@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tom Does It All</title>
+    <link rel="stylesheet" href="allaround.css">
+</head>
+<body>
+    <!-- Navigation Menu -->
+    <nav class="navbar">
+        <a href="F_alt_tab.html">F Alt Tab</a>
+        <a href="Project_C.html">Project C</a>
+        <a href="Tyrestinder.html">Tyres Tinder</a>
+    </nav>
+
+    <h1>CHECKKKKKKKKKKKK</h1>
+    <p>Enter the tire size or SKU below to retrieve details from Tempe Tyres:</p>
+    <textarea id="skuInput" rows="4" placeholder="Enter tire size or SKU, one per line..." onkeydown="handleSkuInputEnter(event)"></textarea>
+    <input type="text" id="searchBar" placeholder="Search...">
+    <button onclick="filterTable()">Search</button><br>
+    <button onclick="removeOutOfStock()">Available Only</button>
+    <button onclick="filterRunflat()">Filter by Runflat</button>
+
+
+
+    <table id="resultsTable">
+        <thead>
+            <tr>
+                <th>Make</th>
+                <th>Model</th>
+                <th>Price (AUD)</th>
+                <th>Status</th>
+                <th>SKU</th>
+                <th>Link</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    
+    <script src="F_alt_tab.js"></script>
+</body>
+</html>

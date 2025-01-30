@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tom Does It All</title>
+    <link rel="stylesheet" href="allaround.css">
+</head>
+<body>
+    <!-- Navigation Menu -->
+    <nav class="navbar">
+        <a href="F_alt_tab.html">F Alt Tab</a>
+        <a href="Project_C.html">Project C</a>
+        <a href="Tyrestinder.html">Tyres Tinder </a>
+    </nav>
+
+    <h1>Tyres Tinder 🍑</h1>
+    <p>Front :</p>
+    <textarea id="skuInput" rows="1" placeholder="Enter tire size or SKU, one per line..."></textarea>
+    <p>Rear :</p>
+    <textarea id="skuInput2" rows="1" placeholder="Enter tire size or SKU, one per line..."></textarea>
+    <button onclick="Tinder()">Check Prices</button>
+
+    <input type="text" id="searchBar" placeholder="Search...">
+    <button onclick="filterTable()">Search</button>
+
+    <table id="resultsTable">
+        <thead>
+            <tr>
+                <th>Brand Name</th>
+                <th>Front Model</th>
+                <th>Rear Model</th>
+                <th>Front SKU</th>
+                <th>Rear SKU</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    
+    <script src="F_alt_tab.js"></script>
+</body>
+</html>

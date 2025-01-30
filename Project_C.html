@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secret Sauce v1.0</title>
+    <link rel="stylesheet" href="allaround.css">
+</head>
+<body>
+    <!-- Navigation Menu -->
+    <nav class="navbar">
+        <a href="F_alt_tab.html">F Alt Tab</a>
+        <a href="Project_C.html">Project C</a>
+        <a href="Tyrestinder.html">Tyres Tinder</a>
+    </nav>
+
+    <h1>Project-C v1.0</h1>
+    <p>Not Including WA, Puncture, SF, or any price that's not on the website</p>
+    <textarea id="skuInput" rows="10" placeholder="Enter SKU and quantity (e.g., 5 ABC123), one per line..."></textarea>
+    <button onclick="checkPrices()">Check Prices</button>
+
+    <table id="resultsTable">
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Quantity</th>
+                <th>Original Price (AUD)</th>
+                <th>Total Price (AUD)</th>
+                <th>Description</th>
+                <th>Link</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3" class="grand-total">Grand Total</td>
+                <td id="grandTotal" class="grand-total">$0.00</td>
+                <td colspan="2"></td>
+            </tr>
+        </tfoot>
+    </table>
+    
+    <script src="Project_C.js"></script>
+</body>
+</html>

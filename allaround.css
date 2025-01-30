@@ -1,0 +1,117 @@
+/* General Styling */
+body {
+    font-family: Arial, sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f2f4f7; /* Light grayish-blue */
+    color: #333;
+    line-height: 1.6;
+    border: 1px solid #ccc; /* Add a subtle border around the body */
+}
+
+h1 {
+    color: #333;
+    font-size: 2em;
+    margin-bottom: 10px;
+    text-align: center;
+    background-color: #e3f2fd; /* Light blue */
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #007bff; /* Slightly darker blue border */
+}
+
+p, textarea, button, table, th, td {
+    font-size: 1em;
+}
+
+/* Textarea Styling */
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #aaa; /* Slightly darker border for better contrast */
+    border-radius: 5px;
+    margin-bottom: 15px;
+    background-color: #fcf8e8; /* Warm beige background */
+    color: #333; /* Dark text for contrast */
+}
+
+/* Button Styling */
+button {
+    padding: 10px 15px;
+    margin: 5px;
+    border: 1px solid #007bff; /* Add a blue border */
+    border-radius: 5px;
+    background-color: #a7c7e7; /* Pastel blue */
+    color: #fff; /* White text for contrast */
+    cursor: pointer;
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+button:hover {
+    background-color: #87b5e2; /* Slightly darker pastel blue */
+    border-color: #0056b3; /* Darker border on hover */
+}
+
+/* Table Styling */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    border: 1px solid #aaa; /* Add a slightly darker border for contrast */
+    background-color: #fff; /* White background for clarity */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border: 1px solid #ddd; /* Add borders between cells */
+    color: #333; /* Dark text for readability */
+}
+
+th {
+    background-color: #c8e6c9; /* Light pastel green */
+    border-bottom: 2px solid #388e3c; /* Slightly darker green border */
+    font-weight: bold;
+}
+
+td a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+td a:hover {
+    text-decoration: underline;
+}
+
+/* Navigation Bar */
+.navbar {
+    background-color: #007bff; /* Solid blue */
+    overflow: hidden;
+    text-align: center;
+    padding: 10px 0;
+}
+
+.navbar a {
+    color: white;
+    padding: 14px 20px;
+    text-decoration: none;
+    font-size: 1.1em;
+}
+
+.navbar a:hover {
+    background-color: #0056b3; /* Slightly darker blue */
+}
+
+/* Table Row Hover */
+table tbody tr:hover {
+    background-color: #f1f5f9; /* Soft gray-blue hover effect */
+}
+
+/* Footer Total */
+tfoot td {
+    background-color: #e8eaf6; /* Light blue for totals */
+    font-weight: bold;
+    border-top: 2px solid #3949ab; /* Darker blue border */
+}
