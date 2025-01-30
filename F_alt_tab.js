@@ -112,9 +112,10 @@ async function Tinder() {
         const tyreWidth = size.slice(0, 3);
         const tyreProfile = size.slice(3, 5);
         const tyreDiameter = size.slice(5, 7);
-
-        const corsProxy = "https://api.allorigins.win/raw?url=";
+        
+        const corsProxy = "https://corsproxy.io/?";
         const url = `${corsProxy}https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
+
 
 
         try {
@@ -239,9 +240,10 @@ async function checkPrices() {
             tyreProfile = "Not%20Specified";
             tyreDiameter = trimmedQuery.slice(3, 5);
         }
-
-        const corsProxy = "https://api.allorigins.win/raw?url=";
+                
+        const corsProxy = "https://corsproxy.io/?";
         const url = `${corsProxy}https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
+
 
 
         try {
