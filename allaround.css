@@ -1,24 +1,27 @@
 /* General Styling */
 body {
-    font-family: Arial, sans-serif;
-    max-width: 800px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* Safari-friendly font stack */
+    max-width: 1200px; /* Wider for better readability */
     margin: 0 auto;
     padding: 20px;
-    background-color: #f2f4f7; /* Light grayish-blue */
+    background-color: #f8f9fa; /* Light gray for a modern look */
     color: #333;
     line-height: 1.6;
-    border: 1px solid #ccc; /* Add a subtle border around the body */
+    border: 1px solid #e0e0e0; /* Subtle border */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* Soft shadow for depth */
+    border-radius: 12px; /* Rounded corners */
 }
 
 h1 {
-    color: #333;
-    font-size: 2em;
-    margin-bottom: 10px;
+    color: #2c3e50; /* Darker blue-gray for better contrast */
+    font-size: 2.5em; /* Larger heading */
+    margin-bottom: 20px;
     text-align: center;
-    background-color: #e3f2fd; /* Light blue */
-    padding: 10px;
-    border-radius: 10px;
-    border: 1px solid #007bff; /* Slightly darker blue border */
+    background-color: #e9f5ff; /* Light blue background */
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #007bff; /* Blue border */
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.1); /* Subtle shadow */
 }
 
 p, textarea, button, table, th, td {
@@ -28,29 +31,44 @@ p, textarea, button, table, th, td {
 /* Textarea Styling */
 textarea {
     width: 100%;
-    padding: 10px;
-    border: 1px solid #aaa; /* Slightly darker border for better contrast */
-    border-radius: 5px;
-    margin-bottom: 15px;
-    background-color: #fcf8e8; /* Warm beige background */
-    color: #333; /* Dark text for contrast */
+    padding: 12px;
+    border: 1px solid #ced4da; /* Subtle border */
+    border-radius: 8px;
+    margin-bottom: 20px;
+    background-color: #ffffff; /* White background */
+    color: #333;
+    font-family: inherit; /* Consistent font */
+    resize: vertical; /* Allow vertical resizing */
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+textarea:focus {
+    border-color: #007bff; /* Blue border on focus */
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.2); /* Subtle glow */
+    outline: none; /* Remove default outline */
 }
 
 /* Button Styling */
 button {
-    padding: 10px 15px;
-    margin: 5px;
-    border: 1px solid #007bff; /* Add a blue border */
-    border-radius: 5px;
-    background-color: #a7c7e7; /* Pastel blue */
-    color: #fff; /* White text for contrast */
+    padding: 12px 20px;
+    margin: 8px;
+    border: none;
+    border-radius: 8px;
+    background-color: #007bff; /* Solid blue */
+    color: #fff;
     cursor: pointer;
-    transition: background-color 0.3s, border-color 0.3s;
+    font-size: 1em;
+    font-weight: 500;
+    transition: background-color 0.3s, transform 0.2s;
 }
 
 button:hover {
-    background-color: #87b5e2; /* Slightly darker pastel blue */
-    border-color: #0056b3; /* Darker border on hover */
+    background-color: #0056b3; /* Darker blue on hover */
+    transform: translateY(-1px); /* Slight lift effect */
+}
+
+button:active {
+    transform: translateY(0); /* Reset lift on click */
 }
 
 /* Table Styling */
@@ -58,39 +76,45 @@ table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
-    border: 1px solid #aaa; /* Add a slightly darker border for contrast */
-    background-color: #fff; /* White background for clarity */
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+    background-color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    overflow: hidden; /* Ensure rounded corners */
 }
 
 th, td {
-    padding: 12px;
+    padding: 14px;
     text-align: left;
-    border: 1px solid #ddd; /* Add borders between cells */
-    color: #333; /* Dark text for readability */
+    border: 1px solid #e0e0e0;
+    color: #333;
 }
 
 th {
-    background-color: #c8e6c9; /* Light pastel green */
-    border-bottom: 2px solid #388e3c; /* Slightly darker green border */
-    font-weight: bold;
+    background-color: #f1f3f5; /* Light gray for headers */
+    font-weight: 600;
+    border-bottom: 2px solid #007bff; /* Blue bottom border */
 }
 
 td a {
     color: #007bff;
     text-decoration: none;
+    transition: color 0.3s;
 }
 
 td a:hover {
+    color: #0056b3; /* Darker blue on hover */
     text-decoration: underline;
 }
 
 /* Navigation Bar */
 .navbar {
-    background-color: #007bff; /* Solid blue */
+    background-color: #007bff;
     overflow: hidden;
     text-align: center;
-    padding: 10px 0;
+    padding: 12px 0;
+    border-radius: 8px;
+    margin-bottom: 20px;
 }
 
 .navbar a {
@@ -98,20 +122,72 @@ td a:hover {
     padding: 14px 20px;
     text-decoration: none;
     font-size: 1.1em;
+    font-weight: 500;
+    transition: background-color 0.3s;
 }
 
 .navbar a:hover {
-    background-color: #0056b3; /* Slightly darker blue */
+    background-color: #0056b3; /* Darker blue on hover */
+    border-radius: 8px;
 }
 
 /* Table Row Hover */
 table tbody tr:hover {
-    background-color: #f1f5f9; /* Soft gray-blue hover effect */
+    background-color: #f8f9fa; /* Light gray hover effect */
 }
 
 /* Footer Total */
 tfoot td {
-    background-color: #e8eaf6; /* Light blue for totals */
+    background-color: #e9f5ff; /* Light blue for totals */
     font-weight: bold;
-    border-top: 2px solid #3949ab; /* Darker blue border */
+    border-top: 2px solid #007bff; /* Blue top border */
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    body {
+        padding: 15px;
+    }
+
+    h1 {
+        font-size: 2em; /* Smaller heading on mobile */
+        padding: 12px;
+    }
+
+    textarea {
+        padding: 10px;
+    }
+
+    button {
+        padding: 10px 16px;
+        font-size: 0.9em;
+    }
+
+    .navbar a {
+        padding: 10px 15px;
+        font-size: 1em;
+    }
+
+    table {
+        font-size: 0.9em; /* Smaller font for tables on mobile */
+    }
+
+    th, td {
+        padding: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.8em; /* Even smaller heading for very small screens */
+    }
+
+    .navbar {
+        display: flex;
+        flex-direction: column; /* Stack links vertically */
+    }
+
+    .navbar a {
+        padding: 10px;
+    }
 }
