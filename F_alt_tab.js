@@ -20,7 +20,9 @@ async function Tinder() {
             return [];
         }
 
-        const url = `https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
+        const corsProxy = "https://api.allorigins.win/raw?url=";
+        const url = `${corsProxy}https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
+        
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error(`Network response was not ok (${response.statusText})`);
@@ -113,8 +115,9 @@ async function Tinder() {
         const tyreProfile = size.slice(3, 5);
         const tyreDiameter = size.slice(5, 7);
 
-        const url = `https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
-
+        const corsProxy = "https://api.allorigins.win/raw?url=";
+        const url = `${corsProxy}https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
+        
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error(`Network response was not ok (${response.statusText})`);
@@ -238,7 +241,8 @@ async function checkPrices() {
             tyreDiameter = trimmedQuery.slice(3, 5);
         }
 
-        const url = `https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
+        const corsProxy = "https://api.allorigins.win/raw?url=";
+        const url = `${corsProxy}https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
 
         try {
             const response = await fetch(url);
