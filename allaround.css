@@ -1,27 +1,27 @@
 /* General Styling */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* Safari-friendly font stack */
-    max-width: 1200px; /* Wider for better readability */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
-    background-color: #f8f9fa; /* Light gray for a modern look */
+    background-color: #f8f9fa;
     color: #333;
     line-height: 1.6;
-    border: 1px solid #e0e0e0; /* Subtle border */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* Soft shadow for depth */
-    border-radius: 12px; /* Rounded corners */
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
 }
 
 h1 {
-    color: #2c3e50; /* Darker blue-gray for better contrast */
-    font-size: 2.5em; /* Larger heading */
+    color: #2c3e50;
+    font-size: 2.5em;
     margin-bottom: 20px;
     text-align: center;
-    background-color: #e9f5ff; /* Light blue background */
+    background-color: #e9f5ff;
     padding: 15px;
     border-radius: 12px;
-    border: 1px solid #007bff; /* Blue border */
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.1); /* Subtle shadow */
+    border: 1px solid #007bff;
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.1);
 }
 
 p, textarea, button, table, th, td {
@@ -32,20 +32,20 @@ p, textarea, button, table, th, td {
 textarea {
     width: 100%;
     padding: 12px;
-    border: 1px solid #ced4da; /* Subtle border */
+    border: 1px solid #ced4da;
     border-radius: 8px;
     margin-bottom: 20px;
-    background-color: #ffffff; /* White background */
+    background-color: #ffffff;
     color: #333;
-    font-family: inherit; /* Consistent font */
-    resize: vertical; /* Allow vertical resizing */
+    font-family: inherit;
+    resize: vertical;
     transition: border-color 0.3s, box-shadow 0.3s;
 }
 
 textarea:focus {
-    border-color: #007bff; /* Blue border on focus */
-    box-shadow: 0 0 8px rgba(0, 123, 255, 0.2); /* Subtle glow */
-    outline: none; /* Remove default outline */
+    border-color: #007bff;
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.2);
+    outline: none;
 }
 
 /* Button Styling */
@@ -54,7 +54,7 @@ button {
     margin: 8px;
     border: none;
     border-radius: 8px;
-    background-color: #007bff; /* Solid blue */
+    background-color: #007bff;
     color: #fff;
     cursor: pointer;
     font-size: 1em;
@@ -63,24 +63,30 @@ button {
 }
 
 button:hover {
-    background-color: #0056b3; /* Darker blue on hover */
-    transform: translateY(-1px); /* Slight lift effect */
+    background-color: #0056b3;
+    transform: translateY(-1px);
 }
 
 button:active {
-    transform: translateY(0); /* Reset lift on click */
+    transform: translateY(0);
+}
+
+/* Table Container (NEW) */
+.table-container {
+    width: 100%;
+    overflow-x: auto; /* Horizontal scroll for small screens */
+    margin-top: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    background-color: #ffffff;
 }
 
 /* Table Styling */
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 20px;
-    border: 1px solid #e0e0e0;
-    background-color: #ffffff;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border-radius: 8px;
-    overflow: hidden; /* Ensure rounded corners */
+    min-width: 600px; /* Minimum width to prevent squishing */
 }
 
 th, td {
@@ -91,9 +97,9 @@ th, td {
 }
 
 th {
-    background-color: #f1f3f5; /* Light gray for headers */
+    background-color: #f1f3f5;
     font-weight: 600;
-    border-bottom: 2px solid #007bff; /* Blue bottom border */
+    border-bottom: 2px solid #007bff;
 }
 
 td a {
@@ -103,7 +109,7 @@ td a {
 }
 
 td a:hover {
-    color: #0056b3; /* Darker blue on hover */
+    color: #0056b3;
     text-decoration: underline;
 }
 
@@ -127,20 +133,20 @@ td a:hover {
 }
 
 .navbar a:hover {
-    background-color: #0056b3; /* Darker blue on hover */
+    background-color: #0056b3;
     border-radius: 8px;
 }
 
 /* Table Row Hover */
 table tbody tr:hover {
-    background-color: #f8f9fa; /* Light gray hover effect */
+    background-color: #f8f9fa;
 }
 
 /* Footer Total */
 tfoot td {
-    background-color: #e9f5ff; /* Light blue for totals */
+    background-color: #e9f5ff;
     font-weight: bold;
-    border-top: 2px solid #007bff; /* Blue top border */
+    border-top: 2px solid #007bff;
 }
 
 /* Responsive Design */
@@ -150,7 +156,7 @@ tfoot td {
     }
 
     h1 {
-        font-size: 2em; /* Smaller heading on mobile */
+        font-size: 2em;
         padding: 12px;
     }
 
@@ -168,8 +174,12 @@ tfoot td {
         font-size: 1em;
     }
 
+    .table-container {
+        border-radius: 0; /* Remove border radius on small screens */
+    }
+
     table {
-        font-size: 0.9em; /* Smaller font for tables on mobile */
+        font-size: 0.9em;
     }
 
     th, td {
@@ -179,12 +189,12 @@ tfoot td {
 
 @media (max-width: 480px) {
     h1 {
-        font-size: 1.8em; /* Even smaller heading for very small screens */
+        font-size: 1.8em;
     }
 
     .navbar {
         display: flex;
-        flex-direction: column; /* Stack links vertically */
+        flex-direction: column;
     }
 
     .navbar a {
