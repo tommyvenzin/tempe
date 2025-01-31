@@ -4,20 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secret Sauce v1.0</title>
-    <link rel="stylesheet" href="./allaround.css">
+    <link rel="stylesheet" href="allaround.css">
 </head>
 <body>
     <!-- Navigation Menu -->
     <nav class="navbar">
-        <a href="index.html">F Alt Tab</a>
+        <a href="F_alt_tab.html">F Alt Tab</a>
         <a href="Project_C.html">Project C</a>
         <a href="Tyrestinder.html">Tyres Tinder</a>
     </nav>
 
     <h1>Project-C v1.0</h1>
     <p>Not Including WA, Puncture, SF, or any price that's not on the website</p>
-    <textarea id="skuInput" rows="10" placeholder="Enter SKU and quantity (e.g., 5 ABC123), one per line..."></textarea>
-    <button onclick="checkPrices()">Check Prices</button>
+    <label for="skuInput">Enter Initials:</label>
+    <input type="text" id="skuInput" placeholder="Enter initials...">
+    
+    <label for="startDateInput">Start Date:</label>
+    <input type="date" id="startDateInput">
+    
+    <label for="endDateInput">End Date:</label>
+    <input type="date" id="endDateInput">
+    <button onclick="checkPrices()">Check Prices</button> <b> <p id="grandTotal" class="grand-total"> </p></b>
+
 
     <table id="resultsTable">
         <thead>
@@ -40,6 +48,6 @@
         </tfoot>
     </table>
     
-    <script src="./Project_C.js"></script>
+    <script src="Project_C.js"></script>
 </body>
 </html>
