@@ -368,17 +368,21 @@ function removeOutOfStock() {
     const rows = Array.from(table.querySelectorAll("tbody tr"));
     const tbody = table.querySelector("tbody");
 
-// Filter rows to exclude those with "Out of Stock" or "On Order" status
-tbody.innerHTML = "";
+    tbody.innerHTML = ""; // Clear previous results
+
     rows.forEach(row => {
-        const status = row.cells[3].textContent.trim().toLowerCase();
-        if (status !== "out of stock" && status !== "on order") {
+        // Get background color of the row
+        const rowColor = row.style.backgroundColor;
+
+        // Only keep rows that are NOT light red (out of stock) or transparent
+        if (rowColor !== "rgb(247, 212, 212)" && rowColor !== "transparent") {
             tbody.appendChild(row);
         }
-});
+    });
 
-console.log("Removed rows with 'Out of Stock' or 'On Order' status.");
+    console.log("Removed rows with 'Out of Stock' or 'On Order' status.");
 }
+
 
 function removeOutOfStock2() {
     const table = document.getElementById("resultsTable");
