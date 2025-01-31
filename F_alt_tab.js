@@ -218,6 +218,28 @@ async function checkPrices() {
 
     resultsTable.innerHTML = ""; // Clear previous results
 
+    // Function to determine stock color
+    const getStockColor = (stockStatus) => {
+        if (!stockStatus) return "transparent"; // Default to no color if status is missing
+
+        const lowerStock = stockStatus.toLowerCase(); // Convert to lowercase for consistency
+
+        if (lowerStock.includes("out of stock") || lowerStock.includes("on order")) {
+            return "#f7d4d4"; // Light Red
+        } 
+        if (lowerStock.match(/\b[1-4]\s*in stock\b/)) {
+            return "#ffd699"; // Light Orange (1-4 in stock)
+        } 
+        if (lowerStock.match(/\b[5-8]\s*in stock\b/)) {
+            return "#fff5b1"; // Light Yellow (5-8 in stock)
+        } 
+        if (lowerStock.includes("8+ in stock") || lowerStock.includes("in stock")) {
+            return "#d4f7d4"; // Light Green (8+ in stock)
+        } 
+
+        return "transparent"; // No matching condition
+    };
+
     const fetchPromises = skuInput.map(async (query) => {
         const trimmedQuery = query.trim();
 
@@ -225,7 +247,7 @@ async function checkPrices() {
 
         // Ensure input has enough characters for each part
         if (trimmedQuery.length !== 5 && trimmedQuery.length !== 7) {
-            resultsTable.innerHTML += `<tr><td colspan="6">Invalid input format for ${trimmedQuery}</td></tr>`;
+            resultsTable.innerHTML += `<tr><td colspan="4">Invalid input format for ${trimmedQuery}</td></tr>`;
             return;
         }
 
@@ -240,11 +262,9 @@ async function checkPrices() {
             tyreProfile = "Not%20Specified";
             tyreDiameter = trimmedQuery.slice(3, 5);
         }
-                
+
         const corsProxy = "https://corsproxy.io/?";
         const url = `${corsProxy}https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
-
-
 
         try {
             const response = await fetch(url);
@@ -261,21 +281,23 @@ async function checkPrices() {
                 const model = item.querySelector(".sub-heading-2")?.textContent.trim() || "No model available";
                 const price = parseFloat(item.querySelector(".txtprice-small span")?.textContent.trim()) || 0;
                 const status = item.querySelector(".stocklevel-small")?.textContent.trim() || "No status available";
-                const sku = item.querySelector("input[name='tyresku']")?.getAttribute("value") || "No SKU available";
-                const link = item.querySelector(".image-container a") ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}` : "#";
+                const link = item.querySelector(".image-container a") 
+                    ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
+                    : "#";
 
-                const row = `<tr>
+                // Get stock color based on availability
+                const stockColor = getStockColor(status);
+
+                const row = `<tr style="background-color:${stockColor};">
                                 <td>${make}</td>
                                 <td>${model}</td>
                                 <td>$${price.toFixed(2)}</td>
-                                <td>${status}</td>
-                                <td>${sku}</td>
                                 <td><a href="${link}" target="_blank">View</a></td>
                             </tr>`;
                 resultsTable.innerHTML += row;
             });
         } catch (error) {
-            resultsTable.innerHTML += `<tr><td colspan="6">Error retrieving data for ${trimmedQuery}</td></tr>`;
+            resultsTable.innerHTML += `<tr><td colspan="4">Error retrieving data for ${trimmedQuery}</td></tr>`;
         }
     });
 
@@ -284,6 +306,7 @@ async function checkPrices() {
     // Automatically sort by price
     sortTableByPrice();
 }
+
 
 
 
