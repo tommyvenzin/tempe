@@ -1,60 +1,132 @@
- async function checkPrices() {
-            const skuInput = document.getElementById("skuInput").value.trim().split("\n");
-            const resultsTable = document.getElementById("resultsTable").querySelector("tbody");
-            const grandTotalElement = document.getElementById("grandTotal");
-            resultsTable.innerHTML = ""; // Clear previous results
-            let grandTotal = 0; // Initialize grand total
+// Completely Remade Project_C - Fixing Date Extraction
 
-            for (const line of skuInput) {
-                const [quantity, sku] = line.trim().split(" ");
-                
-                if (!quantity || isNaN(quantity) || !sku) {
-                    console.error(`Invalid entry: ${line}`);
-                    continue; // Skip invalid entries
-                }
+async function checkPrices() {
+    const initialsInput = document.getElementById("skuInput").value.trim().split("\n");
+    const resultsTable = document.getElementById("resultsTable").querySelector("tbody");
+    const grandTotalElement = document.getElementById("grandTotal");
+    const loadingIndicator = document.getElementById("loadingIndicator");
+    
+    resultsTable.innerHTML = ""; // Clear previous results
+    let grandTotal = 0;
 
-                const url = `https://www.tempetyres.com.au/search?q=${encodeURIComponent(sku)}`;
-                
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`Network response was not ok (${response.statusText})`);
-
-                    const text = await response.text();
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(text, "text/html");
-
-                    // Find the span inside the element with the class `txtprice-small` for the price
-                    const priceElement = doc.querySelector(".txtprice-small span");
-                    const originalPrice = priceElement ? parseFloat(priceElement.textContent.trim()) : 0;
-                    const totalPrice = originalPrice * parseInt(quantity);
-
-                    // Accumulate the total price into grand total
-                    grandTotal += totalPrice;
-
-                    // Find the <p> element with the class `sub-heading-2` for the description
-                    const descriptionElement = doc.querySelector(".sub-heading-2");
-                    const description = descriptionElement ? descriptionElement.textContent.trim() : "No description available";
-
-                    const row = `<tr>
-                                    <td>${sku}</td>
-                                    <td>${quantity}</td>
-                                    <td>$${originalPrice.toFixed(2)} ea</td>
-                                    <td>$${totalPrice.toFixed(2)}</td>
-                                    <td>${description}</td>
-                                    <td><a href="${url}" target="_blank">View</a></td>
-                                </tr>`;
-                    resultsTable.innerHTML += row;
-                } catch (error) {
-                    console.error(`Error fetching data for SKU ${sku}:`, error);
-                    const row = `<tr>
-                                    <td>${sku}</td>
-                                    <td>${quantity}</td>
-                                    <td colspan="4">Error retrieving data</td>
-                                </tr>`;
-                    resultsTable.innerHTML += row;
-                }
+    // Define the date range (YYYYMMDD)
+    const startDate = "20250124";
+    const endDate = "20250130";
+    
+    console.log("Initials entered:", initialsInput);
+    console.log("Date range set from", startDate, "to", endDate);
+    
+    if (initialsInput.length === 0 || !initialsInput[0].trim()) {
+        alert("Please enter at least one initial.");
+        return;
+    }
+    
+    if (loadingIndicator) {
+        loadingIndicator.style.display = "block";
+    }
+    
+    try {
+        console.log("Fetching data from retail picking history...");
+        const response = await fetch(`https://my.tempetyres.com.au/retailpicking/history/?day=0&month=0&year=0&q=${encodeURIComponent(initialsInput[0])}&searchin=EnteredBy`);
+        if (!response.ok) throw new Error("Network response was not ok");
+        
+        const text = await response.text();
+        console.log("Fetched HTML data successfully.");
+        
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, "text/html");
+        
+        const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
+        console.log("Number of rows found:", rows.length);
+        
+        let matchedResults = [];
+        
+        for (const row of rows) {
+            const columns = row.querySelectorAll("td");
+            if (columns.length < 7) {
+                console.warn("Skipping row due to insufficient columns:", row);
+                continue;
             }
 
-            // Update the grand total in the table footer
-            grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
+            // Extract the date from column 2 under <strong> and trim it to YYYYMMDD
+            const rawDateText = columns[1].querySelector("strong")?.textContent.trim();
+            if (!rawDateText) {
+                console.warn("Skipping row due to missing date in column 2:", row);
+                continue;
+            }
+            const dateText = rawDateText.split("-")[2]?.slice(0, 8); // Extract YYYYMMDD from 'RT-1-YYYYMMDD-HHMMSS-XXXX'
+
+            console.log("Extracted date:", dateText);
+
+            // Check if the row's date falls within the specified range
+            if (dateText < startDate || dateText > endDate) {
+                console.log("Skipping row outside date range:", rawDateText);
+                continue;
+            }
+
+            console.log("Row passed date filter:", rawDateText);
+            
+            const initialsElement = columns[3].querySelector("a"); // Updated to column 3
+            const skuElement = columns[1].querySelector("small");
+            const quantityElement = columns[5];
+            
+            if (!initialsElement || !skuElement || !quantityElement) {
+                console.warn("Skipping row due to missing elements:", row);
+                continue;
+            }
+            
+            const initials = initialsElement.textContent.trim();
+            const sku = skuElement.textContent.trim();
+            const quantity = quantityElement.textContent.trim();
+            
+            if (!initials || !initialsInput.includes(initials)) {
+                console.log("Skipping non-matching Initials:", initials);
+                continue;
+            }
+            
+            const url = `https://www.tempetyres.com.au/search?q=${encodeURIComponent(sku)}`;
+            let originalPrice = 0;
+            let totalPrice = 0;
+            let description = "No description available";
+            
+            try {
+                const priceResponse = await fetch(url);
+                if (!priceResponse.ok) throw new Error(`Network response was not ok (${priceResponse.statusText})`);
+                
+                const priceText = await priceResponse.text();
+                const priceDoc = parser.parseFromString(priceText, "text/html");
+                
+                const priceElement = priceDoc.querySelector(".txtprice-small span");
+                originalPrice = priceElement ? parseFloat(priceElement.textContent.trim()) : 0;
+                totalPrice = originalPrice * parseInt(quantity);
+                
+                const descriptionElement = priceDoc.querySelector(".sub-heading-2");
+                description = descriptionElement ? descriptionElement.textContent.trim() : "No description available";
+            } catch (error) {
+                console.error(`Error fetching data for SKU ${sku}:`, error);
+            }
+            
+            grandTotal += totalPrice;
+            
+            matchedResults.push(`<tr>
+                <td>${sku}</td>
+                <td>${quantity}</td>
+                <td>$${originalPrice.toFixed(2)} ea</td>
+                <td>$${totalPrice.toFixed(2)}</td>
+                <td>${description}</td>
+                <td><a href="${url}" target="_blank">View</a></td>
+            </tr>`);
         }
+        
+        console.log("Final matched results count:", matchedResults.length);
+        resultsTable.innerHTML = matchedResults.join("\n");
+        grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        alert("Error retrieving data from the website. Please try again later.");
+    }
+    
+    if (loadingIndicator) {
+        loadingIndicator.style.display = "none";
+    }
+}
