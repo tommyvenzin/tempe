@@ -1,4 +1,4 @@
-// Completely Remade Project_C - Fixing Date Input Format Conversion
+// Completely Remade Project_C - Handling MM-DD Input Format
 
 async function checkPrices() {
     const initialsInput = document.getElementById("skuInput").value.trim().split("\n");
@@ -11,9 +11,9 @@ async function checkPrices() {
     resultsTable.innerHTML = ""; // Clear previous results
     let grandTotal = 0;
 
-    // Convert startDateInput and endDateInput from YYYY-MM-DD to YYYYMMDD
-    const startDate = startDateInput.replace(/-/g, "");
-    const endDate = endDateInput.replace(/-/g, "");
+    // Convert MM-DD input into YYYYMMDD format (Assuming 2025 as the fixed year)
+    const startDate = `2025${startDateInput.replace("-", "")}`;
+    const endDate = `2025${endDateInput.replace("-", "")}`;
 
     console.log("Initials entered:", initialsInput);
     console.log("Date range set from", startDate, "to", endDate);
