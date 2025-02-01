@@ -56,7 +56,7 @@ async function checkPrices() {
             }
 
             // Extract the date from column 2 under <strong> and trim it to YYYYMMDD
-            const rawDateText = columns[2].querySelector("strong")?.textContent.trim();
+            const rawDateText = columns[1].querySelector("strong")?.textContent.trim();
             if (!rawDateText) {
                 console.warn("Skipping row due to missing date in column 2:", row);
                 continue;
