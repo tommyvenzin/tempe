@@ -1,4 +1,4 @@
-// Completely Remade Project_C - Fixing Date Extraction with Custom Input for Date Range
+// Completely Remade Project_C - Fixing Date Input Format Conversion
 
 async function checkPrices() {
     const initialsInput = document.getElementById("skuInput").value.trim().split("\n");
@@ -11,9 +11,9 @@ async function checkPrices() {
     resultsTable.innerHTML = ""; // Clear previous results
     let grandTotal = 0;
 
-    // Define the date range from user input (YYYYMMDD)
-    const startDate = startDateInput;
-    const endDate = endDateInput;
+    // Convert startDateInput and endDateInput from YYYY-MM-DD to YYYYMMDD
+    const startDate = startDateInput.replace(/-/g, "");
+    const endDate = endDateInput.replace(/-/g, "");
 
     console.log("Initials entered:", initialsInput);
     console.log("Date range set from", startDate, "to", endDate);
@@ -61,7 +61,7 @@ async function checkPrices() {
                 console.warn("Skipping row due to missing date in column 2:", row);
                 continue;
             }
-            const dateText = rawDateText.split("-")[2]?.slice(0, 8); // Extract YYYYMMDD from 'RT-1-YYYYMMDD-HHMMSS-XXXX'
+            const dateText = rawDateText.split("-")[1]?.slice(0, 8); // Extract YYYYMMDD from 'RT-1-YYYYMMDD-HHMMSS-XXXX'
 
             console.log("Extracted date:", dateText);
 
