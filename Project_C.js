@@ -1,7 +1,8 @@
 // Completely Remade Project_C - Fixing MM-DD Input Conversion with Debugging
 
 async function checkPrices() {
-    const initialsInput = document.getElementById("skuInput").value.trim().split("\n");
+    const initialsInput = document.getElementById("skuInput").value.trim().toUpperCase().split("
+");
     const startDateInput = document.getElementById("startDateInput").value.trim();
     const endDateInput = document.getElementById("endDateInput").value.trim();
     const resultsTable = document.getElementById("resultsTable").querySelector("tbody");
