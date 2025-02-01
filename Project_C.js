@@ -2,8 +2,7 @@
 console.log("Project_C.js loaded successfully");
 
 async function checkPrices() {
-    const initialsInput = document.getElementById("skuInput").value.trim().toUpperCase().split("
-");
+    const initialsInput = document.getElementById("skuInput").value.trim().split("\n");
     const startDateInput = document.getElementById("startDateInput").value.trim();
     const endDateInput = document.getElementById("endDateInput").value.trim();
     const resultsTable = document.getElementById("resultsTable").querySelector("tbody");
