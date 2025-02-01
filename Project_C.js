@@ -61,7 +61,7 @@ async function checkPrices() {
                 console.warn("Skipping row due to missing date in column 2:", row);
                 continue;
             }
-            const dateText = rawDateText.split("-")[1]?.slice(0, 8); // Extract YYYYMMDD from 'RT-1-YYYYMMDD-HHMMSS-XXXX'
+            const dateText = rawDateText.split("-")[2]?.slice(0, 8); // Extract YYYYMMDD from 'RT-1-YYYYMMDD-HHMMSS-XXXX'
 
             console.log("Extracted date:", dateText);
 
