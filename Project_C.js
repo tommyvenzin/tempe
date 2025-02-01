@@ -1,4 +1,4 @@
-// Completely Remade Project_C - Handling MM-DD Input Format
+// Completely Remade Project_C - Fixing MM-DD Input Conversion with Debugging
 
 async function checkPrices() {
     const initialsInput = document.getElementById("skuInput").value.trim().split("\n");
@@ -12,19 +12,20 @@ async function checkPrices() {
     let grandTotal = 0;
 
     // Convert MM-DD input into YYYYMMDD format (Assuming 2025 as the fixed year)
-    const startDate = `2025${startDateInput.replace("-", "")}`;
-    const endDate = `2025${endDateInput.replace("-", "")}`;
+    const startDate = `2025${startDateInput.replace(/[^0-9]/g, "")}`;
+    const endDate = `2025${endDateInput.replace(/[^0-9]/g, "")}`;
 
     console.log("Initials entered:", initialsInput);
-    console.log("Date range set from", startDate, "to", endDate);
+    console.log("Generated Start Date (YYYYMMDD):", startDate);
+    console.log("Generated End Date (YYYYMMDD):", endDate);
 
     if (initialsInput.length === 0 || !initialsInput[0].trim()) {
         alert("Please enter at least one initial.");
         return;
     }
 
-    if (!startDate || !endDate) {
-        alert("Please enter both a start date and an end date.");
+    if (!startDate || !endDate || startDate.length !== 8 || endDate.length !== 8) {
+        alert("Please enter both a valid start date and an end date in MM-DD format.");
         return;
     }
 
