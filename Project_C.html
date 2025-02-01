@@ -16,6 +16,7 @@
 
     <h1>Project-C v1.0</h1>
     <p>Not Including WA, Puncture, SF, or any price that's not on the website</p>
+    
     <label for="skuInput">Enter Initials:</label>
     <input type="text" id="skuInput" placeholder="Enter initials...">
     
@@ -24,9 +25,9 @@
     
     <label for="endDateInput">End Date (Month-Day):</label>
     <input type="text" id="endDateInput" placeholder="MM-DD">
-
-    <button onclick="checkPrices()">Check Prices</button> <b> <p id="grandTotal" class="grand-total"> </p></b>
-
+    
+    <button onclick="checkPrices()">Check Prices</button> 
+    <b><p id="grandTotal" class="grand-total"></p></b>
 
     <table id="resultsTable">
         <thead>
@@ -40,15 +41,8 @@
             </tr>
         </thead>
         <tbody></tbody>
-        <tfoot>
-            <tr>
-                <td colspan="3" class="grand-total">Grand Total</td>
-                <td id="grandTotal" class="grand-total">$0.00</td>
-                <td colspan="2"></td>
-            </tr>
-        </tfoot>
     </table>
     
-    <script src="Project_C.js"></script>
+    <script src="Project_C.js" defer></script>
 </body>
 </html>
