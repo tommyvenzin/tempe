@@ -1,4 +1,5 @@
 // Completely Remade Project_C - Fixing MM-DD Input Conversion with Debugging
+console.log("Project_C.js loaded successfully");
 
 async function checkPrices() {
     const initialsInput = document.getElementById("skuInput").value.trim().toUpperCase().split("
