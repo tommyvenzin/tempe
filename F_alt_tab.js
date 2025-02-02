@@ -116,8 +116,6 @@ async function Tinder() {
         const corsProxy = "https://corsproxy.io/?";
         const url = `${corsProxy}https://www.tempetyres.com.au/tyres?TyreWidth=${tyreWidth}&TyreProfile=${tyreProfile}&TyreDiameter=${tyreDiameter}`;
 
-
-
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error(`Network response was not ok (${response.statusText})`);
@@ -143,13 +141,21 @@ async function Tinder() {
         }
     };
 
-    // Fetch details for both front and rear sizes
+    const getStockColor = (stockStatus) => {
+        if (!stockStatus) return "transparent";
+        const lowerStock = stockStatus.toLowerCase();
+        if (lowerStock.includes("out of stock") || lowerStock.includes("on order")) return "#f7d4d4";
+        if (lowerStock.match(/\b[1-4]\s*in stock\b/)) return "#ffd699";
+        if (lowerStock.match(/\b[5-8]\s*in stock\b/)) return "#fff5b1";
+        if (lowerStock.includes("8+ in stock") || lowerStock.includes("in stock")) return "#d4f7d4";
+        return "transparent";
+    };
+
     const [frontData, rearData] = await Promise.all([
         fetchTyreDetails(skuInput),
         fetchTyreDetails(skuInput2),
     ]);
 
-    // Group data by Brand Name
     const groupedResults = {};
     [...frontData, ...rearData].forEach((item) => {
         if (!groupedResults[item.brand]) {
@@ -160,16 +166,12 @@ async function Tinder() {
         else groupedResults[item.brand].rear.push(item);
     });
 
-    // Sort grouped results by Brand Name
     const sortedBrands = Object.keys(groupedResults).sort();
-
-    // Sort front and rear models by pattern name within each brand
     sortedBrands.forEach((brand) => {
         groupedResults[brand].front.sort((a, b) => (a.pattern || "").localeCompare(b.pattern || ""));
         groupedResults[brand].rear.sort((a, b) => (a.pattern || "").localeCompare(b.pattern || ""));
     });
 
-    // Display grouped results in the table
     sortedBrands.forEach((brand) => {
         const brandData = groupedResults[brand];
         const rows = Math.max(brandData.front.length, brandData.rear.length);
@@ -178,13 +180,8 @@ async function Tinder() {
             const frontItem = brandData.front[i] || {};
             const rearItem = brandData.rear[i] || {};
 
-            // Determine stock status for coloring
-            const frontStockStatus = frontItem.stock ? frontItem.stock.toLowerCase() : "";
-            const rearStockStatus = rearItem.stock ? rearItem.stock.toLowerCase() : "";
-
-            // Light green for In Stock, Light red for Out of Stock or On Order
-            const frontColor = frontStockStatus.includes("out of stock") || frontStockStatus.includes("on order") ? "#f7d4d4" : (frontStockStatus.includes("in stock") ? "#d4f7d4" : "transparent");
-            const rearColor = rearStockStatus.includes("out of stock") || rearStockStatus.includes("on order") ? "#f7d4d4" : (rearStockStatus.includes("in stock") ? "#d4f7d4" : "transparent");
+            const frontColor = getStockColor(frontItem.stock);
+            const rearColor = getStockColor(rearItem.stock);
 
             const row = `<tr>
                             ${i === 0 ? `<td rowspan="${rows}">${brand}</td>` : ""}
@@ -205,11 +202,11 @@ async function Tinder() {
         }
     });
 
-    // Show a message if no data is found
     if (sortedBrands.length === 0) {
         resultsTable.innerHTML = `<tr><td colspan="5">No matching tires found for the given sizes.</td></tr>`;
     }
 }
+
 
 
 async function checkPrices() {
