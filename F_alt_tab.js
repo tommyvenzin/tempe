@@ -287,11 +287,13 @@ async function checkPrices() {
 
                 // Get stock color based on availability
                 const stockColor = getStockColor(status);
+                const sku = item.querySelector("input[name='tyresku']")?.getAttribute("value") || "No SKU available";
 
                 const row = `<tr style="background-color:${stockColor};">
                                 <td>${make}</td>
                                 <td>${model}</td>
                                 <td>$${price.toFixed(2)}</td>
+                                <td>${sku}</td>
                                 <td><a href="${link}" target="_blank">View</a></td>
                             </tr>`;
                 resultsTable.innerHTML += row;
