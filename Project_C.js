@@ -11,6 +11,7 @@ async function checkPrices() {
 
     resultsTable.innerHTML = ""; // Clear previous results
     let grandTotal = 0;
+    let itemTotal = 0 ; 
 
     // Convert MM-DD input into YYYYMMDD format (Assuming 2025 as the fixed year)
     const startDate = `2025${startDateInput.replace(/[^0-9]/g, "")}`;
@@ -116,6 +117,7 @@ async function checkPrices() {
             }
 
             grandTotal += totalPrice;
+            itemTotal += quantity;
 
             matchedResults.push(`<tr>
                 <td>${sku}</td>
@@ -130,6 +132,7 @@ async function checkPrices() {
         console.log("Final matched results count:", matchedResults.length);
         resultsTable.innerHTML = matchedResults.join("\n");
         grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
+        itemTotalElement.textContent = `$${itemTotal.toFixed(2)}`;
     } catch (error) {
         console.error("Error fetching data:", error);
         alert("Error retrieving data from the website. Please try again later.");
