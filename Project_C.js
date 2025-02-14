@@ -7,6 +7,7 @@ async function checkPrices() {
     const endDateInput = document.getElementById("endDateInput").value.trim();
     const resultsTable = document.getElementById("resultsTable").querySelector("tbody");
     const grandTotalElement = document.getElementById("grandTotal");
+    const grandTotalElement = document.getElementById("itemTotal");
     const loadingIndicator = document.getElementById("loadingIndicator");
 
     resultsTable.innerHTML = ""; // Clear previous results
