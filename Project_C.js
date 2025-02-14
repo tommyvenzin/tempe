@@ -133,7 +133,7 @@ async function checkPrices() {
         console.log("Final matched results count:", matchedResults.length);
         resultsTable.innerHTML = matchedResults.join("\n");
         grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
-        itemTotalElement.textContent = `$${itemTotal}`;
+        itemTotalElement.textContent = `itemTotal`;
     } catch (error) {
         console.error("Error fetching data:", error);
         alert("Error retrieving data from the website. Please try again later.");
