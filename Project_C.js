@@ -118,7 +118,7 @@ async function checkPrices() {
             }
 
             grandTotal += totalPrice;
-            itemTotal += quantity;
+            itemTotal += parseint(quantity);
 
             matchedResults.push(`<tr>
                 <td>${sku}</td>
