@@ -12,7 +12,7 @@ async function checkPrices() {
 
     resultsTable.innerHTML = ""; // Clear previous results
     let grandTotal = 0;
-    let itemTotal = 0 ; 
+    let itemTotal = 0;
 
     // Convert MM-DD input into YYYYMMDD format (Assuming 2025 as the fixed year)
     const startDate = `2025${startDateInput.replace(/[^0-9]/g, "")}`;
@@ -88,7 +88,7 @@ async function checkPrices() {
 
             const initials = initialsElement.textContent.trim();
             const sku = skuElement.textContent.trim();
-            const quantity = quantityElement.textContent.trim();
+            const quantity = parseInt(quantityElement.textContent.trim(), 10); // Corrected parseInt usage
 
             if (!initials || !initialsInput.includes(initials)) {
                 console.log("Skipping non-matching Initials:", initials);
@@ -109,7 +109,7 @@ async function checkPrices() {
 
                 const priceElement = priceDoc.querySelector(".txtprice-small span");
                 originalPrice = priceElement ? parseFloat(priceElement.textContent.trim()) : 0;
-                totalPrice = originalPrice * parseInt(quantity);
+                totalPrice = originalPrice * quantity;
 
                 const descriptionElement = priceDoc.querySelector(".sub-heading-2");
                 description = descriptionElement ? descriptionElement.textContent.trim() : "No description available";
@@ -118,7 +118,7 @@ async function checkPrices() {
             }
 
             grandTotal += totalPrice;
-            itemTotal += parseint(quantity);
+            itemTotal += quantity; // Fixed quantity accumulation
 
             matchedResults.push(`<tr>
                 <td>${sku}</td>
@@ -133,7 +133,7 @@ async function checkPrices() {
         console.log("Final matched results count:", matchedResults.length);
         resultsTable.innerHTML = matchedResults.join("\n");
         grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
-        itemTotalElement.textContent = `itemTotal`;
+        itemTotalElement.textContent = `${itemTotal}`; // Fixed display for item total
     } catch (error) {
         console.error("Error fetching data:", error);
         alert("Error retrieving data from the website. Please try again later.");
