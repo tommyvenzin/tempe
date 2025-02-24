@@ -14,9 +14,10 @@ async function checkPrices() {
     let grandTotal = 0;
     let itemTotal = 0;
 
-    // Convert MM-DD input into YYYYMMDD format (Assuming 2025 as the fixed year)
-    const startDate = `2025${startDateInput.replace(/[^0-9]/g, "")}`;
-    const endDate = `2025${endDateInput.replace(/[^0-9]/g, "")}`;
+    const formatDate = (date) => `2025${date.replace(/\D/g, "")}`;
+    const startDate = formatDate(startDateInput);
+    const endDate = formatDate(endDateInput);
+
 
     console.log("Initials entered:", initialsInput);
     console.log("Generated Start Date (YYYYMMDD):", startDate);
@@ -38,7 +39,8 @@ async function checkPrices() {
 
     try {
         console.log("Fetching data from retail picking history...");
-        const response = await fetch(`https://my.tempetyres.com.au/retailpicking/history/?day=0&month=0&year=0&q=${encodeURIComponent(initialsInput[0])}&searchin=EnteredBy`);
+        const response = await fetch(`https://my.tempetyres.com.au/retailpicking/history/?day=0&month=0&year=0&q=${encodeURIComponent(initialsInput.join(','))}&searchin=EnteredBy`);
+
         if (!response.ok) throw new Error("Network response was not ok");
 
         const text = await response.text();
@@ -100,22 +102,56 @@ async function checkPrices() {
             let totalPrice = 0;
             let description = "No description available";
 
+            const fetchPriceDetails = async (sku, quantity) => {
+            const url = `https://www.tempetyres.com.au/search?q=${encodeURIComponent(sku)}`;
+                
             try {
                 const priceResponse = await fetch(url);
                 if (!priceResponse.ok) throw new Error(`Network response was not ok (${priceResponse.statusText})`);
-
+        
                 const priceText = await priceResponse.text();
                 const priceDoc = parser.parseFromString(priceText, "text/html");
-
+        
                 const priceElement = priceDoc.querySelector(".txtprice-small span");
-                originalPrice = priceElement ? parseFloat(priceElement.textContent.trim()) : 0;
-                totalPrice = originalPrice * quantity;
-
+                const originalPrice = priceElement ? parseFloat(priceElement.textContent.trim()) : 0;
+                const totalPrice = originalPrice * quantity;
+        
                 const descriptionElement = priceDoc.querySelector(".sub-heading-2");
-                description = descriptionElement ? descriptionElement.textContent.trim() : "No description available";
+                const description = descriptionElement ? descriptionElement.textContent.trim() : "No description available";
+        
+                return { sku, quantity, originalPrice, totalPrice, description, url };
             } catch (error) {
                 console.error(`Error fetching data for SKU ${sku}:`, error);
+                return { sku, quantity, originalPrice: 0, totalPrice: 0, description: "Error fetching data", url };
             }
+        };
+
+            // Execute all price fetches in parallel
+            const priceFetchPromises = matchedResults.map(({ sku, quantity }) => fetchPriceDetails(sku, quantity));
+            const priceResults = await Promise.all(priceFetchPromises);
+            
+            resultsTable.innerHTML = ""; // Clear previous results
+            
+            const chunkSize = 20;
+            for (let i = 0; i < priceResults.length; i += chunkSize) {
+                setTimeout(() => {
+                    resultsTable.innerHTML += priceResults.slice(i, i + chunkSize).map(({ sku, quantity, originalPrice, totalPrice, description, url }) => `
+                        <tr>
+                            <td>${sku}</td>
+                            <td>${quantity}</td>
+                            <td>$${originalPrice.toFixed(2)} ea</td>
+                            <td>$${totalPrice.toFixed(2)}</td>
+                            <td>${description}</td>
+                            <td><a href="${url}" target="_blank">View</a></td>
+                        </tr>
+                    `).join("\n");
+                }, i * 100);
+            }
+
+            
+            // Update grand total
+            grandTotal = priceResults.reduce((acc, item) => acc + item.totalPrice, 0);
+            grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
 
             grandTotal += totalPrice;
             itemTotal += quantity; // Fixed quantity accumulation
