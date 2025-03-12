@@ -338,14 +338,11 @@ async function fetchBridgestonePrice(tyreUrl) {
 
         const text = await response.text();
 
-        // Extract the script content containing dataLayer.push
-        const scriptMatch = text.match(/dataLayer\s*=\s*\[\];\s*dataLayer\.push\(({[\s\S]*?})\);/);
-        if (scriptMatch) {
-            const dataLayerJson = JSON.parse(scriptMatch[1]);
+        // Use regex to extract ecomm_totalvalue directly from the script content
+        const priceMatch = text.match(/'ecomm_totalvalue'\s*:\s*'(\d+(\.\d+)?)'/);
 
-            if (dataLayerJson.ecomm_totalvalue) {
-                return parseFloat(dataLayerJson.ecomm_totalvalue);
-            }
+        if (priceMatch) {
+            return parseFloat(priceMatch[1]);
         }
     } catch (error) {
         console.error(`Error fetching Bridgestone price from ${tyreUrl}:`, error);
