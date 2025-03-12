@@ -273,10 +273,12 @@ async function checkPrices() {
 
             const resultItems = doc.querySelectorAll(".col-md-9 .col-lg-4.col-md-4.col-sm-4.col-xs-12");
 
+            const pricePromises = [];
+
             resultItems.forEach((item) => {
                 const make = item.querySelector("b")?.textContent.trim() || "No make available";
                 const model = item.querySelector(".sub-heading-2")?.textContent.trim() || "No model available";
-                const price = parseFloat(item.querySelector(".txtprice-small span")?.textContent.trim()) || 0;
+                let price = parseFloat(item.querySelector(".txtprice-small span")?.textContent.trim()) || 0;
                 const status = item.querySelector(".stocklevel-small")?.textContent.trim() || "No status available";
                 const link = item.querySelector(".image-container a") 
                     ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
@@ -286,15 +288,36 @@ async function checkPrices() {
                 const stockColor = getStockColor(status);
                 const sku = item.querySelector("input[name='tyresku']")?.getAttribute("value") || "No SKU available";
 
-                const row = `<tr style="background-color:${stockColor};">
-                                <td>${make}</td>
-                                <td>${model}</td>
-                                <td>$${price.toFixed(2)}</td>
-                                <td>${sku}</td>
-                                <td><a href="${link}" target="_blank">View</a></td>
-                            </tr>`;
-                resultsTable.innerHTML += row;
+                // If Bridgestone tyre, fetch price separately
+                if (make.toLowerCase().includes("bridgestone")) {
+                    pricePromises.push(
+                        fetchBridgestonePrice(link).then((bridgestonePrice) => {
+                            if (bridgestonePrice) price = bridgestonePrice;
+
+                            const row = `<tr style="background-color:${stockColor};">
+                                            <td>${make}</td>
+                                            <td>${model}</td>
+                                            <td>$${price.toFixed(2)}</td>
+                                            <td>${sku}</td>
+                                            <td><a href="${link}" target="_blank">View</a></td>
+                                        </tr>`;
+                            resultsTable.innerHTML += row;
+                        })
+                    );
+                } else {
+                    const row = `<tr style="background-color:${stockColor};">
+                                    <td>${make}</td>
+                                    <td>${model}</td>
+                                    <td>$${price.toFixed(2)}</td>
+                                    <td>${sku}</td>
+                                    <td><a href="${link}" target="_blank">View</a></td>
+                                </tr>`;
+                    resultsTable.innerHTML += row;
+                }
             });
+
+            await Promise.all(pricePromises);
+
         } catch (error) {
             resultsTable.innerHTML += `<tr><td colspan="4">Error retrieving data for ${trimmedQuery}</td></tr>`;
         }
@@ -305,6 +328,33 @@ async function checkPrices() {
     // Automatically sort by price
     sortTableByPrice();
 }
+
+// Function to fetch price from Bridgestone tyre pages
+async function fetchBridgestonePrice(tyreUrl) {
+    try {
+        const corsProxy = "https://corsproxy.io/?";
+        const response = await fetch(corsProxy + tyreUrl);
+        if (!response.ok) throw new Error(`Network response was not ok (${response.statusText})`);
+
+        const text = await response.text();
+
+        // Extract ecomm_totalvalue from dataLayer.push
+        const dataLayerMatch = text.match(/dataLayer\.push\(({[\s\S]*?})\);/);
+        if (dataLayerMatch) {
+            const dataLayerJson = JSON.parse(dataLayerMatch[1]);
+
+            if (dataLayerJson.ecomm_totalvalue) {
+                return parseFloat(dataLayerJson.ecomm_totalvalue);
+            }
+        }
+    } catch (error) {
+        console.error(`Error fetching Bridgestone price from ${tyreUrl}:`, error);
+    }
+
+    return 0; // Return 0 if price not found
+}
+
+
 
 
 
