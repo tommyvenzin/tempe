@@ -338,17 +338,17 @@ async function fetchBridgestonePrice(tyreUrl) {
 
         const text = await response.text();
 
-        // Match the script containing dataLayer.push
-        const scriptMatch = text.match(/dataLayer\s*=\s*\[\];\s*dataLayer\.push\(({[\s\S]*?})\);/);
+        // Extract the script block that contains 'dataLayer.push'
+        const scriptMatch = text.match(/<script[^>]*>\s*dataLayer\s*=\s*\[\];\s*dataLayer.push\(({[\s\S]*?})\);\s*<\/script>/);
         
         if (scriptMatch) {
-            const scriptContent = scriptMatch[1];
+            const scriptContent = scriptMatch[1]; // Extract only the object inside push({ ... })
 
-            // Extract ecomm_totalvalue using regex
-            const priceMatch = scriptContent.match(/'ecomm_totalvalue'\s*:\s*'(\d+(\.\d+)?)'/);
+            // Manually extract ecomm_totalvalue using regex
+            const priceMatch = scriptContent.match(/'ecomm_totalvalue'\s*:\s*['"]?(\d+(\.\d+)?)['"]?/);
 
             if (priceMatch) {
-                return parseFloat(priceMatch[1]); // Convert to a float and return
+                return parseFloat(priceMatch[1]); // Convert price to a float
             }
         }
     } catch (error) {
@@ -357,7 +357,6 @@ async function fetchBridgestonePrice(tyreUrl) {
 
     return 0; // Return 0 if price not found
 }
-
 
 
 // Function to sort the table by make (alphabetically)
