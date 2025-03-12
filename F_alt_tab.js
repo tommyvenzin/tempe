@@ -338,10 +338,10 @@ async function fetchBridgestonePrice(tyreUrl) {
 
         const text = await response.text();
 
-        // Extract ecomm_totalvalue from dataLayer.push
-        const dataLayerMatch = text.match(/dataLayer\.push\(({[\s\S]*?})\);/);
-        if (dataLayerMatch) {
-            const dataLayerJson = JSON.parse(dataLayerMatch[1]);
+        // Extract the script content containing dataLayer.push
+        const scriptMatch = text.match(/dataLayer\s*=\s*\[\];\s*dataLayer\.push\(({[\s\S]*?})\);/);
+        if (scriptMatch) {
+            const dataLayerJson = JSON.parse(scriptMatch[1]);
 
             if (dataLayerJson.ecomm_totalvalue) {
                 return parseFloat(dataLayerJson.ecomm_totalvalue);
@@ -353,10 +353,6 @@ async function fetchBridgestonePrice(tyreUrl) {
 
     return 0; // Return 0 if price not found
 }
-
-
-
-
 
 
 // Function to sort the table by make (alphabetically)
