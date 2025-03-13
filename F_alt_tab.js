@@ -339,16 +339,24 @@ async function fetchBridgestonePrice(tyreUrl) {
         const text = await response.text();
 
         // Extract the JavaScript block containing dataLayer.push
-        const scriptMatch = text.match(/<script[^>]*>\s*dataLayer\s*=\s*\[\];\s*dataLayer.push\(({[\s\S]*?})\);\s*<\/script>/);
-
+        const scriptMatch = text.match(/dataLayer\.push\s*\(\s*{[\s\S]*?}\s*\);/);
+        
         if (scriptMatch) {
-            // Inject and evaluate JavaScript
-            const scriptContent = scriptMatch[1].replace(/(\w+)\s*:/g, '"$1":'); // Convert into valid JSON format
-            const dataLayerJson = JSON.parse(`{${scriptContent}}`);
+            const scriptContent = scriptMatch[0]; // Get the full dataLayer.push(...) script
 
-            if (dataLayerJson.ecomm_totalvalue) {
-                return parseFloat(dataLayerJson.ecomm_totalvalue);
+            console.log("Extracted dataLayer script:", scriptContent); // Debugging: See what we captured
+
+            // Extract ecomm_totalvalue using regex
+            const priceMatch = scriptContent.match(/['"]ecomm_totalvalue['"]\s*:\s*['"]?(\d+(\.\d+)?)['"]?/);
+
+            if (priceMatch) {
+                console.log("Extracted Price:", priceMatch[1]); // Debugging: Log the extracted price
+                return parseFloat(priceMatch[1]); // Convert to a number
+            } else {
+                console.warn("ecomm_totalvalue not found in DataLayer.");
             }
+        } else {
+            console.warn("dataLayer.push script not found in page.");
         }
     } catch (error) {
         console.error(`Error fetching Bridgestone price from ${tyreUrl}:`, error);
@@ -356,6 +364,7 @@ async function fetchBridgestonePrice(tyreUrl) {
 
     return 0; // Return 0 if price not found
 }
+
 
 // Function to sort the table by make (alphabetically)
 function sortTableByMake() {
