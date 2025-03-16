@@ -330,33 +330,40 @@ async function checkPrices() {
 }
 
 // Function to fetch price from Bridgestone tyre pages
+const puppeteer = require("puppeteer");
+
 async function fetchBridgestonePrice(tyreUrl) {
     try {
-        const corsProxy = "https://corsproxy.io/?";
-        const response = await fetch(corsProxy + tyreUrl);
-        if (!response.ok) throw new Error(`Network response was not ok (${response.statusText})`);
+        const browser = await puppeteer.launch({ headless: true }); // Run in headless mode
+        const page = await browser.newPage();
+        await page.goto(tyreUrl, { waitUntil: "networkidle2" }); // Wait for network requests to finish
 
-        const text = await response.text();
+        // Wait for dataLayer to be populated dynamically
+        await page.waitForFunction(() => 
+            window.dataLayer && window.dataLayer.some(dl => dl.ecomm_totalvalue), 
+            { timeout: 5000 }
+        );
 
-        // Inject script to fetch dataLayer AFTER a delay
-        const price = await new Promise((resolve) => {
-            setTimeout(() => {
-                if (window.dataLayer && window.dataLayer.some(dl => dl.ecomm_totalvalue)) {
-                    const data = window.dataLayer.find(dl => dl.ecomm_totalvalue);
-                    resolve(data ? parseFloat(data.ecomm_totalvalue) : 0);
-                } else {
-                    resolve(0);
-                }
-            }, 3000); // Wait 3 seconds for JavaScript execution
+        // Extract ecomm_totalvalue
+        const price = await page.evaluate(() => {
+            const data = window.dataLayer.find(dl => dl.ecomm_totalvalue);
+            return data ? parseFloat(data.ecomm_totalvalue) : 0;
         });
 
+        await browser.close();
         return price;
     } catch (error) {
         console.error(`Error fetching Bridgestone price from ${tyreUrl}:`, error);
+        return 0;
     }
-
-    return 0; // Return 0 if price not found
 }
+
+// Example usage
+const tyreUrl = "https://tempetyres.com.au/tyreproducts?bridgestone-225/65r17-102v-alenza-a001-2256517a001";
+fetchBridgestonePrice(tyreUrl).then(price => {
+    console.log(`Bridgestone Tyre Price: $${price}`);
+});
+
 
 
 
