@@ -188,7 +188,7 @@ async function checkPrices2() {
 
     try {
         console.log("Fetching data from retail picking history...");
-        const response = await fetch(`https://my.tempetyres.com.au/warehousepicking/history/?day=0&month=0&year=0&q=${encodeURIComponent(initialsInput.join(','))}&searchin=EnteredBy`);
+        const response = await fetch(`https://my.tempetyres.com.au/warehousepicking/sydney/history/?day=0&month=0&year=0&q=${encodeURIComponent(initialsInput.join(','))}&searchin=EnteredBy`);
         if (!response.ok) throw new Error("Network response was not ok");
 
         const text = await response.text();
