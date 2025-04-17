@@ -58,12 +58,12 @@ async function checkPrices() {
                 continue;
             }
 
-            const rawDateText = columns[1].querySelector("b")?.textContent.trim();
+            const rawDateText = columns[1].querySelector("strong")?.textContent.trim();
             if (!rawDateText) {
                 console.warn("Skipping row due to missing date:", row);
                 continue;
             }
-            const dateText = rawDateText.split("-")[3]?.slice(0, 8);
+            const dateText = rawDateText.split("-")[2]?.slice(0, 8);
 
             if (dateText < startDate || dateText > endDate) {
                 console.log("Skipping row outside date range:", rawDateText);
@@ -209,7 +209,7 @@ async function checkPrices2() {
                 continue;
             }
 
-            const rawDateText = columns[1].querySelector("strong")?.textContent.trim();
+            const rawDateText = columns[1].querySelector("b")?.textContent.trim();
             if (!rawDateText) {
                 console.warn("Skipping row due to missing date:", row);
                 continue;
