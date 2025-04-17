@@ -209,7 +209,7 @@ async function checkPrices2() {
                 continue;
             }
 
-            const rawDateText = columns[1].querySelector("b")?.textContent.trim();
+            const rawDateText = columns[1].querySelector("b a")?.textContent.trim();
             if (!rawDateText) {
                 console.warn("Skipping row due to missing date:", row);
                 continue;
