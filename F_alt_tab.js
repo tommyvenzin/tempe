@@ -188,10 +188,12 @@ function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
         e.preventDefault();
 
-        if (typeof checkPrices === "function") {
-            checkPrices(); // Prioritize F Alt Tab
-        } else if (typeof Tinder === "function") {
-            Tinder(); // Fallback for Tyres Tinder
+        const page = window.location.href;
+
+        if (page.includes("Tyrestinder")) {
+            if (typeof Tinder === "function") Tinder();
+        } else if (typeof checkPrices === "function") {
+            checkPrices();
         }
     }
 }
