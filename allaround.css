@@ -28,13 +28,15 @@ p, textarea, button, table, th, td {
     font-size: 1em;
 }
 
-/* Textarea Styling */
-textarea {
+/* Textarea & Input Styling */
+textarea,
+input[type="text"] {
     width: 100%;
-    padding: 12px;
+    font-size: 0.95em;
+    padding: 8px 10px;
     border: 1px solid #ced4da;
     border-radius: 8px;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     background-color: #ffffff;
     color: #333;
     font-family: inherit;
@@ -42,7 +44,8 @@ textarea {
     transition: border-color 0.3s, box-shadow 0.3s;
 }
 
-textarea:focus {
+textarea:focus,
+input[type="text"]:focus {
     border-color: #007bff;
     box-shadow: 0 0 8px rgba(0, 123, 255, 0.2);
     outline: none;
@@ -51,7 +54,7 @@ textarea:focus {
 /* Button Styling */
 button {
     padding: 12px 20px;
-    margin: 8px;
+    margin: 8px 0;
     border: none;
     border-radius: 8px;
     background-color: #007bff;
@@ -71,10 +74,19 @@ button:active {
     transform: translateY(0);
 }
 
-/* Table Container (NEW) */
+/* Button Group Wrapper */
+.button-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+/* Table Container (optional) */
 .table-container {
     width: 100%;
-    overflow-x: auto; /* Horizontal scroll for small screens */
+    overflow-x: auto;
     margin-top: 20px;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
@@ -86,7 +98,7 @@ button:active {
 table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 600px; /* Minimum width to prevent squishing */
+    min-width: 600px;
 }
 
 th, td {
@@ -160,8 +172,9 @@ tfoot td {
         padding: 12px;
     }
 
-    textarea {
-        padding: 10px;
+    textarea,
+    input[type="text"] {
+        padding: 8px;
     }
 
     button {
@@ -175,7 +188,7 @@ tfoot td {
     }
 
     .table-container {
-        border-radius: 0; /* Remove border radius on small screens */
+        border-radius: 0;
     }
 
     table {
