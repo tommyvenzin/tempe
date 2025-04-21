@@ -16,10 +16,11 @@
 
     <div class="form-row">
         <label for="skuInput">Front Size:</label>
-        <input type="text" id="skuInput" placeholder="e.g., 2354518">
+        <input type="text" id="skuInput" placeholder="Front Size" onkeydown="handleSkuInputEnter(event)">
+
 
         <label for="skuInput2">Rear Size:</label>
-        <input type="text" id="skuInput2" placeholder="e.g., 2554018">
+        <input type="text" id="skuInput2" placeholder="Rear Size" onkeydown="handleSkuInputEnter(event)">
     </div>
 
     <div class="form-row">
@@ -41,13 +42,5 @@
     </table>
 
     <script src="F_alt_tab.js" defer></script>
-    <script>
-        document.getElementById("skuInput2").addEventListener("keydown", function(event) {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                Tinder();
-            }
-        });
-    </script>
 </body>
 </html>
