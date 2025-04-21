@@ -187,13 +187,16 @@ function filterTinderTable() {
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
         e.preventDefault();
-
         const page = window.location.href;
 
-        if (page.includes("Tyrestinder")) {
-            if (typeof Tinder === "function") Tinder();
+        if (page.includes("Tyrestinder") && typeof Tinder === "function") {
+            Tinder();
         } else if (typeof checkPrices === "function") {
             checkPrices();
+        }
+    }
+} else if (typeof Tinder === "function") {
+            Tinder(); // Fallback for Tyres Tinder
         }
     }
 }
