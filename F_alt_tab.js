@@ -165,6 +165,25 @@ function removeOutOfStock() {
     });
 }
 
+function removeOutOfStockTinder() {
+    const rows = document.querySelectorAll("#resultsTable tbody tr");
+    rows.forEach(row => {
+        const frontCell = row.cells[1]; // Front tyre column
+        const rearCell = row.cells[2];  // Rear tyre column
+
+        const outColors = ["#f7d4d4", "rgb(247, 212, 212)", "transparent"];
+
+        const isFrontOut = outColors.includes(frontCell.style.backgroundColor);
+        const isRearOut = outColors.includes(rearCell.style.backgroundColor);
+
+        if (isFrontOut || isRearOut) {
+            row.style.display = "none";
+        } else {
+            row.style.display = "";
+        }
+    });
+}
+
 function filterTable() {
     const keyword = document.getElementById("searchBar").value.toLowerCase();
     const rows = document.querySelectorAll("#resultsTable tbody tr");
@@ -193,4 +212,3 @@ function handleSkuInputEnter(e) {
         }
     }
 }
-        
