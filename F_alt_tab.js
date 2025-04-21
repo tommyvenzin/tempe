@@ -51,14 +51,26 @@ async function Tinder() {
     ]);
 
     const grouped = {};
+    savedTinderResults = {};
+
     [...front, ...rear].forEach((item) => {
         grouped[item.brand] = grouped[item.brand] || { front: [], rear: [] };
         (front.includes(item) ? grouped[item.brand].front : grouped[item.brand].rear).push(item);
+
+        savedTinderResults[item.brand] = savedTinderResults[item.brand] || { front: [], rear: [] };
+        (front.includes(item) ? savedTinderResults[item.brand].front : savedTinderResults[item.brand].rear).push(item);
     });
 
-    const sorted = Object.keys(grouped).sort();
+    renderTinderResults(grouped);
+}
+
+function renderTinderResults(data) {
+    const resultsTable = document.querySelector("#resultsTable tbody");
+    resultsTable.innerHTML = "";
+
+    const sorted = Object.keys(data).sort();
     sorted.forEach((brand) => {
-        const { front, rear } = grouped[brand];
+        const { front, rear } = data[brand];
         front.sort((a, b) => a.pattern.localeCompare(b.pattern));
         rear.sort((a, b) => a.pattern.localeCompare(b.pattern));
 
@@ -81,6 +93,21 @@ async function Tinder() {
     if (sorted.length === 0) {
         resultsTable.innerHTML = `<tr><td colspan="5">No matching tyres found.</td></tr>`;
     }
+}
+
+function removeOutOfStockTinder() {
+    const filtered = {};
+
+    for (const [brand, sets] of Object.entries(savedTinderResults)) {
+        const goodFront = sets.front.filter(f => getStockColor(f.stock) !== "#f7d4d4");
+        const goodRear = sets.rear.filter(r => getStockColor(r.stock) !== "#f7d4d4");
+
+        if (goodFront.length && goodRear.length) {
+            filtered[brand] = { front: goodFront, rear: goodRear };
+        }
+    }
+
+    renderTinderResults(filtered);
 }
 
 async function checkPrices() {
@@ -162,38 +189,6 @@ function removeOutOfStock() {
         const bg = row.style.backgroundColor;
         const red = ["#f7d4d4", "rgb(247, 212, 212)", "transparent"];
         row.style.display = red.includes(bg) ? "none" : "";
-    });
-}
-
-function removeOutOfStockTinder() {
-    const rows = document.querySelectorAll("#resultsTable tbody tr");
-
-    rows.forEach(row => {
-        const cells = row.querySelectorAll("td");
-        const outColors = ["#f7d4d4", "rgb(247, 212, 212)", "transparent"];
-
-        let frontCell = cells[1];
-        let rearCell = cells[2];
-
-        // Try to detect which cell is front or rear based on how many tds exist
-        if (cells.length === 5) {
-            // row includes brand, front, rear, front SKU, rear SKU
-            frontCell = cells[1];
-            rearCell = cells[2];
-        } else if (cells.length === 4) {
-            // row has no brand cell
-            frontCell = cells[0];
-            rearCell = cells[1];
-        }
-
-        const isFrontOut = frontCell && outColors.includes(frontCell.style.backgroundColor);
-        const isRearOut = rearCell && outColors.includes(rearCell.style.backgroundColor);
-
-        if (isFrontOut || isRearOut) {
-            row.style.display = "none";
-        } else {
-            row.style.display = "";
-        }
     });
 }
 
