@@ -14,15 +14,13 @@
         <a href="Tyrestinder.html">Tyres Tinder</a>
     </nav>
 
-    <h1>CHECKKKKKKKKKKKK</h1>
-    <p>Enter the tire size or SKU below to retrieve details from Tempe Tyres:</p>
+    <h1>Price Checker Lite Version</h1>
     <textarea id="skuInput" rows="4" placeholder="Enter tire size or SKU, one per line..." onkeydown="handleSkuInputEnter(event)"></textarea>
     <input type="text" id="searchBar" placeholder="Search...">
-    <button onclick="filterTable()">Search</button><br>
-    <button onclick="removeOutOfStock()">Available Only</button>
-    <button onclick="filterRunflat()">Filter by Runflat</button>
-
-
+    <div class="button-group">
+        <button onclick="filterTable()">Search</button>
+        <button onclick="removeOutOfStock()">Available Only</button>
+    </div>
 
     <table id="resultsTable">
         <thead>
