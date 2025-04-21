@@ -175,9 +175,23 @@ function filterTable() {
     if (!keyword) rows.forEach((r) => (r.style.display = ""));
 }
 
+function filterTinderTable() {
+    const keyword = document.getElementById("searchBar").value.toLowerCase();
+    const rows = document.querySelectorAll("#resultsTable tbody tr");
+    rows.forEach((row) => {
+        const rowText = row.textContent.toLowerCase();
+        row.style.display = rowText.includes(keyword) ? "" : "none";
+    });
+}
+
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
         e.preventDefault();
-        checkPrices();
+
+        if (typeof checkPrices === "function") {
+            checkPrices(); // Prioritize F Alt Tab
+        } else if (typeof Tinder === "function") {
+            Tinder(); // Fallback for Tyres Tinder
+        }
     }
 }
