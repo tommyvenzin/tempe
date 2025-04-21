@@ -5,6 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secret Sauce v1.0</title>
     <link rel="stylesheet" href="allaround.css">
+    <style>
+        .form-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .form-row label {
+            min-width: 120px;
+            font-weight: 500;
+        }
+        .form-row input,
+        .form-row select {
+            flex: 1;
+            min-width: 140px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation Menu -->
@@ -16,19 +37,38 @@
 
     <h1>Project-C v3.0 † Stay Halal Brother ☪</h1>
     <p>Not Including WA, Puncture, SF, or any price that's not on the website</p>
-    
-    <label for="skuInput">Enter Initials:</label>
-    <input type="text" id="skuInput" placeholder="Enter initials...">
-    
-    <label for="startDateInput">Start Date (Month-Day):</label>
-    <input type="text" id="startDateInput" placeholder="MM-DD">
-    
-    <label for="endDateInput">End Date (Month-Day):</label>
-    <input type="text" id="endDateInput" placeholder="MM-DD">
-    
-    <button onclick="checkPrices()">Check Prices</button> <br>
-    
-    <button onclick="checkPrices2()">Wholesale Prices</button> <br>
+
+    <div class="form-row">
+        <label for="skuInput">Initials:</label>
+        <select id="skuInput" multiple>
+            <option value="ABR">ABR</option>
+            <option value="AZI">AZI</option>
+            <option value="DB">DB</option>
+            <option value="MMS">MMS</option>
+            <option value="MOR">MOR</option>
+            <option value="SA">SA</option>
+            <option value="SUN">SUN</option>
+            <option value="TOG">TOG</option>
+        </select>
+
+        <label for="customInitialInput">Manual Initial:</label>
+        <input type="text" id="customInitialInput" placeholder="e.g., JON">
+    </div>
+
+    <div class="form-row">
+        <label for="startDateInput">Start Date (MM-DD):</label>
+        <input type="text" id="startDateInput" placeholder="MM-DD">
+
+        <label for="endDateInput">End Date (MM-DD):</label>
+        <input type="text" id="endDateInput" placeholder="MM-DD">
+    </div>
+
+    <div class="button-group">
+        <button onclick="autoFillSalesPeriod()">Auto Select This Week</button>
+        <button onclick="checkPrices()">Check Prices</button>
+        <button onclick="wholesalePrices()">Wholesale Prices</button>
+    </div>
+
     <b>Total : <p id="grandTotal" class="grand-total"> </p> Quantity : <p id="itemTotal" class="item-total"></p></b>
 
     <table id="resultsTable">
@@ -44,7 +84,7 @@
         </thead>
         <tbody></tbody>
     </table>
-    
+
     <script src="./Project_C.js" defer></script>
 </body>
 </html>
