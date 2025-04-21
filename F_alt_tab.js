@@ -167,14 +167,27 @@ function removeOutOfStock() {
 
 function removeOutOfStockTinder() {
     const rows = document.querySelectorAll("#resultsTable tbody tr");
-    rows.forEach(row => {
-        const frontCell = row.cells[1]; // Front tyre column
-        const rearCell = row.cells[2];  // Rear tyre column
 
+    rows.forEach(row => {
+        const cells = row.querySelectorAll("td");
         const outColors = ["#f7d4d4", "rgb(247, 212, 212)", "transparent"];
 
-        const isFrontOut = outColors.includes(frontCell.style.backgroundColor);
-        const isRearOut = outColors.includes(rearCell.style.backgroundColor);
+        let frontCell = cells[1];
+        let rearCell = cells[2];
+
+        // Try to detect which cell is front or rear based on how many tds exist
+        if (cells.length === 5) {
+            // row includes brand, front, rear, front SKU, rear SKU
+            frontCell = cells[1];
+            rearCell = cells[2];
+        } else if (cells.length === 4) {
+            // row has no brand cell
+            frontCell = cells[0];
+            rearCell = cells[1];
+        }
+
+        const isFrontOut = frontCell && outColors.includes(frontCell.style.backgroundColor);
+        const isRearOut = rearCell && outColors.includes(rearCell.style.backgroundColor);
 
         if (isFrontOut || isRearOut) {
             row.style.display = "none";
@@ -183,6 +196,7 @@ function removeOutOfStockTinder() {
         }
     });
 }
+
 
 function filterTable() {
     const keyword = document.getElementById("searchBar").value.toLowerCase();
