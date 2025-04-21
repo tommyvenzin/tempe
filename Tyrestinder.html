@@ -14,20 +14,23 @@
         <a href="Tyrestinder.html">Tyres Tinder </a>
     </nav>
 
-    <h1>Tyres Tinder 🍑</h1>
-    <p>Front :</p>
-    <textarea id="skuInput" rows="1" placeholder="Enter tire size or SKU, one per line..."></textarea>
-    <p>Rear :</p>
-    <textarea id="skuInput2" rows="1" placeholder="Enter tire size or SKU, one per line..."></textarea>
-    <button onclick="Tinder()">Check Prices</button>
+    <div class="form-row">
+        <label for="skuInput">Front Size:</label>
+        <input type="text" id="skuInput" placeholder="e.g., 2354518">
 
-    <input type="text" id="searchBar" placeholder="Search...">
-    <button onclick="filterTable()">Search</button>
+        <label for="skuInput2">Rear Size:</label>
+        <input type="text" id="skuInput2" placeholder="e.g., 2554018">
+    </div>
+
+    <div class="form-row">
+        <label for="searchBar">Search:</label>
+        <input type="text" id="searchBar" placeholder="Filter results..." oninput="filterTable()">
+    </div>
 
     <table id="resultsTable">
         <thead>
             <tr>
-                <th>Brand Name</th>
+                <th>Brand</th>
                 <th>Front Model</th>
                 <th>Rear Model</th>
                 <th>Front SKU</th>
@@ -36,7 +39,15 @@
         </thead>
         <tbody></tbody>
     </table>
-    
-    <script src="./F_alt_tab.js"></script>
+
+    <script src="F_alt_tab.js" defer></script>
+    <script>
+        document.getElementById("skuInput2").addEventListener("keydown", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                Tinder();
+            }
+        });
+    </script>
 </body>
 </html>
