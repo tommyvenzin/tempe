@@ -131,7 +131,7 @@ async function checkPrices() {
             const res = await fetch(url);
             const text = await res.text();
             const doc = new DOMParser().parseFromString(text, "text/html");
-            const items = doc.querySelectorAll(".col-md-9 .col-lg-4.col-md-4.col-sm-4.col-xs-12");
+            const items = doc.querySelectorAll(".col-lg-3 col-md-3 col-sm-4 col-xs-12");
 
             return Array.from(items).map((item) => {
                 const make = item.querySelector("b")?.textContent.trim() || "No make";
