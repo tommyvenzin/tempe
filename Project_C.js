@@ -77,7 +77,7 @@ async function checkPrices(type = "retail") {
                 const html = await res.text();
                 const doc = parser.parseFromString(html, "text/html");
 
-                const priceElement = doc.querySelector(".txtprice-small span");
+                const priceElement = doc.querySelector(".sale-price span");
                 const originalPrice = priceElement ? parseFloat(priceElement.textContent.trim()) : 0;
                 const totalPrice = originalPrice * quantity;
 
