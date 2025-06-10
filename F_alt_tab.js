@@ -27,7 +27,7 @@ async function Tinder() {
             const res = await fetch(url);
             const html = await res.text();
             const doc = new DOMParser().parseFromString(html, "text/html");
-            const items = doc.querySelectorAll(".col-md-9 .col-lg-4.col-md-4.col-sm-4.col-xs-12");
+            const items = doc.querySelectorAll(".col-lg-3 col-md-3 col-sm-4 col-xs-12");
 
             return Array.from(items).map((item) => ({
                 brand: item.querySelector("span.text-uppercase")?.textContent.trim() || "No brand available",
