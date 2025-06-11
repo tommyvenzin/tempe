@@ -3,6 +3,10 @@ console.log("Project_C.js loaded successfully");
 async function checkPrices(type = "retail") {
     const initialsSelect = document.getElementById("skuInput");
     const initialsInput = Array.from(initialsSelect.selectedOptions).map(opt => opt.value);
+
+    const manualInitial = document.getElementById("customInitialInput").value.trim();
+    if (manualInitial) initialsInput.push(manualInitial.toUpperCase());
+
     const startDateInput = document.getElementById("startDateInput").value.trim();
     const endDateInput = document.getElementById("endDateInput").value.trim();
     const resultsTable = document.getElementById("resultsTable").querySelector("tbody");
@@ -77,14 +81,31 @@ async function checkPrices(type = "retail") {
                 const html = await res.text();
                 const doc = parser.parseFromString(html, "text/html");
 
-                const priceElement = doc.querySelector(".sale-price span");
-                const originalPrice = priceElement ? parseFloat(priceElement.textContent.trim()) : 0;
-                const totalPrice = originalPrice * quantity;
+                // Price detection: Tyre or Wheel
+                let price = 0;
+                const tyrePrice = doc.querySelector(".sale-price span")?.textContent.trim();
+                const wheelPriceText = doc.querySelector(".wh-price")?.textContent.trim();
+                if (tyrePrice) {
+                    price = parseFloat(tyrePrice);
+                } else if (wheelPriceText) {
+                    const match = wheelPriceText.match(/\$([\d.]+)/);
+                    if (match) price = parseFloat(match[1]);
+                }
 
-                const descElement = doc.querySelector(".sub-heading-2");
-                const description = descElement ? descElement.textContent.trim() : "No description available";
+                const totalPrice = price * quantity;
 
-                return { sku, quantity, originalPrice, totalPrice, description, url };
+                // Description detection
+                const tySize = doc.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
+                const tyPattern = doc.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
+                let description = `${tySize} ${tyPattern}`.trim();
+
+                if (!description || description === "") {
+                    const whSize = doc.querySelector(".sub-heading-wh-2")?.textContent.trim() || "";
+                    const whFinish = doc.querySelector(".sub-heading-wh-3")?.textContent.trim() || "";
+                    description = `${whSize} ${whFinish}`.trim() || "No description available";
+                }
+
+                return { sku, quantity, originalPrice: price, totalPrice, description, url };
             } catch (e) {
                 console.error(`Error fetching SKU ${sku}:`, e);
                 return { sku, quantity, originalPrice: 0, totalPrice: 0, description: "Error fetching data", url };
