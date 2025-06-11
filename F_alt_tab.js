@@ -30,15 +30,17 @@ async function Tinder() {
             const items = doc.querySelectorAll(".col-lg-3 col-md-3 col-sm-4 col-xs-12");
 
             return Array.from(items).map((item) => ({
-                brand: item.querySelector("text-uppercase brand-name")?.textContent.trim() || "No brand available",
-                pattern: item.querySelector(".sub-heading-ty-2")?.textContent.trim() || "No pattern available",
+                brand: item.querySelector(".brand-name b")?.textContent.trim() || "No brand available",
+                pattern: item.querySelector(".sub-heading-ty-3")?.textContent.trim() || "No pattern available",
+                size: item.querySelector(".sub-heading-ty-2")?.textContent.trim() || "No size available",
                 price: item.querySelector(".sale-price span")?.textContent.trim() || "No price available",
-                stock: item.querySelector(".stocklevel-small")?.textContent.trim() || "No stock info",
+                stock: item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "No stock info",
                 sku: item.querySelector("input[name='tyresku']")?.value || "No SKU available",
                 link: item.querySelector(".image-container a")
-                    ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
-                    : "#",
-            }));
+                        ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
+                        : "#",
+        }));
+
         } catch (e) {
             console.error(`Error fetching data for ${size}:`, e);
             return [];
