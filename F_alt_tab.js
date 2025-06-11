@@ -1,4 +1,3 @@
-// Fully Optimized Version — Cleaned, Consistent, No Puppeteer
 console.log("F_alt_tab.js loaded successfully");
 
 // Utility Function: Get Stock Color
@@ -27,20 +26,18 @@ async function Tinder() {
             const res = await fetch(url);
             const html = await res.text();
             const doc = new DOMParser().parseFromString(html, "text/html");
-            const items = doc.querySelectorAll(".col-lg-3 col-md-3 col-sm-4 col-xs-12");
+            const items = doc.querySelectorAll(".product-container");
 
             return Array.from(items).map((item) => ({
                 brand: item.querySelector(".brand-name b")?.textContent.trim() || "No brand available",
                 pattern: item.querySelector(".sub-heading-ty-3")?.textContent.trim() || "No pattern available",
-                size: item.querySelector(".sub-heading-ty-2")?.textContent.trim() || "No size available",
                 price: item.querySelector(".sale-price span")?.textContent.trim() || "No price available",
                 stock: item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "No stock info",
                 sku: item.querySelector("input[name='tyresku']")?.value || "No SKU available",
                 link: item.querySelector(".image-container a")
-                        ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
-                        : "#",
-        }));
-
+                    ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
+                    : "#",
+            }));
         } catch (e) {
             console.error(`Error fetching data for ${size}:`, e);
             return [];
@@ -133,13 +130,15 @@ async function checkPrices() {
             const res = await fetch(url);
             const text = await res.text();
             const doc = new DOMParser().parseFromString(text, "text/html");
-            const items = doc.querySelectorAll(".col-lg-3 col-md-3 col-sm-4 col-xs-12");
+            const items = doc.querySelectorAll(".product-container");
 
             return Array.from(items).map((item) => {
-                const make = item.querySelector("b")?.textContent.trim() || "No make";
-                const model = item.querySelector(".sub-heading-2")?.textContent.trim() || "No model";
-                const price = parseFloat(item.querySelector(".txtprice-small span")?.textContent.trim()) || 0;
-                const stock = item.querySelector(".stocklevel-small")?.textContent.trim() || "No status";
+                const make = item.querySelector(".brand-name b")?.textContent.trim() || "No make";
+                const size = item.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
+                const pattern = item.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
+                const model = `${size} ${pattern}`.trim();
+                const price = parseFloat(item.querySelector(".sale-price span")?.textContent.trim()) || 0;
+                const stock = item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "No status";
                 const sku = item.querySelector("input[name='tyresku']")?.value || "No SKU";
                 const link = item.querySelector(".image-container a")
                     ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
@@ -194,7 +193,6 @@ function removeOutOfStock() {
     });
 }
 
-
 function filterTable() {
     const keyword = document.getElementById("searchBar").value.toLowerCase();
     const rows = document.querySelectorAll("#resultsTable tbody tr");
@@ -217,7 +215,6 @@ function filterTinderTable() {
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
         e.preventDefault();
-
         if (typeof checkPrices === "function") {
             checkPrices();
         }
