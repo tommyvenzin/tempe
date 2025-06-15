@@ -41,13 +41,13 @@ async function checkPrices(type = "retail") {
     };
 
     const dateSelector = type === "retail" ? "strong" : "b a";
+    const parser = new DOMParser();
 
     try {
         const response = await fetch(`${urlMap[type]}?day=0&month=0&year=0&q=${encodeURIComponent(initialsInput.join(","))}&searchin=EnteredBy`);
         if (!response.ok) throw new Error("Network response was not ok");
         const text = await response.text();
 
-        const parser = new DOMParser();
         const doc = parser.parseFromString(text, "text/html");
         const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
 
@@ -76,63 +76,75 @@ async function checkPrices(type = "retail") {
 
         const fetchPriceDetails = async ({ sku, quantity }) => {
             const searchUrl = `https://www.tempetyres.com.au/search?q=${encodeURIComponent(sku)}`;
+            let price = 0;
+            let description = "";
+            let productUrl = searchUrl;
+
             try {
                 const res = await fetch(searchUrl);
                 const html = await res.text();
                 const doc = parser.parseFromString(html, "text/html");
 
-                let price = 0;
-                let needProductPage = false;
-
-                const priceText = doc.querySelector(".sale-price span")?.textContent.trim();
-                if (priceText && !priceText.toLowerCase().includes("call") && !isNaN(parseFloat(priceText))) {
-                    price = parseFloat(priceText);
-                } else {
-                    needProductPage = true;
+                // Try search page price
+                let priceText = doc.querySelector(".sale-price span")?.textContent.trim();
+                if (!priceText) {
+                    const whPriceText = doc.querySelector(".wh-price")?.textContent;
+                    const match = whPriceText && whPriceText.match(/\$([\d.]+)/);
+                    if (match) priceText = match[1];
                 }
 
-                let description = "";
-                let productUrl = searchUrl;
-
-                if (needProductPage) {
+                if (priceText && !priceText.toLowerCase().includes("call") && !isNaN(parseFloat(priceText))) {
+                    price = parseFloat(priceText);
+                    // Description from search page
+                    if (doc.querySelector(".sub-heading-ty-2")) {
+                        const tySize = doc.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
+                        const tyPattern = doc.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
+                        description = `${tySize} ${tyPattern}`.trim();
+                    } else if (doc.querySelector(".sub-heading-wh-2")) {
+                        const whSize = doc.querySelector(".sub-heading-wh-2")?.textContent.trim() || "";
+                        const whFinish = doc.querySelector(".sub-heading-wh-3")?.textContent.trim() || "";
+                        description = `${whSize} ${whFinish}`.trim();
+                    }
+                } else {
+                    // Follow product page
                     const productLinkElement = doc.querySelector(".product-container .image-container a");
                     if (productLinkElement) {
                         productUrl = `https://www.tempetyres.com.au${productLinkElement.getAttribute("href")}`;
                         const productRes = await fetch(productUrl);
                         const productHtml = await productRes.text();
+                        const productDoc = parser.parseFromString(productHtml, "text/html");
 
-                        const priceMatch = productHtml.match(/'ecomm_totalvalue':\s*'(\d+)'/);
-                        if (priceMatch) {
-                            price = parseFloat(priceMatch[1]);
+                        // Wheels
+                        const price2 = productDoc.querySelector("#price2")?.textContent.trim();
+                        if (price2 && !isNaN(parseFloat(price2.replace("$", "")))) {
+                            price = parseFloat(price2.replace("$", ""));
                         }
 
-                        const productDoc = parser.parseFromString(productHtml, "text/html");
-                        const tySize = productDoc.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
-                        const tyPattern = productDoc.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
-                        description = `${tySize} ${tyPattern}`.trim();
+                        // Tyres
+                        if (price === 0) {
+                            const match = productHtml.match(/'ecomm_totalvalue':\s*'(\d+)'/);
+                            if (match) price = parseFloat(match[1]);
+                        }
 
-                        if (!description) {
+                        if (productDoc.querySelector(".sub-heading-ty-2")) {
+                            const tySize = productDoc.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
+                            const tyPattern = productDoc.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
+                            description = `${tySize} ${tyPattern}`.trim();
+                        } else if (productDoc.querySelector(".sub-heading-wh-2")) {
                             const whSize = productDoc.querySelector(".sub-heading-wh-2")?.textContent.trim() || "";
                             const whFinish = productDoc.querySelector(".sub-heading-wh-3")?.textContent.trim() || "";
-                            description = `${whSize} ${whFinish}`.trim() || "No description available";
+                            description = `${whSize} ${whFinish}`.trim();
+                        } else {
+                            description = "No description available";
                         }
                     } else {
                         description = "No product link found";
-                    }
-                } else {
-                    const tySize = doc.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
-                    const tyPattern = doc.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
-                    description = `${tySize} ${tyPattern}`.trim();
-
-                    if (!description) {
-                        const whSize = doc.querySelector(".sub-heading-wh-2")?.textContent.trim() || "";
-                        const whFinish = doc.querySelector(".sub-heading-wh-3")?.textContent.trim() || "";
-                        description = `${whSize} ${whFinish}`.trim() || "No description available";
                     }
                 }
 
                 const totalPrice = price * quantity;
                 return { sku, quantity, originalPrice: price, totalPrice, description, url: productUrl };
+
             } catch (e) {
                 console.error(`Error fetching SKU ${sku}:`, e);
                 return { sku, quantity, originalPrice: 0, totalPrice: 0, description: "Error fetching data", url: searchUrl };
