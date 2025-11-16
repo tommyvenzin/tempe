@@ -147,7 +147,7 @@ td a:hover {
 }
 
 table tbody tr:hover {
-    background-color: #f8f9fa;
+    background-color: #020617;
 }
 
 tfoot td {
@@ -325,6 +325,7 @@ tfoot td,
 .button-group {
     justify-content: center;
 }
+
 
 
 
