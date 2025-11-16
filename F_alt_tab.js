@@ -64,5 +64,50 @@ async function Tinder() {
                 price: item.querySelector(".sale-price span")?.textContent.trim() || "No price available",
                 stock: item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "No stock info",
                 sku: item.querySelector("input[name='tyresku']")?.value || "No SKU available",
-                lin
+                link: item.querySelector(".image-container a")
+                    ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
+                    : "#",
+            }));
+        } catch (e) {
+            console.error(`Error fetching data for ${size}:`, e);
+            return [];
+        }
+    };
 
+    const [front, rear] = await Promise.all([
+        fetchTyreDetails(skuInput),
+        fetchTyreDetails(skuInput2),
+    ]);
+
+    const grouped = {};
+    savedTinderResults = {};
+
+    [...front, ...rear].forEach((item) => {
+        grouped[item.brand] = grouped[item.brand] || { front: [], rear: [] };
+        (front.includes(item) ? grouped[item.brand].front : grouped[item.brand].rear).push(item);
+
+        savedTinderResults[item.brand] = savedTinderResults[item.brand] || { front: [], rear: [] };
+        (front.includes(item) ? savedTinderResults[item.brand].front : savedTinderResults[item.brand].rear).push(item);
+    });
+
+    renderTinderResults(grouped);
+}
+
+function renderTinderResults(data) {
+    const resultsTable = document.querySelector("#resultsTable tbody");
+    resultsTable.innerHTML = "";
+
+    const sorted = Object.keys(data).sort();
+    sorted.forEach((brand) => {
+        const { front, rear } = data[brand];
+        front.sort((a, b) => a.pattern.localeCompare(b.pattern));
+        rear.sort((a, b) => a.pattern.localeCompare(b.pattern));
+
+        const rowCount = Math.max(front.length, rear.length);
+        for (let i = 0; i < rowCount; i++) {
+            const f = front[i] || {}, r = rear[i] || {};
+            const row = `<tr>
+                ${i === 0 ? `<td rowspan="${rowCount}">${brand}</td>` : ""}
+                <td style="background:${getStockColor(f.stock)};" data-stock="${(f.stock || "").replace(/"/g, "&quot;")}">
+                    ${f.pattern ? `<a href="${f.link}" target="_blank">${f.pattern}</a>` : "No data"}${f.price ? ` - $${f.price}` : ""} (${f.stock || "No stock"})</td>
+                <td style="background:${getStockColor(r.stock)};" data-stock="${(r.stock || "").replace(/"/g,
