@@ -305,7 +305,7 @@ th {
 }
 
 td {
-    background-color: #020617;
+    background-color: transparent;   /* let the <tr> background show */
     border: 1px solid #1f2937;
     color: #e5e7eb;
 }
@@ -325,5 +325,6 @@ tfoot td,
 .button-group {
     justify-content: center;
 }
+
 
 
