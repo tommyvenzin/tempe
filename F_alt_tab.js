@@ -104,9 +104,11 @@ function renderTinderResults(data) {
         rear.sort((a, b) => a.pattern.localeCompare(b.pattern));
 
         const rowCount = Math.max(front.length, rear.length);
+        const safeBrand = (brand || "").replace(/"/g, "&quot;");
+
         for (let i = 0; i < rowCount; i++) {
             const f = front[i] || {}, r = rear[i] || {};
-            const row = `<tr>
+            const row = `<tr data-brand="${safeBrand.toLowerCase()}">
                 ${i === 0 ? `<td rowspan="${rowCount}">${brand}</td>` : ""}
                 <td style="background:${getStockColor(f.stock)};" data-stock="${(f.stock || "").replace(/"/g, "&quot;")}">
                     ${f.pattern ? `<a href="${f.link}" target="_blank">${f.pattern}</a>` : "No data"}${f.price ? ` - $${f.price}` : ""} (${f.stock || "No stock"})</td>
@@ -123,6 +125,7 @@ function renderTinderResults(data) {
         resultsTable.innerHTML = `<tr><td colspan="5">No matching tyres found.</td></tr>`;
     }
 }
+
 
 // Tyres Tinder "Available Only" – uses stock text
 function removeOutOfStockTinder() {
@@ -245,12 +248,28 @@ function removeOutOfStock() {
 
 // Shared text filter (used by both index.html and Tyrestinder.html)
 function filterTable() {
-    const keyword = document.getElementById("searchBar").value.toLowerCase();
+    const keyword = document.getElementById("searchBar").value.toLowerCase().trim();
     const rows = document.querySelectorAll("#resultsTable tbody tr");
+
     rows.forEach((row) => {
-        const match = [...row.cells].some((c) => c.textContent.toLowerCase().includes(keyword));
+        // If search box is empty, show everything
+        if (!keyword) {
+            row.style.display = "";
+            return;
+        }
+
+        const brand = (row.dataset.brand || "").toLowerCase();
+        const matchInCells = [...row.cells].some((c) =>
+            c.textContent.toLowerCase().includes(keyword)
+        );
+
+        // Row matches if:
+        // - Any cell contains the keyword (F Alt Tab behaviour)
+        // - OR its data-brand matches (fixes Tyres Tinder + rowspan issue)
+        const match = matchInCells || brand.includes(keyword);
         row.style.display = match ? "" : "none";
     });
-    if (!keyword) rows.forEach((r) => (r.style.display = ""));
 }
+
+
 
