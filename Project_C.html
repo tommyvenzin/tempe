@@ -30,7 +30,41 @@
             display: none;
             margin-top: 10px;
             font-weight: bold;
-            color: #4ade80;
+        }
+
+        /* Progress bar for leaderboard */
+        .progress-wrapper {
+            min-width: 180px;
+        }
+        .progress-label {
+            font-size: 0.85em;
+            margin-bottom: 4px;
+            opacity: 0.9;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            border-radius: 999px;
+            overflow: hidden;
+            border: 1px solid #1f2937;
+            background-color: #020617;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0;
+            transition: width 0.4s ease;
+        }
+        .progress-fill.grade-keepgoing {
+            background: linear-gradient(90deg, #4b5563, #9ca3af);
+        }
+        .progress-fill.grade-level1 {
+            background: linear-gradient(90deg, #f59e0b, #d97706);
+        }
+        .progress-fill.grade-level2 {
+            background: linear-gradient(90deg, #22c55e, #16a34a);
+        }
+        .progress-fill.grade-sitdown {
+            background: linear-gradient(90deg, #e11d48, #b91c1c);
         }
     </style>
 </head>
@@ -52,7 +86,7 @@
         <label for="skuInput">Initials:</label>
         <select id="skuInput" multiple>
             <option value="ABR">ABR</option>
-            <option value="AZI">AZI</option>
+            <option value="YF">YF</option>
             <option value="DB">DB</option>
             <option value="MRA">MRA</option>
             <option value="MOR">MOR</option>
@@ -77,8 +111,7 @@
         <button onclick="autoFillSalesPeriod()">Auto Select This Week</button>
         <button onclick="checkPrices()">Check Prices</button>
         <button onclick="wholesalePrices()">Wholesale Prices</button>
-
-        <!-- NEW BUTTON -->
+        <!-- Leaderboard / grade button -->
         <button onclick="allInitialsRanked()">All Initials (Ranked + Grade)</button>
     </div>
 
