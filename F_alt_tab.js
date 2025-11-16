@@ -173,7 +173,7 @@ async function checkPrices() {
                 const pattern = item.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
                 const model = `${size} ${pattern}`.trim();
                 const price = parseFloat(item.querySelector(".sale-price span")?.textContent.trim()) || 0;
-                const stock = item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "No status";
+                const stock = item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "On Order";
                 const sku = item.querySelector("input[name='tyresku']")?.value || "No SKU";
                 const link = item.querySelector(".image-container a")
                     ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
@@ -253,3 +253,4 @@ function filterTable() {
     });
     if (!keyword) rows.forEach((r) => (r.style.display = ""));
 }
+
