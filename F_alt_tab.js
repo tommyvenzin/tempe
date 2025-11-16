@@ -4,12 +4,30 @@ console.log("F_alt_tab.js loaded successfully");
 function getStockColor(stockStatus) {
     if (!stockStatus) return "transparent";
     const lower = stockStatus.toLowerCase();
-    if (lower.includes("out of stock") || lower.includes("on order")) return "#f7d4d4";
-    if (lower.match(/\b[1-4]\s*in stock\b/)) return "#ffd699";
-    if (lower.match(/\b[5-8]\s*in stock\b/)) return "#fff5b1";
-    if (lower.includes("8+ in stock") || lower.includes("in stock")) return "#d4f7d4";
+
+    // OUT OF STOCK / ON ORDER → deep red
+    if (lower.includes("out of stock") || lower.includes("on order")) {
+        return "#4b1113"; // dark red
+    }
+
+    // 1–4 IN STOCK → amber
+    if (lower.match(/\b[1-4]\s*in stock\b/)) {
+        return "#4b2a12"; // dark amber/brown
+    }
+
+    // 5–8 IN STOCK → olive / yellow-green
+    if (lower.match(/\b[5-8]\s*in stock\b/)) {
+        return "#3b3a16"; // olive-ish
+    }
+
+    // 8+ IN STOCK or generic "in stock" → deep green
+    if (lower.includes("8+ in stock") || lower.includes("in stock")) {
+        return "#123524"; // deep green
+    }
+
     return "transparent";
 }
+
 
 async function Tinder() {
     const skuInput = document.getElementById("skuInput").value.trim();
@@ -220,3 +238,4 @@ function handleSkuInputEnter(e) {
         }
     }
 }
+
