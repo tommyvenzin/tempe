@@ -390,56 +390,66 @@ async function allInitialsRanked() {
     let grandTotal = 0;
     let itemTotal = 0;
 
+    // 🔁 UPDATED: process each initial ONE BY ONE instead of joining with commas
     const processType = async (type) => {
-        const response = await fetch(
-            `${urlMap[type]}?day=0&month=0&year=0&q=${encodeURIComponent(allInitials.join(","))}&searchin=EnteredBy`
-        );
-        if (!response.ok) throw new Error("Network response was not ok");
-        const text = await response.text();
-
-        const doc = parser.parseFromString(text, "text/html");
-        const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
+        const baseUrl = urlMap[type];
         const dateSelector = type === "retail" ? "strong" : "b a";
 
-        for (const row of rows) {
-            const columns = row.querySelectorAll("td");
-            if (columns.length < 7) continue;
+        for (const initials of allInitials) {
+            try {
+                const response = await fetch(
+                    `${baseUrl}?day=0&month=0&year=0&q=${encodeURIComponent(initials)}&searchin=EnteredBy`
+                );
+                if (!response.ok) continue;
 
-            const rawDateText = columns[1].querySelector(dateSelector)?.textContent.trim();
-            const dateText = rawDateText?.split("-")[2]?.slice(0, 8);
-            if (!dateText || dateText < startDate || dateText > endDate) continue;
+                const text = await response.text();
+                const doc = parser.parseFromString(text, "text/html");
+                const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
 
-            const initialsElement = columns[3].querySelector("a");
-            const skuElement = columns[1].querySelector("small");
-            const quantityElement = columns[5];
-            if (!initialsElement || !skuElement || !quantityElement) continue;
+                for (const row of rows) {
+                    const columns = row.querySelectorAll("td");
+                    if (columns.length < 7) continue;
 
-            const initials = initialsElement.textContent.trim();
-            const sku = skuElement.textContent.trim();
-            const quantity = parseInt(quantityElement.textContent.trim(), 10);
+                    const rawDateText = columns[1].querySelector(dateSelector)?.textContent.trim();
+                    const dateText = rawDateText?.split("-")[2]?.slice(0, 8);
+                    if (!dateText || dateText < startDate || dateText > endDate) continue;
 
-            if (!initials || !allInitials.includes(initials)) continue;
+                    const initialsElement = columns[3].querySelector("a");
+                    const skuElement = columns[1].querySelector("small");
+                    const quantityElement = columns[5];
+                    if (!initialsElement || !skuElement || !quantityElement) continue;
 
-            const price = await getPriceForSku(sku);
-            const lineTotal = price * quantity;
+                    const rowInitials = initialsElement.textContent.trim();
+                    const sku = skuElement.textContent.trim();
+                    const quantity = parseInt(quantityElement.textContent.trim(), 10);
 
-            if (!totals[initials]) {
-                totals[initials] = {
-                    retailTotal: 0,
-                    wholesaleTotal: 0,
-                    qty: 0
-                };
+                    // Make sure each row actually belongs to THIS initials
+                    if (!rowInitials || rowInitials !== initials) continue;
+
+                    const price = await getPriceForSku(sku);
+                    const lineTotal = price * quantity;
+
+                    if (!totals[initials]) {
+                        totals[initials] = {
+                            retailTotal: 0,
+                            wholesaleTotal: 0,
+                            qty: 0
+                        };
+                    }
+
+                    if (type === "retail") {
+                        totals[initials].retailTotal += lineTotal;
+                    } else {
+                        totals[initials].wholesaleTotal += lineTotal;
+                    }
+
+                    totals[initials].qty += quantity;
+                    grandTotal += lineTotal;
+                    itemTotal += quantity;
+                }
+            } catch (e) {
+                console.error(`Error processing ${type} for ${initials}:`, e);
             }
-
-            if (type === "retail") {
-                totals[initials].retailTotal += lineTotal;
-            } else {
-                totals[initials].wholesaleTotal += lineTotal;
-            }
-
-            totals[initials].qty += quantity;
-            grandTotal += lineTotal;
-            itemTotal += quantity;
         }
     };
 
