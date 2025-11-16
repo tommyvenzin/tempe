@@ -110,4 +110,146 @@ function renderTinderResults(data) {
                 ${i === 0 ? `<td rowspan="${rowCount}">${brand}</td>` : ""}
                 <td style="background:${getStockColor(f.stock)};" data-stock="${(f.stock || "").replace(/"/g, "&quot;")}">
                     ${f.pattern ? `<a href="${f.link}" target="_blank">${f.pattern}</a>` : "No data"}${f.price ? ` - $${f.price}` : ""} (${f.stock || "No stock"})</td>
-                <td style="background:${getStockColor(r.stock)};" data-stock="${(r.stock || "").replace(/"/g,
+                <td style="background:${getStockColor(r.stock)};" data-stock="${(r.stock || "").replace(/"/g, "&quot;")}">
+                    ${r.pattern ? `<a href="${r.link}" target="_blank">${r.pattern}</a>` : "No data"}${r.price ? ` - $${r.price}` : ""} (${r.stock || "No stock"})</td>
+                <td>${f.sku || "No SKU"}</td>
+                <td>${r.sku || "No SKU"}</td>
+            </tr>`;
+            resultsTable.innerHTML += row;
+        }
+    });
+
+    if (sorted.length === 0) {
+        resultsTable.innerHTML = `<tr><td colspan="5">No matching tyres found.</td></tr>`;
+    }
+}
+
+// Tyres Tinder "Available Only" – uses stock text
+function removeOutOfStockTinder() {
+    const filtered = {};
+
+    for (const [brand, sets] of Object.entries(savedTinderResults)) {
+        const goodFront = sets.front.filter(f => isAvailableStock(f.stock));
+        const goodRear = sets.rear.filter(r => isAvailableStock(r.stock));
+
+        if (goodFront.length && goodRear.length) {
+            filtered[brand] = { front: goodFront, rear: goodRear };
+        }
+    }
+
+    renderTinderResults(filtered);
+}
+
+/* =========================
+   F ALT TAB (index.html)
+   ========================= */
+
+async function checkPrices() {
+    const skuInput = document.getElementById("skuInput").value.trim().split("\n");
+    const resultsTable = document.querySelector("#resultsTable tbody");
+    resultsTable.innerHTML = "";
+
+    const rows = await Promise.all(skuInput.map(async (line) => {
+        const query = line.trim();
+        if (!query) return "";
+
+        if (![5, 7].includes(query.length)) {
+            return `<tr><td colspan="4">Invalid input: ${query}</td></tr>`;
+        }
+
+        const [w, d] = [query.slice(0, 3), query.slice(-2)];
+        const p = query.length === 7 ? query.slice(3, 5) : "Not%20Specified";
+        const url = `https://corsproxy.io/?https://www.tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
+
+        try {
+            const res = await fetch(url);
+            const text = await res.text();
+            const doc = new DOMParser().parseFromString(text, "text/html");
+            const items = doc.querySelectorAll(".product-container");
+
+            return Array.from(items).map((item) => {
+                const make = item.querySelector(".brand-name b")?.textContent.trim() || "No make";
+                const size = item.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
+                const pattern = item.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
+                const model = `${size} ${pattern}`.trim();
+                const price = parseFloat(item.querySelector(".sale-price span")?.textContent.trim()) || 0;
+                const stock = item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "No status";
+                const sku = item.querySelector("input[name='tyresku']")?.value || "No SKU";
+                const link = item.querySelector(".image-container a")
+                    ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
+                    : "#";
+
+                // Stock shown after model AND stored in data-stock for filtering
+                return `<tr 
+                    style="background:${getStockColor(stock)};"
+                    data-stock="${stock.replace(/"/g, '&quot;')}"
+                >
+                    <td>${make}</td>
+                    <td>${model} <span style="opacity:0.8; font-size:0.9em;">(${stock})</span></td>
+                    <td>$${price.toFixed(2)}</td>
+                    <td>${sku}</td>
+                    <td><a href="${link}" target="_blank">View</a></td>
+                </tr>`;
+            }).join("\n");
+        } catch (err) {
+            return `<tr><td colspan="4">Error retrieving: ${query}</td></tr>`;
+        }
+    }));
+
+    resultsTable.innerHTML = rows.flat().join("\n");
+    sortTableByPrice();
+}
+
+function sortTableByPrice() {
+    const tbody = document.querySelector("#resultsTable tbody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    rows.sort((a, b) => {
+        const aPrice = parseFloat(a.cells[2].textContent.replace("$", "")) || 0;
+        const bPrice = parseFloat(b.cells[2].textContent.replace("$", "")) || 0;
+        return aPrice - bPrice;
+    });
+    tbody.innerHTML = "";
+    rows.forEach((r) => tbody.appendChild(r));
+}
+
+/* =========================
+   FILTERS / SEARCH
+   ========================= */
+
+// Helper: determine if a stock string counts as "available"
+function isAvailableStock(stockText) {
+    if (!stockText) return false;
+    const lower = stockText.toLowerCase();
+
+    // NOT AVAILABLE
+    if (lower.includes("out of stock")) return false;
+    if (lower.includes("on order")) return false;
+    if (lower.includes("no status")) return false;
+    if (lower.includes("no stock")) return false;
+
+    // AVAILABLE
+    if (lower.includes("in stock")) return true;
+    if (/\d+/.test(lower)) return true; // has a number like "3 in stock" or "8+ in stock"
+
+    return false;
+}
+
+// F Alt Tab "Available Only" — uses real stock text
+function removeOutOfStock() {
+    const rows = document.querySelectorAll("#resultsTable tbody tr");
+    rows.forEach((row) => {
+        const stock = row.dataset.stock || "";
+        row.style.display = isAvailableStock(stock) ? "" : "none";
+    });
+}
+
+// Shared text filter (used by both index.html and Tyrestinder.html)
+function filterTable() {
+    const keyword = document.getElementById("searchBar").value.toLowerCase();
+    const rows = document.querySelectorAll("#resultsTable tbody tr");
+    rows.forEach((row) => {
+        const match = [...row.cells].some((c) => c.textContent.toLowerCase().includes(keyword));
+        row.style.display = match ? "" : "none";
+    });
+    if (!keyword) rows.forEach((r) => (r.style.display = ""));
+}
