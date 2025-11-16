@@ -50,9 +50,14 @@ function getStockColor(stockStatus) {
     if (!stockStatus) return "transparent";
     const lower = stockStatus.toLowerCase();
 
-    // OUT OF STOCK / ON ORDER → deep red
-    if (lower.includes("out of stock") || lower.includes("on order")) {
-        return "#4b1113";
+    // OUT OF STOCK → deep red
+    if (lower.includes("out of stock")) {
+        return "#4b1113"; 
+    }
+
+    // ON ORDER → charcoal grey
+    if (lower.includes("on order")) {
+        return "#1a1a1d";
     }
 
     // 1–4 IN STOCK → dark amber/brown
@@ -328,3 +333,4 @@ function filterTable() {
         row.style.display = match ? "" : "none";
     });
 }
+
