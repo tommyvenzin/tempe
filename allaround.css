@@ -1,17 +1,230 @@
+/* ------------------------------ */
+/*  ORIGINAL STYLES (UNCHANGED)  */
+/* ------------------------------ */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f8f9fa;
+    color: #333;
+    line-height: 1.6;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
+}
+
+h1 {
+    color: #2c3e50;
+    font-size: 2.5em;
+    margin-bottom: 20px;
+    text-align: center;
+    background-color: #e9f5ff;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #007bff;
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.1);
+}
+
+p, textarea, button, table, th, td {
+    font-size: 1em;
+}
+
+textarea,
+input[type="text"] {
+    width: 100%;
+    font-size: 0.95em;
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    background-color: #ffffff;
+    color: #333;
+    font-family: inherit;
+    resize: vertical;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+textarea:focus,
+input[type="text"]:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.2);
+    outline: none;
+}
+
+button {
+    padding: 12px 20px;
+    margin: 8px 0;
+    border: none;
+    border-radius: 8px;
+    background-color: #007bff;
+    color: #fff;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 500;
+    transition: background-color 0.3s, transform 0.2s;
+}
+
+button:hover {
+    background-color: #0056b3;
+    transform: translateY(-1px);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.table-container {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    background-color: #ffffff;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+th, td {
+    padding: 14px;
+    text-align: left;
+    border: 1px solid #e0e0e0;
+    color: #333;
+}
+
+th {
+    background-color: #f1f3f5;
+    font-weight: 600;
+    border-bottom: 2px solid #007bff;
+}
+
+td a {
+    color: #007bff;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+td a:hover {
+    color: #0056b3;
+    text-decoration: underline;
+}
+
+.navbar {
+    background-color: #007bff;
+    overflow: hidden;
+    text-align: center;
+    padding: 12px 0;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.navbar a {
+    color: white;
+    padding: 14px 20px;
+    text-decoration: none;
+    font-size: 1.1em;
+    font-weight: 500;
+    transition: background-color 0.3s;
+}
+
+.navbar a:hover {
+    background-color: #0056b3;
+    border-radius: 8px;
+}
+
+table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+tfoot td {
+    background-color: #e9f5ff;
+    font-weight: bold;
+    border-top: 2px solid #007bff;
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 15px;
+    }
+
+    h1 {
+        font-size: 2em;
+        padding: 12px;
+    }
+
+    textarea,
+    input[type="text"] {
+        padding: 8px;
+    }
+
+    button {
+        padding: 10px 16px;
+        font-size: 0.9em;
+    }
+
+    .navbar a {
+        padding: 10px 15px;
+        font-size: 1em;
+    }
+
+    .table-container {
+        border-radius: 0;
+    }
+
+    table {
+        font-size: 0.9em;
+    }
+
+    th, td {
+        padding: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.8em;
+    }
+
+    .navbar {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .navbar a {
+        padding: 10px;
+    }
+}
+
+/* -------------------------------------------------- */
+/*  END OF ORIGINAL FILE — CHRISTMAS DARK BELOW       */
+/* -------------------------------------------------- */
+
+
 /* ============================= */
 /*   CHRISTMAS DARK THEME        */
-/*   CSS-only, no JS changes     */
 /* ============================= */
 
-/* Overall page */
 body {
     background: radial-gradient(circle at top, #1f2933 0%, #020617 55%, #000000 100%);
-    color: #e5e7eb; /* light gray text */
+    color: #e5e7eb;
     border: 1px solid #111827;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
 }
 
-/* Main heading */
 h1 {
     background: linear-gradient(90deg, #b91c1c, #14532d);
     color: #f9fafb;
@@ -24,12 +237,6 @@ h1::after {
     content: " 🎄";
 }
 
-/* General text elements */
-p, textarea, button, table, th, td {
-    color: #e5e7eb;
-}
-
-/* Navbar */
 .navbar {
     background: linear-gradient(90deg, #022c22, #111827);
     border-radius: 10px;
@@ -45,7 +252,6 @@ p, textarea, button, table, th, td {
     border-radius: 999px;
 }
 
-/* Inputs & textarea */
 textarea,
 input[type="text"],
 select {
@@ -62,12 +268,11 @@ input[type="text"]::placeholder {
 textarea:focus,
 input[type="text"]:focus,
 select:focus {
-    border-color: #f97373; /* soft red */
+    border-color: #f97373;
     box-shadow: 0 0 10px rgba(248, 113, 113, 0.7);
     outline: none;
 }
 
-/* Buttons */
 button {
     background: linear-gradient(135deg, #b91c1c, #7f1d1d);
     color: #f9fafb;
@@ -83,7 +288,6 @@ button:active {
     transform: translateY(0);
 }
 
-/* Table container & table */
 .table-container {
     background-color: #020617;
     border: 1px solid #1f2937;
@@ -94,25 +298,22 @@ table {
     background-color: #020617;
 }
 
-/* Table header */
 th {
     background: linear-gradient(90deg, #14532d, #064e3b);
     color: #f9fafb;
     border-bottom: 2px solid #b91c1c;
 }
 
-/* Table rows */
 td {
     background-color: #020617;
     border: 1px solid #1f2937;
+    color: #e5e7eb;
 }
 
-/* Row hover */
 table tbody tr:hover {
-    background-color: rgba(248, 113, 113, 0.14); /* soft red tint */
+    background-color: rgba(248, 113, 113, 0.14);
 }
 
-/* Totals/footer cells */
 tfoot td,
 .grand-total,
 .item-total {
@@ -121,7 +322,6 @@ tfoot td,
     border-top: 2px solid #b91c1c;
 }
 
-/* Button group minor tweak for dark mode */
 .button-group {
     justify-content: flex-start;
 }
