@@ -1,5 +1,38 @@
 console.log("F_alt_tab.js loaded successfully");
 
+// Click-to-copy helper used by F Alt Tab + Tyres Tinder
+function copySKU(sku) {
+    if (!sku || sku === "No SKU" || sku === "No SKU available") return;
+
+    navigator.clipboard.writeText(sku)
+        .then(() => {
+            const toast = document.createElement("div");
+            toast.textContent = `Copied: ${sku}`;
+            toast.style.position = "fixed";
+            toast.style.bottom = "20px";
+            toast.style.right = "20px";
+            toast.style.padding = "8px 12px";
+            toast.style.background = "#16a34a";
+            toast.style.color = "white";
+            toast.style.borderRadius = "6px";
+            toast.style.fontSize = "14px";
+            toast.style.opacity = "0";
+            toast.style.transition = "opacity 0.3s ease";
+            toast.style.zIndex = "9999";
+            document.body.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.style.opacity = "1";
+            });
+
+            setTimeout(() => {
+                toast.style.opacity = "0";
+                setTimeout(() => toast.remove(), 300);
+            }, 800);
+        })
+        .catch((err) => console.error("Copy failed", err));
+}
+
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
         e.preventDefault();
@@ -108,14 +141,23 @@ function renderTinderResults(data) {
 
         for (let i = 0; i < rowCount; i++) {
             const f = front[i] || {}, r = rear[i] || {};
+
+            // Make SKUs safe for inline JS
+            const safeFrontSku = (f.sku || "").replace(/'/g, "\\'");
+            const safeRearSku = (r.sku || "").replace(/'/g, "\\'");
+
             const row = `<tr data-brand="${safeBrand.toLowerCase()}">
                 ${i === 0 ? `<td rowspan="${rowCount}">${brand}</td>` : ""}
                 <td style="background:${getStockColor(f.stock)};" data-stock="${(f.stock || "").replace(/"/g, "&quot;")}">
                     ${f.pattern ? `<a href="${f.link}" target="_blank">${f.pattern}</a>` : "No data"}${f.price ? ` - $${f.price}` : ""} (${f.stock || "No stock"})</td>
                 <td style="background:${getStockColor(r.stock)};" data-stock="${(r.stock || "").replace(/"/g, "&quot;")}">
                     ${r.pattern ? `<a href="${r.link}" target="_blank">${r.pattern}</a>` : "No data"}${r.price ? ` - $${r.price}` : ""} (${r.stock || "No stock"})</td>
-                <td>${f.sku || "No SKU"}</td>
-                <td>${r.sku || "No SKU"}</td>
+                <td onclick="copySKU('${safeFrontSku}')" style="cursor:pointer; color:#60a5fa;">
+                    ${f.sku || "No SKU"}
+                </td>
+                <td onclick="copySKU('${safeRearSku}')" style="cursor:pointer; color:#60a5fa;">
+                    ${r.sku || "No SKU"}
+                </td>
             </tr>`;
             resultsTable.innerHTML += row;
         }
@@ -182,15 +224,20 @@ async function checkPrices() {
                     ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
                     : "#";
 
+                const safeStock = stock.replace(/"/g, '&quot;');
+                const safeSku = sku.replace(/'/g, "\\'");
+
                 // Stock shown after model AND stored in data-stock for filtering
                 return `<tr 
                     style="background:${getStockColor(stock)};"
-                    data-stock="${stock.replace(/"/g, '&quot;')}"
+                    data-stock="${safeStock}"
                 >
                     <td>${make}</td>
                     <td>${model} <span style="opacity:0.8; font-size:0.9em;">(${stock})</span></td>
                     <td>$${price.toFixed(2)}</td>
-                    <td>${sku}</td>
+                    <td onclick="copySKU('${safeSku}')" style="cursor:pointer; color:#60a5fa;">
+                        ${sku}
+                    </td>
                     <td><a href="${link}" target="_blank">View</a></td>
                 </tr>`;
             }).join("\n");
@@ -270,7 +317,3 @@ function filterTable() {
         row.style.display = match ? "" : "none";
     });
 }
-
-
-
-
