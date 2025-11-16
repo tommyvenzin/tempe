@@ -4,30 +4,18 @@ console.log("F_alt_tab.js loaded successfully");
 function getStockColor(stockStatus) {
     if (!stockStatus) return "transparent";
     const lower = stockStatus.toLowerCase();
-
-    // OUT OF STOCK / ON ORDER → deep red
-    if (lower.includes("out of stock") || lower.includes("on order")) {
-        return "#4b1113"; // dark red
-    }
-
-    // 1–4 IN STOCK → amber
-    if (lower.match(/\b[1-4]\s*in stock\b/)) {
-        return "#4b2a12"; // dark amber/brown
-    }
-
-    // 5–8 IN STOCK → olive / yellow-green
-    if (lower.match(/\b[5-8]\s*in stock\b/)) {
-        return "#3b3a16"; // olive-ish
-    }
-
-    // 8+ IN STOCK or generic "in stock" → deep green
-    if (lower.includes("8+ in stock") || lower.includes("in stock")) {
-        return "#123524"; // deep green
-    }
-
+    if (lower.includes("out of stock") || lower.includes("on order")) return "#f7d4d4";
+    if (lower.match(/\b[1-4]\s*in stock\b/)) return "#ffd699";
+    if (lower.match(/\b[5-8]\s*in stock\b/)) return "#fff5b1";
+    if (lower.includes("8+ in stock") || lower.includes("in stock")) return "#d4f7d4";
     return "transparent";
 }
 
+/* =========================
+   TYRES TINDER (Tyrestinder.html)
+   ========================= */
+
+let savedTinderResults = {};
 
 async function Tinder() {
     const skuInput = document.getElementById("skuInput").value.trim();
@@ -127,6 +115,10 @@ function removeOutOfStockTinder() {
     renderTinderResults(filtered);
 }
 
+/* =========================
+   F ALT TAB (index.html)
+   ========================= */
+
 async function checkPrices() {
     const skuInput = document.getElementById("skuInput").value.trim().split("\n");
     const resultsTable = document.querySelector("#resultsTable tbody");
@@ -162,8 +154,13 @@ async function checkPrices() {
                     ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
                     : "#";
 
-                return `<tr style="background:${getStockColor(stock)};">
-                    <td>${make}</td><td>${model}</td>
+                // Stock shown after model AND stored in data-stock for filtering
+                return `<tr 
+                    style="background:${getStockColor(stock)};"
+                    data-stock="${stock.replace(/"/g, '&quot;')}"
+                >
+                    <td>${make}</td>
+                    <td>${model} <span style="opacity:0.8; font-size:0.9em;">(${stock})</span></td>
                     <td>$${price.toFixed(2)}</td>
                     <td>${sku}</td>
                     <td><a href="${link}" target="_blank">View</a></td>
@@ -178,39 +175,50 @@ async function checkPrices() {
     sortTableByPrice();
 }
 
-function sortTableByMake() {
-    const tbody = document.querySelector("#resultsTable tbody");
-    const rows = Array.from(tbody.querySelectorAll("tr"));
-    rows.sort((a, b) => a.cells[0].textContent.localeCompare(b.cells[0].textContent));
-    tbody.innerHTML = "";
-    rows.forEach((r) => tbody.appendChild(r));
-}
-
 function sortTableByPrice() {
     const tbody = document.querySelector("#resultsTable tbody");
     const rows = Array.from(tbody.querySelectorAll("tr"));
-    rows.sort((a, b) => parseFloat(a.cells[2].textContent.replace("$", "")) - parseFloat(b.cells[2].textContent.replace("$", "")));
+    rows.sort((a, b) => {
+        const aPrice = parseFloat(a.cells[2].textContent.replace("$", "")) || 0;
+        const bPrice = parseFloat(b.cells[2].textContent.replace("$", "")) || 0;
+        return aPrice - bPrice;
+    });
     tbody.innerHTML = "";
     rows.forEach((r) => tbody.appendChild(r));
 }
 
-function filterRunflat() {
-    const rows = document.querySelectorAll("#resultsTable tbody tr");
-    rows.forEach((row) => {
-        const text = row.cells[1].textContent.toLowerCase();
-        row.style.display = text.includes("runflat") ? "" : "none";
-    });
+/* =========================
+   FILTERS / SEARCH
+   ========================= */
+
+// Helper: determine if a stock string counts as "available"
+function isAvailableStock(stockText) {
+    if (!stockText) return false;
+    const lower = stockText.toLowerCase();
+
+    // NOT AVAILABLE
+    if (lower.includes("out of stock")) return false;
+    if (lower.includes("on order")) return false;
+    if (lower.includes("no status")) return false;
+    if (lower.includes("no stock")) return false;
+
+    // AVAILABLE
+    if (lower.includes("in stock")) return true;
+    if (/\d+/.test(lower)) return true; // has a number like "3 in stock" or "8+ in stock"
+
+    return false;
 }
 
+// F Alt Tab "Available Only" — now uses real stock text
 function removeOutOfStock() {
     const rows = document.querySelectorAll("#resultsTable tbody tr");
     rows.forEach((row) => {
-        const bg = row.style.backgroundColor;
-        const red = ["#f7d4d4", "rgb(247, 212, 212)", "transparent"];
-        row.style.display = red.includes(bg) ? "none" : "";
+        const stock = row.dataset.stock || "";
+        row.style.display = isAvailableStock(stock) ? "" : "none";
     });
 }
 
+// Shared text filter (used by both index.html and Tyrestinder.html)
 function filterTable() {
     const keyword = document.getElementById("searchBar").value.toLowerCase();
     const rows = document.querySelectorAll("#resultsTable tbody tr");
@@ -221,15 +229,7 @@ function filterTable() {
     if (!keyword) rows.forEach((r) => (r.style.display = ""));
 }
 
-function filterTinderTable() {
-    const keyword = document.getElementById("searchBar").value.toLowerCase();
-    const rows = document.querySelectorAll("#resultsTable tbody tr");
-    rows.forEach((row) => {
-        const rowText = row.textContent.toLowerCase();
-        row.style.display = rowText.includes(keyword) ? "" : "none";
-    });
-}
-
+// Enter key support on F Alt Tab textarea
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
         e.preventDefault();
@@ -238,4 +238,3 @@ function handleSkuInputEnter(e) {
         }
     }
 }
-
