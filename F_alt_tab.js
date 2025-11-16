@@ -1,6 +1,10 @@
 console.log("F_alt_tab.js loaded successfully");
 
-// Click-to-copy helper used by F Alt Tab + Tyres Tinder
+/* =========================
+   Shared helpers
+   ========================= */
+
+// Click-to-copy SKU helper
 function copySKU(sku) {
     if (!sku || sku === "No SKU" || sku === "No SKU available") return;
 
@@ -33,6 +37,7 @@ function copySKU(sku) {
         .catch((err) => console.error("Copy failed", err));
 }
 
+// Enter key support on F Alt Tab textarea
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
         e.preventDefault();
@@ -68,8 +73,24 @@ function getStockColor(stockStatus) {
     return "transparent";
 }
 
+// Helper: determine if a stock string counts as "available"
+function isAvailableStock(stockText) {
+    if (!stockText) return false;
+    const lower = stockText.toLowerCase();
+
+    if (lower.includes("out of stock")) return false;
+    if (lower.includes("on order")) return false;
+    if (lower.includes("no status")) return false;
+    if (lower.includes("no stock")) return false;
+
+    if (lower.includes("in stock")) return true;
+    if (/\d+/.test(lower)) return true;
+
+    return false;
+}
+
 /* =========================
-   TYRES TINDER (Tyrestinder.html)
+   TYRES TINDER
    ========================= */
 
 let savedTinderResults = {};
@@ -142,7 +163,6 @@ function renderTinderResults(data) {
         for (let i = 0; i < rowCount; i++) {
             const f = front[i] || {}, r = rear[i] || {};
 
-            // Make SKUs safe for inline JS
             const safeFrontSku = (f.sku || "").replace(/'/g, "\\'");
             const safeRearSku = (r.sku || "").replace(/'/g, "\\'");
 
@@ -152,9 +172,11 @@ function renderTinderResults(data) {
                     ${f.pattern ? `<a href="${f.link}" target="_blank">${f.pattern}</a>` : "No data"}${f.price ? ` - $${f.price}` : ""} (${f.stock || "No stock"})</td>
                 <td style="background:${getStockColor(r.stock)};" data-stock="${(r.stock || "").replace(/"/g, "&quot;")}">
                     ${r.pattern ? `<a href="${r.link}" target="_blank">${r.pattern}</a>` : "No data"}${r.price ? ` - $${r.price}` : ""} (${r.stock || "No stock"})</td>
+
                 <td onclick="copySKU('${safeFrontSku}')" style="cursor:pointer; color:#60a5fa;">
                     ${f.sku || "No SKU"}
                 </td>
+
                 <td onclick="copySKU('${safeRearSku}')" style="cursor:pointer; color:#60a5fa;">
                     ${r.sku || "No SKU"}
                 </td>
@@ -169,7 +191,7 @@ function renderTinderResults(data) {
 }
 
 
-// Tyres Tinder "Available Only" – uses stock text
+// Tyres Tinder "Available Only"
 function removeOutOfStockTinder() {
     const filtered = {};
 
@@ -186,7 +208,7 @@ function removeOutOfStockTinder() {
 }
 
 /* =========================
-   F ALT TAB (index.html)
+   F ALT TAB
    ========================= */
 
 async function checkPrices() {
@@ -204,7 +226,7 @@ async function checkPrices() {
 
         const [w, d] = [query.slice(0, 3), query.slice(-2)];
         const p = query.length === 7 ? query.slice(3, 5) : "Not%20Specified";
-        const url = `https://corsproxy.io/?https://www.tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
+        const url = `https://corsproxy.io/?https://tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
 
         try {
             const res = await fetch(url);
@@ -220,6 +242,7 @@ async function checkPrices() {
                 const price = parseFloat(item.querySelector(".sale-price span")?.textContent.trim()) || 0;
                 const stock = item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "On Order";
                 const sku = item.querySelector("input[name='tyresku']")?.value || "No SKU";
+
                 const link = item.querySelector(".image-container a")
                     ? `https://tempetyres.com.au${item.querySelector(".image-container a").getAttribute("href")}`
                     : "#";
@@ -227,18 +250,25 @@ async function checkPrices() {
                 const safeStock = stock.replace(/"/g, '&quot;');
                 const safeSku = sku.replace(/'/g, "\\'");
 
-                // Stock shown after model AND stored in data-stock for filtering
+                /* MODEL NOW CLICKABLE – LINK COLUMN REMOVED */
                 return `<tr 
                     style="background:${getStockColor(stock)};"
                     data-stock="${safeStock}"
                 >
                     <td>${make}</td>
-                    <td>${model} <span style="opacity:0.8; font-size:0.9em;">(${stock})</span></td>
+
+                    <td>
+                        <a href="${link}" target="_blank" style="color:#93c5fd; text-decoration:none;">
+                            ${model}
+                        </a>
+                        <span style="opacity:0.8; font-size:0.9em;"> (${stock})</span>
+                    </td>
+
                     <td>$${price.toFixed(2)}</td>
+
                     <td onclick="copySKU('${safeSku}')" style="cursor:pointer; color:#60a5fa;">
                         ${sku}
                     </td>
-                    <td><a href="${link}" target="_blank">View</a></td>
                 </tr>`;
             }).join("\n");
         } catch (err) {
@@ -253,53 +283,37 @@ async function checkPrices() {
 function sortTableByPrice() {
     const tbody = document.querySelector("#resultsTable tbody");
     const rows = Array.from(tbody.querySelectorAll("tr"));
+
     rows.sort((a, b) => {
         const aPrice = parseFloat(a.cells[2].textContent.replace("$", "")) || 0;
         const bPrice = parseFloat(b.cells[2].textContent.replace("$", "")) || 0;
         return aPrice - bPrice;
     });
+
     tbody.innerHTML = "";
     rows.forEach((r) => tbody.appendChild(r));
 }
 
 /* =========================
-   FILTERS / SEARCH
+   SHARED FILTERS
    ========================= */
 
-// Helper: determine if a stock string counts as "available"
-function isAvailableStock(stockText) {
-    if (!stockText) return false;
-    const lower = stockText.toLowerCase();
-
-    // NOT AVAILABLE
-    if (lower.includes("out of stock")) return false;
-    if (lower.includes("on order")) return false;
-    if (lower.includes("no status")) return false;
-    if (lower.includes("no stock")) return false;
-
-    // AVAILABLE
-    if (lower.includes("in stock")) return true;
-    if (/\d+/.test(lower)) return true; // has a number like "3 in stock" or "8+ in stock"
-
-    return false;
-}
-
-// F Alt Tab "Available Only" — uses real stock text
+// F Alt Tab "Available Only"
 function removeOutOfStock() {
     const rows = document.querySelectorAll("#resultsTable tbody tr");
+
     rows.forEach((row) => {
         const stock = row.dataset.stock || "";
         row.style.display = isAvailableStock(stock) ? "" : "none";
     });
 }
 
-// Shared text filter (used by both index.html and Tyrestinder.html)
+// Tyres Tinder & F Alt Tab search
 function filterTable() {
     const keyword = document.getElementById("searchBar").value.toLowerCase().trim();
     const rows = document.querySelectorAll("#resultsTable tbody tr");
 
     rows.forEach((row) => {
-        // If search box is empty, show everything
         if (!keyword) {
             row.style.display = "";
             return;
@@ -310,9 +324,6 @@ function filterTable() {
             c.textContent.toLowerCase().includes(keyword)
         );
 
-        // Row matches if:
-        // - Any cell contains the keyword (F Alt Tab behaviour)
-        // - OR its data-brand matches (fixes Tyres Tinder + rowspan issue)
         const match = matchInCells || brand.includes(keyword);
         row.style.display = match ? "" : "none";
     });
