@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secret Sauce v1.0</title>
+    <title>Project C – Secret Sauce v5.0</title>
     <link rel="stylesheet" href="allaround.css">
+
     <style>
         .form-row {
             display: flex;
@@ -25,19 +26,28 @@
             border-radius: 6px;
             border: 1px solid #ccc;
         }
+        #loadingIndicator {
+            display: none;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #4ade80;
+        }
     </style>
 </head>
+
 <body>
-    <!-- Navigation Menu -->
+
+    <!-- Navigation -->
     <nav class="navbar">
         <a href="index.html">F Alt Tab</a>
         <a href="Project_C.html">Project C</a>
         <a href="Tyrestinder.html">Tyres Tinder</a>
     </nav>
 
-    <h1>Project-C v5.0 - Arise</h1>
-    <p>Not Including WA, Puncture, SF, or any price that's not on the website</p>
+    <h1>Project C – Secret Sauce v5.0</h1>
+    <p>Note: Does not include WA, puncture, SF, or any price that is not on the website.</p>
 
+    <!-- Initials Selection -->
     <div class="form-row">
         <label for="skuInput">Initials:</label>
         <select id="skuInput" multiple>
@@ -51,11 +61,9 @@
             <option value="TOG">TOG</option>
             <option value="DK">DK</option>
         </select>
-
-        <label for="customInitialInput">Manual Initial:</label>
-        <input type="text" id="customInitialInput" placeholder="e.g., JON">
     </div>
 
+    <!-- Date Range -->
     <div class="form-row">
         <label for="startDateInput">Start Date (MM-DD):</label>
         <input type="text" id="startDateInput" placeholder="MM-DD">
@@ -64,14 +72,23 @@
         <input type="text" id="endDateInput" placeholder="MM-DD">
     </div>
 
+    <!-- Buttons -->
     <div class="button-group">
         <button onclick="autoFillSalesPeriod()">Auto Select This Week</button>
         <button onclick="checkPrices()">Check Prices</button>
         <button onclick="wholesalePrices()">Wholesale Prices</button>
+
+        <!-- NEW BUTTON -->
+        <button onclick="allInitialsRanked()">All Initials (Ranked + Grade)</button>
     </div>
 
-    <b>Total : <p id="grandTotal" class="grand-total"> </p> Quantity : <p id="itemTotal" class="item-total"></p></b>
+    <div id="loadingIndicator">⏳ Loading… Please wait…</div>
 
+    <!-- Totals Summary -->
+    <b>Total : <p id="grandTotal" class="grand-total"></p></b>
+    <b>Quantity : <p id="itemTotal" class="item-total"></p></b>
+
+    <!-- Results Table -->
     <table id="resultsTable">
         <thead>
             <tr>
@@ -86,8 +103,6 @@
         <tbody></tbody>
     </table>
 
-    <script src="./Project_C.js" defer></script>
+    <script src="Project_C.js" defer></script>
 </body>
 </html>
-
-
