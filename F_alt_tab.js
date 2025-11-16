@@ -1,5 +1,12 @@
 console.log("F_alt_tab.js loaded successfully");
 
+function handleSkuInputEnter(e) {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        checkPrices();
+    }
+}
+
 // Utility Function: Get Stock Color (dark-mode Christmas friendly)
 function getStockColor(stockStatus) {
     if (!stockStatus) return "transparent";
@@ -58,3 +65,4 @@ async function Tinder() {
                 stock: item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "No stock info",
                 sku: item.querySelector("input[name='tyresku']")?.value || "No SKU available",
                 lin
+
