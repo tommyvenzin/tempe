@@ -271,18 +271,18 @@ function autoFillSalesPeriod() {
 }
 
 /* =========================
-   NEW: Grade helper
+   Grade / progress helper
    ========================= */
 
-function getGrade(total) {
-    if (total >= 90000) return "Sit down";      // 90k++
-    if (total >= 70000) return "Level 2";       // 70k–89,999
-    if (total >= 60000) return "Level 1";       // 60k–69,999
-    return "Keep going";                        // below 60k
+function getGradeInfo(total) {
+    if (total >= 90000) return { label: "Sit down", className: "grade-sitdown" };  // 90k++
+    if (total >= 70000) return { label: "Level 2", className: "grade-level2" };    // 70k–89,999
+    if (total >= 60000) return { label: "Level 1", className: "grade-level1" };    // 60k–69,999
+    return { label: "Keep going", className: "grade-keepgoing" };                  // below 60k
 }
 
 /* =========================
-   NEW: All Initials Ranked
+   All Initials Ranked
    ========================= */
 
 async function allInitialsRanked() {
@@ -312,7 +312,7 @@ async function allInitialsRanked() {
         <th>Wholesale Total (AUD)</th>
         <th>Combined Total (AUD)</th>
         <th>Total Quantity</th>
-        <th>Grade</th>
+        <th>Progress / Grade</th>
     `;
 
     grandTotalElement.textContent = "";
@@ -447,15 +447,22 @@ async function allInitialsRanked() {
         await processType("retail");
         await processType("wholesale");
 
+        const target = 90000;
+
         const rowsData = Object.entries(totals).map(([initials, data]) => {
             const combined = data.retailTotal + data.wholesaleTotal;
+            const gradeInfo = getGradeInfo(combined);
+            const percent = Math.max(0, Math.min(100, Math.round((combined / target) * 100)));
+
             return {
                 initials,
                 retailTotal: data.retailTotal,
                 wholesaleTotal: data.wholesaleTotal,
                 combinedTotal: combined,
                 qty: data.qty,
-                grade: getGrade(combined)
+                gradeLabel: gradeInfo.label,
+                gradeClass: gradeInfo.className,
+                percent
             };
         });
 
@@ -468,7 +475,14 @@ async function allInitialsRanked() {
                 <td>$${d.wholesaleTotal.toFixed(2)}</td>
                 <td>$${d.combinedTotal.toFixed(2)}</td>
                 <td>${d.qty}</td>
-                <td>${d.grade}</td>
+                <td>
+                    <div class="progress-wrapper">
+                        <div class="progress-label">${d.gradeLabel} – $${d.combinedTotal.toFixed(0)} / ${target.toLocaleString()}</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${d.gradeClass}" style="width: ${d.percent}%;"></div>
+                        </div>
+                    </div>
+                </td>
             </tr>
         `).join("\n");
 
