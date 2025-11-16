@@ -15,13 +15,17 @@
     </nav>
 
     <h1>Price Checker Lite Version</h1>
+
     <textarea id="skuInput" rows="4" placeholder="Enter tire size or SKU, one per line..." onkeydown="handleSkuInputEnter(event)"></textarea>
+
     <input type="text" id="searchBar" placeholder="Search...">
+
     <div class="button-group">
         <button onclick="removeOutOfStock()">Available Only</button>
         <button onclick="filterTable()">Filter Search</button>
     </div>
 
+    <!-- TABLE UPDATED: Link column removed -->
     <table id="resultsTable">
         <thead>
             <tr>
@@ -29,7 +33,6 @@
                 <th>Model</th>
                 <th>Price (AUD)</th>
                 <th>SKU</th>
-                <th>Link</th>
             </tr>
         </thead>
         <tbody></tbody>
