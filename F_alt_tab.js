@@ -109,7 +109,7 @@ async function Tinder() {
     const fetchTyreDetails = async (size) => {
         if (!size || size.length !== 7) return [];
         const [w, p, d] = [size.slice(0, 3), size.slice(3, 5), size.slice(5, 7)];
-        const url = `https://corsproxy.io/?https://www.tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
+        const url = `https://cors.moesif.net/?https://www.tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
 
         try {
             const res = await fetch(url);
@@ -231,7 +231,7 @@ async function checkPrices() {
 
         const [w, d] = [query.slice(0, 3), query.slice(-2)];
         const p = query.length === 7 ? query.slice(3, 5) : "Not%20Specified";
-        const url = `https://corsproxy.io/?https://tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
+        const url = `https://cors.moesif.net/?https://tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
 
         try {
             const res = await fetch(url);
@@ -333,4 +333,5 @@ function filterTable() {
         row.style.display = match ? "" : "none";
     });
 }
+
 
