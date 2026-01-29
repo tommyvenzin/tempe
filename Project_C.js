@@ -1,5 +1,19 @@
 console.log("Project_C.js loaded successfully");
 
+/* =========================
+   LOCAL PROXY (FAST + NO CORS)
+   ========================= */
+
+const LOCAL_PROXY = "http://localhost:8787/proxy?url=";
+
+function proxify(url) {
+    return LOCAL_PROXY + encodeURIComponent(url);
+}
+
+/* =========================
+   Main: Check Prices
+   ========================= */
+
 async function checkPrices(type = "retail") {
     const initialsSelect = document.getElementById("skuInput");
     const initialsInput = Array.from(initialsSelect.selectedOptions).map(opt => opt.value);
@@ -41,9 +55,11 @@ async function checkPrices(type = "retail") {
     const parser = new DOMParser();
 
     try {
-        const response = await fetch(
-            `${urlMap[type]}?day=0&month=0&year=0&q=${encodeURIComponent(initialsInput.join(","))}&searchin=EnteredBy`
-        );
+        // ✅ INTRANET fetch via local proxy
+        const intranetUrl =
+            `${urlMap[type]}?day=0&month=0&year=0&q=${encodeURIComponent(initialsInput.join(","))}&searchin=EnteredBy`;
+
+        const response = await fetch(proxify(intranetUrl));
         if (!response.ok) throw new Error("Network response was not ok");
         const text = await response.text();
 
@@ -78,10 +94,10 @@ async function checkPrices(type = "retail") {
             let price = 0;
             let description = "";
             let productUrl = searchUrl;
-            const parser = new DOMParser();
 
             try {
-                const res = await fetch(searchUrl);
+                // ✅ tempetyres search fetch via local proxy
+                const res = await fetch(proxify(searchUrl));
                 const html = await res.text();
                 const doc = parser.parseFromString(html, "text/html");
 
@@ -99,68 +115,47 @@ async function checkPrices(type = "retail") {
                     !isNaN(parseFloat(priceText))
                 ) {
                     price = parseFloat(priceText);
+
                     // Description from search page
                     if (doc.querySelector(".sub-heading-ty-2")) {
-                        const tySize =
-                            doc.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
-                        const tyPattern =
-                            doc.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
+                        const tySize = doc.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
+                        const tyPattern = doc.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
                         description = `${tySize} ${tyPattern}`.trim();
                     } else if (doc.querySelector(".sub-heading-wh-2")) {
-                        const whSize =
-                            doc.querySelector(".sub-heading-wh-2")?.textContent.trim() || "";
-                        const whFinish =
-                            doc.querySelector(".sub-heading-wh-3")?.textContent.trim() || "";
+                        const whSize = doc.querySelector(".sub-heading-wh-2")?.textContent.trim() || "";
+                        const whFinish = doc.querySelector(".sub-heading-wh-3")?.textContent.trim() || "";
                         description = `${whSize} ${whFinish}`.trim();
                     }
                 } else {
                     // Follow product page
-                    const productLinkElement = doc.querySelector(
-                        ".product-container .image-container a"
-                    );
+                    const productLinkElement = doc.querySelector(".product-container .image-container a");
                     if (productLinkElement) {
-                        productUrl = `https://www.tempetyres.com.au${productLinkElement.getAttribute(
-                            "href"
-                        )}`;
-                        const productRes = await fetch(productUrl);
+                        productUrl = `https://www.tempetyres.com.au${productLinkElement.getAttribute("href")}`;
+
+                        // ✅ tempetyres product fetch via local proxy
+                        const productRes = await fetch(proxify(productUrl));
                         const productHtml = await productRes.text();
                         const productDoc = parser.parseFromString(productHtml, "text/html");
 
                         // Wheels
-                        const price2 = productDoc
-                            .querySelector("#price2")
-                            ?.textContent.trim();
+                        const price2 = productDoc.querySelector("#price2")?.textContent.trim();
                         if (price2 && !isNaN(parseFloat(price2.replace("$", "")))) {
                             price = parseFloat(price2.replace("$", ""));
                         }
 
-                        // Tyres
+                        // Tyres fallback from embedded value
                         if (price === 0) {
-                            const match = productHtml.match(
-                                /'ecomm_totalvalue':\s*'(\d+)'/
-                            );
+                            const match = productHtml.match(/'ecomm_totalvalue':\s*'(\d+)'/);
                             if (match) price = parseFloat(match[1]);
                         }
 
                         if (productDoc.querySelector(".sub-heading-ty-2")) {
-                            const tySize =
-                                productDoc
-                                    .querySelector(".sub-heading-ty-2")
-                                    ?.textContent.trim() || "";
-                            const tyPattern =
-                                productDoc
-                                    .querySelector(".sub-heading-ty-3")
-                                    ?.textContent.trim() || "";
+                            const tySize = productDoc.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
+                            const tyPattern = productDoc.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
                             description = `${tySize} ${tyPattern}`.trim();
                         } else if (productDoc.querySelector(".sub-heading-wh-2")) {
-                            const whSize =
-                                productDoc
-                                    .querySelector(".sub-heading-wh-2")
-                                    ?.textContent.trim() || "";
-                            const whFinish =
-                                productDoc
-                                    .querySelector(".sub-heading-wh-3")
-                                    ?.textContent.trim() || "";
+                            const whSize = productDoc.querySelector(".sub-heading-wh-2")?.textContent.trim() || "";
+                            const whFinish = productDoc.querySelector(".sub-heading-wh-3")?.textContent.trim() || "";
                             description = `${whSize} ${whFinish}`.trim();
                         } else {
                             description = "No description available";
@@ -192,46 +187,29 @@ async function checkPrices(type = "retail") {
             }
         };
 
-        const priceResults = await Promise.all(
-            matchedResults.map(fetchPriceDetails)
-        );
+        const priceResults = await Promise.all(matchedResults.map(fetchPriceDetails));
 
         const chunkSize = 20;
         for (let i = 0; i < priceResults.length; i += chunkSize) {
             setTimeout(() => {
                 resultsTable.innerHTML += priceResults
                     .slice(i, i + chunkSize)
-                    .map(
-                        ({
-                            sku,
-                            quantity,
-                            originalPrice,
-                            totalPrice,
-                            description,
-                            url,
-                        }) => `
-                    <tr>
-                        <td>${sku}</td>
-                        <td>${quantity}</td>
-                        <td>$${originalPrice.toFixed(2)} ea</td>
-                        <td>$${totalPrice.toFixed(2)}</td>
-                        <td>${description}</td>
-                        <td><a href="${url}" target="_blank">View</a></td>
-                    </tr>
-                `
-                    )
+                    .map(({ sku, quantity, originalPrice, totalPrice, description, url }) => `
+                        <tr>
+                            <td>${sku}</td>
+                            <td>${quantity}</td>
+                            <td>$${originalPrice.toFixed(2)} ea</td>
+                            <td>$${totalPrice.toFixed(2)}</td>
+                            <td>${description}</td>
+                            <td><a href="${url}" target="_blank">View</a></td>
+                        </tr>
+                    `)
                     .join("\n");
             }, i * 100);
         }
 
-        grandTotal = priceResults.reduce(
-            (acc, item) => acc + item.totalPrice,
-            0
-        );
-        itemTotal = priceResults.reduce(
-            (acc, item) => acc + item.quantity,
-            0
-        );
+        grandTotal = priceResults.reduce((acc, item) => acc + item.totalPrice, 0);
+        itemTotal = priceResults.reduce((acc, item) => acc + item.quantity, 0);
 
         grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
         itemTotalElement.textContent = `${itemTotal}`;
@@ -337,8 +315,8 @@ async function allInitialsRanked() {
 
     const parser = new DOMParser();
 
-    const totals = {}; // initials -> { retailTotal, wholesaleTotal, qty }
-    const priceCache = {}; // sku -> price
+    const totals = {};      // initials -> { retailTotal, wholesaleTotal, qty }
+    const priceCache = {};  // sku -> price
 
     const getPriceForSku = async (sku) => {
         if (priceCache[sku] !== undefined) return priceCache[sku];
@@ -347,7 +325,7 @@ async function allInitialsRanked() {
         let price = 0;
 
         try {
-            const res = await fetch(searchUrl);
+            const res = await fetch(proxify(searchUrl));
             const html = await res.text();
             const doc = parser.parseFromString(html, "text/html");
 
@@ -364,7 +342,7 @@ async function allInitialsRanked() {
                 const productLinkElement = doc.querySelector(".product-container .image-container a");
                 if (productLinkElement) {
                     const productUrl = `https://www.tempetyres.com.au${productLinkElement.getAttribute("href")}`;
-                    const productRes = await fetch(productUrl);
+                    const productRes = await fetch(proxify(productUrl));
                     const productHtml = await productRes.text();
                     const productDoc = parser.parseFromString(productHtml, "text/html");
 
@@ -390,16 +368,17 @@ async function allInitialsRanked() {
     let grandTotal = 0;
     let itemTotal = 0;
 
-    // 🔁 UPDATED: process each initial ONE BY ONE instead of joining with commas
+    // Process each initial one-by-one (your logic), but all fetches go via local proxy
     const processType = async (type) => {
         const baseUrl = urlMap[type];
         const dateSelector = type === "retail" ? "strong" : "b a";
 
         for (const initials of allInitials) {
             try {
-                const response = await fetch(
-                    `${baseUrl}?day=0&month=0&year=0&q=${encodeURIComponent(initials)}&searchin=EnteredBy`
-                );
+                const intranetUrl =
+                    `${baseUrl}?day=0&month=0&year=0&q=${encodeURIComponent(initials)}&searchin=EnteredBy`;
+
+                const response = await fetch(proxify(intranetUrl));
                 if (!response.ok) continue;
 
                 const text = await response.text();
@@ -430,18 +409,11 @@ async function allInitialsRanked() {
                     const lineTotal = price * quantity;
 
                     if (!totals[initials]) {
-                        totals[initials] = {
-                            retailTotal: 0,
-                            wholesaleTotal: 0,
-                            qty: 0
-                        };
+                        totals[initials] = { retailTotal: 0, wholesaleTotal: 0, qty: 0 };
                     }
 
-                    if (type === "retail") {
-                        totals[initials].retailTotal += lineTotal;
-                    } else {
-                        totals[initials].wholesaleTotal += lineTotal;
-                    }
+                    if (type === "retail") totals[initials].retailTotal += lineTotal;
+                    else totals[initials].wholesaleTotal += lineTotal;
 
                     totals[initials].qty += quantity;
                     grandTotal += lineTotal;
