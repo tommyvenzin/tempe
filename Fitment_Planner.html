@@ -49,6 +49,16 @@
             <label class="fitment-checkbox"><input type="checkbox" id="rotationMode"> Rotation draw mode</label>
             <button type="button" id="clearRotationBtn">Clear rotations</button>
         </div>
+        <div class="map-controls">
+            <label class="fitment-checkbox"><input type="checkbox" id="spareMountedMode"> Spare is currently mounted</label>
+            <select id="spareMountedAt" disabled>
+                <option value="">Choose where spare is mounted</option>
+                <option value="front-left">Front Left (FL)</option>
+                <option value="front-right">Front Right (FR)</option>
+                <option value="rear-left">Rear Left (RL)</option>
+                <option value="rear-right">Rear Right (RR)</option>
+            </select>
+        </div>
 
         <div class="car-map better-map" id="carMap">
             <div class="front-label">FRONT</div>
@@ -63,6 +73,7 @@
         </div>
 
         <p id="rotationFlowInline" class="rotation-flow-inline">Rotation flow: none</p>
+        <p id="spareMountedText" class="rotation-flow-inline"></p>
     </section>
 
     <script src="./Fitment_Planner.js"></script>

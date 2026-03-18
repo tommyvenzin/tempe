@@ -18,6 +18,12 @@ const rotationNodes = {
     "boot": { x: 250, y: 300 },
 };
 
+function getSpareMountedLocation() {
+    const enabled = document.getElementById("spareMountedMode").checked;
+    const selected = document.getElementById("spareMountedAt").value;
+    return enabled && selected ? selected : null;
+}
+
 function copySKU(sku) {
     if (!sku) return;
     navigator.clipboard.writeText(sku).catch((err) => console.error("Copy failed", err));
@@ -62,6 +68,24 @@ function drawRotationArrows() {
         </defs>
     `;
 
+    const mountedSpareAt = getSpareMountedLocation();
+    if (mountedSpareAt) {
+        const spareStart = rotationNodes.boot;
+        const mountedPoint = rotationNodes[mountedSpareAt];
+        if (spareStart && mountedPoint) {
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", spareStart.x);
+            line.setAttribute("y1", spareStart.y);
+            line.setAttribute("x2", mountedPoint.x);
+            line.setAttribute("y2", mountedPoint.y);
+            line.setAttribute("stroke", "#38bdf8");
+            line.setAttribute("stroke-width", "2");
+            line.setAttribute("stroke-dasharray", "5 5");
+            line.setAttribute("marker-end", "url(#arrowhead)");
+            svg.appendChild(line);
+        }
+    }
+
     rotationPlan.forEach(({ from, to }) => {
         const start = rotationNodes[from];
         const end = rotationNodes[to];
@@ -82,6 +106,11 @@ function drawRotationArrows() {
         ? rotationPlan.map((step) => `${labelMap[step.from]}→${labelMap[step.to]}`).join(" | ")
         : "none";
     document.getElementById("rotationFlowInline").textContent = `Rotation flow: ${flowText}`;
+
+    const spareTextEl = document.getElementById("spareMountedText");
+    spareTextEl.textContent = mountedSpareAt
+        ? `Mounted spare start point: ${labelMap[mountedSpareAt]} (blue dashed arrow from Spare).`
+        : "";
 }
 
 function updateTotal(baseTyrePrice) {
@@ -123,6 +152,17 @@ function handlePositionTap(position, button, baseTyrePrice) {
     drawRotationArrows();
 }
 
+function highlightMountedSpare() {
+    const mounted = getSpareMountedLocation();
+    document.querySelectorAll(".position-btn").forEach((btn) => {
+        if (btn.dataset.position === mounted) {
+            btn.classList.add("spare-mounted");
+        } else {
+            btn.classList.remove("spare-mounted");
+        }
+    });
+}
+
 function initFitmentPlanner() {
     const baseTyrePrice = loadSelectedTyre();
 
@@ -151,6 +191,23 @@ function initFitmentPlanner() {
         drawRotationArrows();
     });
 
+    const spareMountedMode = document.getElementById("spareMountedMode");
+    const spareMountedAt = document.getElementById("spareMountedAt");
+    spareMountedMode.addEventListener("change", () => {
+        spareMountedAt.disabled = !spareMountedMode.checked;
+        if (!spareMountedMode.checked) {
+            spareMountedAt.value = "";
+        }
+        highlightMountedSpare();
+        drawRotationArrows();
+    });
+
+    spareMountedAt.addEventListener("change", () => {
+        highlightMountedSpare();
+        drawRotationArrows();
+    });
+
+    highlightMountedSpare();
     drawRotationArrows();
     updateTotal(baseTyrePrice);
 }
