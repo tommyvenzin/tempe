@@ -1,10 +1,13 @@
 const selectedPositions = new Set();
+const rotationPlan = [];
+let pendingFrom = null;
+
 const labelMap = {
-    "front-left": "Front Left",
-    "front-right": "Front Right",
-    "rear-left": "Rear Left",
-    "rear-right": "Rear Right",
-    "boot": "Spare / Boot",
+    "front-left": "FL",
+    "front-right": "FR",
+    "rear-left": "RL",
+    "rear-right": "RR",
+    "boot": "Spare",
 };
 
 const rotationNodes = {
@@ -17,22 +20,7 @@ const rotationNodes = {
 
 function copySKU(sku) {
     if (!sku) return;
-    navigator.clipboard.writeText(sku)
-        .then(() => {
-            const toast = document.createElement("div");
-            toast.textContent = `Copied: ${sku}`;
-            toast.style.position = "fixed";
-            toast.style.bottom = "20px";
-            toast.style.right = "20px";
-            toast.style.padding = "8px 12px";
-            toast.style.background = "#16a34a";
-            toast.style.color = "white";
-            toast.style.borderRadius = "6px";
-            toast.style.zIndex = "9999";
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 900);
-        })
-        .catch((err) => console.error("Copy failed", err));
+    navigator.clipboard.writeText(sku).catch((err) => console.error("Copy failed", err));
 }
 
 function loadSelectedTyre() {
@@ -46,16 +34,12 @@ function loadSelectedTyre() {
         if (!tyre || !tyre.sku) return 0;
 
         const linkText = tyre.link && tyre.link !== "#"
-            ? `<a href="${tyre.link}" target="_blank">${tyre.make || "Unknown Make"} ${tyre.model || "Unknown Model"}</a>`
-            : `${tyre.make || "Unknown Make"} ${tyre.model || "Unknown Model"}`;
+            ? `<a href="${tyre.link}" target="_blank">${tyre.make || "Unknown"} ${tyre.model || "Tyre"}</a>`
+            : `${tyre.make || "Unknown"} ${tyre.model || "Tyre"}`;
 
-        textEl.innerHTML = `${linkText} | SKU: <button type="button" class="sku-copy-btn" id="skuCopyBtn">${tyre.sku}</button> | $${Number(tyre.price || 0).toFixed(2)} | ${tyre.stock || "No stock status"}`;
+        textEl.innerHTML = `${linkText} | SKU: <button type="button" class="sku-copy-btn" id="skuCopyBtn">${tyre.sku}</button> | $${Number(tyre.price || 0).toFixed(2)}`;
 
-        const skuBtn = document.getElementById("skuCopyBtn");
-        if (skuBtn) {
-            skuBtn.addEventListener("click", () => copySKU(tyre.sku));
-        }
-
+        document.getElementById("skuCopyBtn")?.addEventListener("click", () => copySKU(tyre.sku));
         return Number(tyre.price || 0);
     } catch (err) {
         console.error("Failed to load selected tyre", err);
@@ -64,24 +48,11 @@ function loadSelectedTyre() {
 }
 
 function getAlignmentPrice() {
-    const enabled = document.getElementById("alignmentEnabled").checked;
-    if (!enabled) return 0;
-
-    const selectedType = document.querySelector("input[name='alignmentType']:checked")?.value;
-    return selectedType === "full" ? 70 : 50;
+    if (!document.getElementById("alignmentEnabled").checked) return 0;
+    return document.querySelector("input[name='alignmentType']:checked")?.value === "full" ? 70 : 50;
 }
 
-function getRotationPlan() {
-    const plan = [];
-    document.querySelectorAll(".rotation-to").forEach((select) => {
-        const from = select.dataset.from;
-        const to = select.value;
-        if (to) plan.push({ from, to });
-    });
-    return plan;
-}
-
-function drawRotationArrows(plan) {
+function drawRotationArrows() {
     const svg = document.getElementById("rotationArrows");
     svg.innerHTML = `
         <defs>
@@ -91,7 +62,7 @@ function drawRotationArrows(plan) {
         </defs>
     `;
 
-    plan.forEach(({ from, to }) => {
+    rotationPlan.forEach(({ from, to }) => {
         const start = rotationNodes[from];
         const end = rotationNodes[to];
         if (!start || !end || from === to) return;
@@ -106,109 +77,82 @@ function drawRotationArrows(plan) {
         line.setAttribute("marker-end", "url(#arrowhead)");
         svg.appendChild(line);
     });
+
+    const flowText = rotationPlan.length
+        ? rotationPlan.map((step) => `${labelMap[step.from]}→${labelMap[step.to]}`).join(" | ")
+        : "none";
+    document.getElementById("rotationFlowInline").textContent = `Rotation flow: ${flowText}`;
 }
 
-function renderSummary(baseTyrePrice) {
-    const summaryEl = document.getElementById("fitmentSummary");
-    const warningEl = document.getElementById("fitmentWarning");
-    const totalEl = document.getElementById("totalPriceText");
-
+function updateTotal(baseTyrePrice) {
     const qty = Number(document.getElementById("quantityInput").value || 0);
-    const locations = [...selectedPositions].map((pos) => labelMap[pos]);
-    const rotationPlan = getRotationPlan();
-    drawRotationArrows(rotationPlan);
-
-    const alignmentPrice = getAlignmentPrice();
     const tyreTotal = qty * baseTyrePrice;
-    const total = tyreTotal + alignmentPrice;
+    const alignment = getAlignmentPrice();
+    const total = tyreTotal + alignment;
 
-    totalEl.textContent = `Total: $${total.toFixed(2)} (Tyres: $${tyreTotal.toFixed(2)} + Alignment: $${alignmentPrice.toFixed(2)})`;
+    const selectedCount = selectedPositions.size;
+    const mismatch = selectedCount > 0 && selectedCount !== qty ? ` (selected spots: ${selectedCount})` : "";
+    document.getElementById("totalPriceText").textContent = `Total: $${total.toFixed(2)}${mismatch}`;
+}
 
-    if (locations.length === 0) {
-        summaryEl.textContent = "Select tyre positions to build the job summary.";
-        warningEl.style.display = "none";
+function handlePositionTap(position, button, baseTyrePrice) {
+    const rotationMode = document.getElementById("rotationMode").checked;
+
+    if (!rotationMode) {
+        if (selectedPositions.has(position)) {
+            selectedPositions.delete(position);
+            button.classList.remove("selected");
+        } else {
+            selectedPositions.add(position);
+            button.classList.add("selected");
+        }
+        updateTotal(baseTyrePrice);
         return;
     }
 
-    const locationText = locations.join(", ");
-    const rotationText = rotationPlan.length
-        ? `Rotation flow: ${rotationPlan.map((step) => `${labelMap[step.from]} ➜ ${labelMap[step.to]}`).join(" | ")}`
-        : "Rotation flow: none.";
-
-    summaryEl.textContent = `Install ${qty} tyre(s) at: ${locationText}. ${rotationText}`;
-
-    if (qty !== locations.length) {
-        warningEl.textContent = `Quantity is ${qty}, but ${locations.length} position(s) are selected.`;
-        warningEl.style.display = "block";
-    } else {
-        warningEl.style.display = "none";
+    if (!pendingFrom) {
+        pendingFrom = position;
+        button.classList.add("rotation-source");
+        return;
     }
-}
 
-function bindPositionButtons(onChange) {
-    document.querySelectorAll(".position-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            const position = btn.dataset.position;
-            if (!position) return;
+    rotationPlan.push({ from: pendingFrom, to: position });
 
-            if (selectedPositions.has(position)) {
-                selectedPositions.delete(position);
-                btn.classList.remove("selected");
-            } else {
-                selectedPositions.add(position);
-                btn.classList.add("selected");
-            }
-
-            onChange();
-        });
-    });
-}
-
-function buildRotationRows() {
-    const builder = document.getElementById("rotationBuilder");
-    const positions = Object.keys(labelMap);
-
-    builder.innerHTML = positions.map((from) => {
-        const options = ['<option value="">No move</option>']
-            .concat(positions.map((to) => `<option value="${to}">${labelMap[to]}</option>`))
-            .join("");
-
-        return `
-            <div class="rotation-row">
-                <span class="rotation-from">${labelMap[from]}</span>
-                <span class="rotation-arrow">➜</span>
-                <select class="rotation-to" data-from="${from}">${options}</select>
-            </div>
-        `;
-    }).join("");
+    document.querySelectorAll(".position-btn").forEach((btn) => btn.classList.remove("rotation-source"));
+    pendingFrom = null;
+    drawRotationArrows();
 }
 
 function initFitmentPlanner() {
-    buildRotationRows();
     const baseTyrePrice = loadSelectedTyre();
 
-    const triggerRender = () => renderSummary(baseTyrePrice);
-
-    bindPositionButtons(triggerRender);
-
-    document.getElementById("quantityInput").addEventListener("input", triggerRender);
-
-    const alignmentEnabled = document.getElementById("alignmentEnabled");
-    const alignmentOptions = document.getElementById("alignmentOptions");
-    alignmentEnabled.addEventListener("change", () => {
-        alignmentOptions.style.display = alignmentEnabled.checked ? "grid" : "none";
-        triggerRender();
+    document.querySelectorAll(".position-btn").forEach((btn) => {
+        btn.addEventListener("click", () => handlePositionTap(btn.dataset.position, btn, baseTyrePrice));
     });
+
+    document.getElementById("quantityInput").addEventListener("input", () => updateTotal(baseTyrePrice));
+    document.getElementById("alignmentEnabled").addEventListener("change", () => updateTotal(baseTyrePrice));
 
     document.querySelectorAll("input[name='alignmentType']").forEach((radio) => {
-        radio.addEventListener("change", triggerRender);
+        radio.addEventListener("change", () => updateTotal(baseTyrePrice));
     });
 
-    document.querySelectorAll(".rotation-to").forEach((select) => {
-        select.addEventListener("change", triggerRender);
+    document.getElementById("rotationMode").addEventListener("change", (e) => {
+        if (!e.target.checked) {
+            pendingFrom = null;
+            document.querySelectorAll(".position-btn").forEach((btn) => btn.classList.remove("rotation-source"));
+        }
     });
 
-    triggerRender();
+    document.getElementById("clearRotationBtn").addEventListener("click", () => {
+        rotationPlan.length = 0;
+        pendingFrom = null;
+        document.querySelectorAll(".position-btn").forEach((btn) => btn.classList.remove("rotation-source"));
+        drawRotationArrows();
+    });
+
+    drawRotationArrows();
+    updateTotal(baseTyrePrice);
 }
 
 initFitmentPlanner();
