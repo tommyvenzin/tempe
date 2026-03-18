@@ -43,6 +43,71 @@ function copySKU(sku) {
         .catch((err) => console.error("Copy failed", err));
 }
 
+function selectTyreForFitment(tyre) {
+    try {
+        localStorage.setItem("fitment:selectedTyre", JSON.stringify({
+            ...tyre,
+            savedAt: new Date().toISOString(),
+        }));
+        window.location.href = "Fitment_Planner.html";
+    } catch (err) {
+        console.error("Could not save tyre for fitment planning", err);
+        alert("Could not open Fitment Planner. Please try again.");
+    }
+}
+
+function getSavedFitmentSelections() {
+    try {
+        const raw = localStorage.getItem("fitment:placements");
+        return raw ? JSON.parse(raw) : {};
+    } catch (err) {
+        console.error("Could not read fitment selections", err);
+        return {};
+    }
+}
+
+function saveFitmentSelections(data) {
+    try {
+        localStorage.setItem("fitment:placements", JSON.stringify(data));
+    } catch (err) {
+        console.error("Could not save fitment selections", err);
+    }
+}
+
+function toggleFitmentPosition(sku, position, isChecked) {
+    if (!sku) return;
+    const allSelections = getSavedFitmentSelections();
+    const rowSelection = new Set(allSelections[sku] || []);
+
+    if (isChecked) {
+        rowSelection.add(position);
+    } else {
+        rowSelection.delete(position);
+    }
+
+    allSelections[sku] = [...rowSelection];
+    saveFitmentSelections(allSelections);
+}
+
+function renderFitmentSelector(sku) {
+    const saved = getSavedFitmentSelections();
+    const selected = new Set(saved[sku] || []);
+    const checked = (pos) => (selected.has(pos) ? "checked" : "");
+    const safeSku = sku.replace(/'/g, "\\'");
+
+    return `
+        <div class="fitment-inline">
+            <div class="fitment-grid">
+                <label class="fitment-spot"><input type="checkbox" onchange="toggleFitmentPosition('${safeSku}','FL', this.checked)" ${checked("FL")}><span>FL</span></label>
+                <label class="fitment-spot"><input type="checkbox" onchange="toggleFitmentPosition('${safeSku}','FR', this.checked)" ${checked("FR")}><span>FR</span></label>
+                <label class="fitment-spot"><input type="checkbox" onchange="toggleFitmentPosition('${safeSku}','RL', this.checked)" ${checked("RL")}><span>RL</span></label>
+                <label class="fitment-spot"><input type="checkbox" onchange="toggleFitmentPosition('${safeSku}','RR', this.checked)" ${checked("RR")}><span>RR</span></label>
+            </div>
+            <label class="fitment-spare">Spare <input type="checkbox" onchange="toggleFitmentPosition('${safeSku}','Spare', this.checked)" ${checked("Spare")}></label>
+        </div>
+    `;
+}
+
 // Enter key support on F Alt Tab textarea
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
@@ -235,7 +300,7 @@ async function checkPrices() {
         if (!query) return "";
 
         if (![5, 7].includes(query.length)) {
-            return `<tr><td colspan="4">Invalid input: ${query}</td></tr>`;
+            return `<tr><td colspan="5">Invalid input: ${query}</td></tr>`;
         }
 
         const [w, d] = [query.slice(0, 3), query.slice(-2)];
@@ -266,7 +331,6 @@ async function checkPrices() {
 
                 const safeStock = stock.replace(/"/g, '&quot;');
                 const safeSku = sku.replace(/'/g, "\\'");
-
                 /* MODEL NOW CLICKABLE – LINK COLUMN REMOVED */
                 return `<tr 
                     style="background:${getStockColor(stock)};"
@@ -286,10 +350,12 @@ async function checkPrices() {
                     <td onclick="copySKU('${safeSku}')" style="cursor:pointer; color:#60a5fa;">
                         ${sku}
                     </td>
+
+                    <td>${renderFitmentSelector(sku)}</td>
                 </tr>`;
             }).join("\n");
         } catch (err) {
-            return `<tr><td colspan="4">Error retrieving: ${query}</td></tr>`;
+            return `<tr><td colspan="5">Error retrieving: ${query}</td></tr>`;
         }
     }));
 
@@ -302,8 +368,8 @@ function sortTableByPrice() {
     const rows = Array.from(tbody.querySelectorAll("tr"));
 
     rows.sort((a, b) => {
-        const aPrice = parseFloat(a.cells[2].textContent.replace("$", "")) || 0;
-        const bPrice = parseFloat(b.cells[2].textContent.replace("$", "")) || 0;
+        const aPrice = parseFloat((a.cells[2]?.textContent || "").replace("$", "")) || 0;
+        const bPrice = parseFloat((b.cells[2]?.textContent || "").replace("$", "")) || 0;
         return aPrice - bPrice;
     });
 
