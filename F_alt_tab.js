@@ -43,6 +43,19 @@ function copySKU(sku) {
         .catch((err) => console.error("Copy failed", err));
 }
 
+function selectTyreForFitment(tyre) {
+    try {
+        localStorage.setItem("fitment:selectedTyre", JSON.stringify({
+            ...tyre,
+            savedAt: new Date().toISOString(),
+        }));
+        window.location.href = "Fitment_Planner.html";
+    } catch (err) {
+        console.error("Could not save tyre for fitment planning", err);
+        alert("Could not open Fitment Planner. Please try again.");
+    }
+}
+
 // Enter key support on F Alt Tab textarea
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
@@ -235,7 +248,7 @@ async function checkPrices() {
         if (!query) return "";
 
         if (![5, 7].includes(query.length)) {
-            return `<tr><td colspan="4">Invalid input: ${query}</td></tr>`;
+            return `<tr><td colspan="5">Invalid input: ${query}</td></tr>`;
         }
 
         const [w, d] = [query.slice(0, 3), query.slice(-2)];
@@ -266,7 +279,9 @@ async function checkPrices() {
 
                 const safeStock = stock.replace(/"/g, '&quot;');
                 const safeSku = sku.replace(/'/g, "\\'");
-
+                const safeMake = make.replace(/'/g, "\\'");
+                const safeModel = model.replace(/'/g, "\\'");
+                const safeLink = link.replace(/'/g, "\\'");
                 /* MODEL NOW CLICKABLE – LINK COLUMN REMOVED */
                 return `<tr 
                     style="background:${getStockColor(stock)};"
@@ -286,10 +301,19 @@ async function checkPrices() {
                     <td onclick="copySKU('${safeSku}')" style="cursor:pointer; color:#60a5fa;">
                         ${sku}
                     </td>
+
+                    <td>
+                        <button
+                            type="button"
+                            onclick="selectTyreForFitment({ sku: '${safeSku}', make: '${safeMake}', model: '${safeModel}', price: ${price.toFixed(2)}, stock: '${safeStock}', link: '${safeLink}' }); window.location.href='Fitment_Planner.html';"
+                        >
+                            Add to Fitment Planner
+                        </button>
+                    </td>
                 </tr>`;
             }).join("\n");
         } catch (err) {
-            return `<tr><td colspan="4">Error retrieving: ${query}</td></tr>`;
+            return `<tr><td colspan="5">Error retrieving: ${query}</td></tr>`;
         }
     }));
 
@@ -302,8 +326,8 @@ function sortTableByPrice() {
     const rows = Array.from(tbody.querySelectorAll("tr"));
 
     rows.sort((a, b) => {
-        const aPrice = parseFloat(a.cells[2].textContent.replace("$", "")) || 0;
-        const bPrice = parseFloat(b.cells[2].textContent.replace("$", "")) || 0;
+        const aPrice = parseFloat((a.cells[2]?.textContent || "").replace("$", "")) || 0;
+        const bPrice = parseFloat((b.cells[2]?.textContent || "").replace("$", "")) || 0;
         return aPrice - bPrice;
     });
 
