@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fitment Planner</title>
+    <link rel="stylesheet" href="./allaround.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html">F Alt Tab</a>
+        <a href="Project_C.html">Project C</a>
+        <a href="Tyrestinder.html">Tyres Tinder</a>
+        <a href="Fitment_Planner.html">Fitment Planner</a>
+    </nav>
+
+    <h1>Tyre Fitment Planner</h1>
+
+    <section class="fitment-card">
+        <h2>Selected Tyre</h2>
+        <p id="selectedTyreText">No tyre selected yet. Go to F Alt Tab and click <strong>Plan Fitment</strong>.</p>
+        <a id="selectedTyreLink" href="#" target="_blank" style="display:none;">Open Tyre Product Page</a>
+    </section>
+
+    <section class="fitment-controls fitment-card">
+        <label for="quantityInput">How many tyres are being installed?</label>
+        <input type="number" id="quantityInput" min="1" max="5" value="2">
+
+        <label class="fitment-checkbox">
+            <input type="checkbox" id="rotationFrontInput">
+            Customer wants rotation so new tyres end up on the front.
+        </label>
+    </section>
+
+    <section class="fitment-card">
+        <h2>Tap Where The Tyres Go</h2>
+        <div class="car-map" id="carMap">
+            <div class="car-shape">CAR</div>
+            <button type="button" class="position-btn" data-position="front-left">Front Left</button>
+            <button type="button" class="position-btn" data-position="front-right">Front Right</button>
+            <button type="button" class="position-btn" data-position="rear-left">Rear Left</button>
+            <button type="button" class="position-btn" data-position="rear-right">Rear Right</button>
+            <button type="button" class="position-btn boot" data-position="boot">Boot / Spare</button>
+        </div>
+    </section>
+
+    <section class="fitment-card">
+        <h2>Job Summary</h2>
+        <p id="fitmentSummary">Select tyre positions to build the job summary.</p>
+        <p id="fitmentWarning" class="fitment-warning" style="display:none;"></p>
+    </section>
+
+    <script src="./Fitment_Planner.js"></script>
+</body>
+</html>
