@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fitment Planner</title>
+    <link rel="stylesheet" href="./allaround.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html">F Alt Tab</a>
+        <a href="Project_C.html">Project C</a>
+        <a href="Tyrestinder.html">Tyres Tinder</a>
+        <a href="Fitment_Planner.html">Fitment Planner</a>
+    </nav>
+
+    <h1>Tyre Fitment Planner</h1>
+
+    <section class="fitment-card compact-card">
+        <div class="fitment-customer-grid compact-grid">
+            <label for="customerName">Customer</label>
+            <input type="text" id="customerName" placeholder="Name">
+
+            <label for="customerPhone">Phone</label>
+            <input type="tel" id="customerPhone" inputmode="numeric" pattern="[0-9]*" placeholder="0400000000">
+
+            <label for="quantityInput">Qty</label>
+            <input type="number" id="quantityInput" min="1" max="5" value="2">
+        </div>
+
+        <p id="selectedTyreText" class="selected-tyre-inline">No tyre selected yet. Go to F Alt Tab and select a tyre result first.</p>
+
+        <div class="compact-pricing-row">
+            <label class="fitment-checkbox">
+                <input type="checkbox" id="alignmentEnabled">
+                Alignment
+            </label>
+            <label><input type="radio" name="alignmentType" value="front" checked> Front $50</label>
+            <label><input type="radio" name="alignmentType" value="full"> Front+Rear $70</label>
+            <strong id="totalPriceText" class="fitment-total">Total: $0.00</strong>
+        </div>
+    </section>
+
+    <section class="fitment-card compact-card">
+        <h2>Fitment + Rotation Map</h2>
+        <p class="map-help">Tap wheel positions to mark new tyres. Turn on rotation mode, then tap FROM and TO points to draw arrows.</p>
+
+        <div class="map-controls">
+            <label class="fitment-checkbox"><input type="checkbox" id="rotationMode"> Rotation draw mode</label>
+            <button type="button" id="clearRotationBtn">Clear rotations</button>
+        </div>
+
+        <div class="car-map better-map" id="carMap">
+            <div class="front-label">FRONT</div>
+            <div class="car-shape detailed-car"><div class="car-center-text">TOP VIEW</div></div>
+            <button type="button" class="position-btn" data-position="front-left">FL</button>
+            <button type="button" class="position-btn" data-position="front-right">FR</button>
+            <button type="button" class="position-btn" data-position="rear-left">RL</button>
+            <button type="button" class="position-btn" data-position="rear-right">RR</button>
+            <button type="button" class="position-btn boot" data-position="boot">Spare</button>
+            <svg id="rotationArrows" class="rotation-arrows overlay" viewBox="0 0 500 350" aria-label="Rotation arrows"></svg>
+            <div class="rear-label">REAR</div>
+        </div>
+
+        <p id="rotationFlowInline" class="rotation-flow-inline">Rotation flow: none</p>
+    </section>
+
+    <script src="./Fitment_Planner.js"></script>
+</body>
+</html>
