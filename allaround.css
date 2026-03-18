@@ -319,6 +319,123 @@ h1::after {
     font-weight: 700;
 }
 
+.fitment-inline {
+    font-size: 0.85rem;
+}
+
+.fitment-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(62px, 1fr));
+    gap: 6px 14px;
+    margin-bottom: 8px;
+}
+
+.fitment-inline label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.fitment-spot {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center !important;
+    gap: 2px !important;
+}
+
+.fitment-spare {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fitment-customer-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+
+.fitment-customer-grid input {
+    margin-bottom: 8px;
+}
+
+.alignment-options {
+    display: grid;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.better-map {
+    border: 1px dashed #334155;
+    border-radius: 12px;
+    padding: 18px 6px;
+}
+
+.front-label,
+.rear-label {
+    text-align: center;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #fbbf24;
+}
+
+.rear-label {
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.detailed-car {
+    border-color: #38bdf8;
+    background: linear-gradient(180deg, rgba(14, 116, 144, 0.35), rgba(15, 23, 42, 0.8));
+}
+
+.car-center-text {
+    font-size: 0.85rem;
+}
+
+.rotation-builder {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.rotation-row {
+    display: grid;
+    grid-template-columns: 1fr 28px 1fr;
+    gap: 8px;
+    align-items: center;
+}
+
+.rotation-arrow {
+    text-align: center;
+}
+
+.rotation-arrows {
+    width: 100%;
+    max-width: 500px;
+    min-height: 220px;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    background: rgba(2, 6, 23, 0.85);
+}
+
+.sku-copy-btn {
+    background: #0f172a;
+    border: 1px solid #38bdf8;
+    color: #bae6fd;
+    padding: 2px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.fitment-total {
+    font-weight: 700;
+    color: #86efac;
+}
+
 .navbar {
     background: linear-gradient(90deg, #022c22, #111827);
     border-radius: 10px;
