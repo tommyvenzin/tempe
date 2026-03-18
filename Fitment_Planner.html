@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fitment Planner</title>
+    <link rel="stylesheet" href="./allaround.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html">F Alt Tab</a>
+        <a href="Project_C.html">Project C</a>
+        <a href="Tyrestinder.html">Tyres Tinder</a>
+        <a href="Fitment_Planner.html">Fitment Planner</a>
+    </nav>
+
+    <h1>Tyre Fitment Planner</h1>
+
+    <section class="fitment-card">
+        <h2>Customer Details</h2>
+        <div class="fitment-customer-grid">
+            <label for="customerName">Customer Name</label>
+            <input type="text" id="customerName" placeholder="Enter customer name">
+
+            <label for="customerPhone">Phone Number</label>
+            <input type="tel" id="customerPhone" inputmode="numeric" pattern="[0-9]*" placeholder="0400000000">
+        </div>
+    </section>
+
+    <section class="fitment-card">
+        <h2>Selected Tyre</h2>
+        <p id="selectedTyreText">No tyre selected yet. Go to F Alt Tab and select a tyre result first.</p>
+    </section>
+
+    <section class="fitment-controls fitment-card">
+        <label for="quantityInput">How many tyres are being installed?</label>
+        <input type="number" id="quantityInput" min="1" max="5" value="2">
+
+        <label class="fitment-checkbox">
+            <input type="checkbox" id="alignmentEnabled">
+            Include wheel alignment
+        </label>
+        <div id="alignmentOptions" class="alignment-options" style="display:none;">
+            <label><input type="radio" name="alignmentType" value="front" checked> Front only ($50)</label>
+            <label><input type="radio" name="alignmentType" value="full"> Front + Rear ($70)</label>
+        </div>
+    </section>
+
+    <section class="fitment-card">
+        <h2>Tyre Fitment Map</h2>
+        <div class="car-map better-map" id="carMap">
+            <div class="front-label">FRONT OF CAR</div>
+            <div class="car-shape detailed-car">
+                <div class="car-center-text">TOP VIEW</div>
+            </div>
+            <button type="button" class="position-btn" data-position="front-left">Front Left</button>
+            <button type="button" class="position-btn" data-position="front-right">Front Right</button>
+            <button type="button" class="position-btn" data-position="rear-left">Rear Left</button>
+            <button type="button" class="position-btn" data-position="rear-right">Rear Right</button>
+            <button type="button" class="position-btn boot" data-position="boot">Spare / Boot</button>
+            <div class="rear-label">REAR OF CAR</div>
+        </div>
+    </section>
+
+    <section class="fitment-card">
+        <h2>Rotation Route Builder</h2>
+        <p>Build rotation flow (from ➜ to). Any combination is allowed.</p>
+        <div id="rotationBuilder" class="rotation-builder"></div>
+        <svg id="rotationArrows" class="rotation-arrows" viewBox="0 0 500 350" aria-label="Rotation arrows"></svg>
+    </section>
+
+    <section class="fitment-card">
+        <h2>Job Summary</h2>
+        <p id="fitmentSummary">Select tyre positions to build the job summary.</p>
+        <p id="fitmentWarning" class="fitment-warning" style="display:none;"></p>
+        <p id="totalPriceText" class="fitment-total">Total: $0.00</p>
+    </section>
+
+    <script src="./Fitment_Planner.js"></script>
+</body>
+</html>
