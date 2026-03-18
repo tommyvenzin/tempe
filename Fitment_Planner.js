@@ -68,24 +68,6 @@ function drawRotationArrows() {
         </defs>
     `;
 
-    const mountedSpareAt = getSpareMountedLocation();
-    if (mountedSpareAt) {
-        const spareStart = rotationNodes.boot;
-        const mountedPoint = rotationNodes[mountedSpareAt];
-        if (spareStart && mountedPoint) {
-            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            line.setAttribute("x1", spareStart.x);
-            line.setAttribute("y1", spareStart.y);
-            line.setAttribute("x2", mountedPoint.x);
-            line.setAttribute("y2", mountedPoint.y);
-            line.setAttribute("stroke", "#38bdf8");
-            line.setAttribute("stroke-width", "2");
-            line.setAttribute("stroke-dasharray", "5 5");
-            line.setAttribute("marker-end", "url(#arrowhead)");
-            svg.appendChild(line);
-        }
-    }
-
     rotationPlan.forEach(({ from, to }) => {
         const start = rotationNodes[from];
         const end = rotationNodes[to];
@@ -107,9 +89,10 @@ function drawRotationArrows() {
         : "none";
     document.getElementById("rotationFlowInline").textContent = `Rotation flow: ${flowText}`;
 
+    const mountedSpareAt = getSpareMountedLocation();
     const spareTextEl = document.getElementById("spareMountedText");
     spareTextEl.textContent = mountedSpareAt
-        ? `Mounted spare start point: ${labelMap[mountedSpareAt]} (blue dashed arrow from Spare).`
+        ? `Spare is currently on ${labelMap[mountedSpareAt]} (labels swapped on map).`
         : "";
 }
 
@@ -163,6 +146,29 @@ function highlightMountedSpare() {
     });
 }
 
+function updatePositionLabels() {
+    const mounted = getSpareMountedLocation();
+    const buttonLabels = {
+        "front-left": "FL",
+        "front-right": "FR",
+        "rear-left": "RL",
+        "rear-right": "RR",
+        "boot": "Spare",
+    };
+
+    if (mounted) {
+        buttonLabels[mounted] = "Spare";
+        buttonLabels.boot = labelMap[mounted];
+    }
+
+    document.querySelectorAll(".position-btn").forEach((btn) => {
+        const pos = btn.dataset.position;
+        if (buttonLabels[pos]) {
+            btn.textContent = buttonLabels[pos];
+        }
+    });
+}
+
 function initFitmentPlanner() {
     const baseTyrePrice = loadSelectedTyre();
 
@@ -198,15 +204,18 @@ function initFitmentPlanner() {
         if (!spareMountedMode.checked) {
             spareMountedAt.value = "";
         }
+        updatePositionLabels();
         highlightMountedSpare();
         drawRotationArrows();
     });
 
     spareMountedAt.addEventListener("change", () => {
+        updatePositionLabels();
         highlightMountedSpare();
         drawRotationArrows();
     });
 
+    updatePositionLabels();
     highlightMountedSpare();
     drawRotationArrows();
     updateTotal(baseTyrePrice);
