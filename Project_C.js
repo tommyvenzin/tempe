@@ -6,6 +6,8 @@ console.log("Project_C.js loaded successfully");
 
 const LOCAL_PROXY = "http://localhost:8787/proxy?url=";
 const CF_PROXY = "https://pepektires.tommyvenzin.workers.dev/?url=";
+const PRICE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 mins
+const rankedPriceCache = new Map(); // sku -> { price, cachedAt }
 
 function isLocalHostRuntime() {
     const host = window.location.hostname;
@@ -38,6 +40,22 @@ async function fetchProxyText(targetUrl) {
     }
 
     throw lastError || new Error("All proxy attempts failed.");
+}
+
+async function mapWithConcurrency(items, concurrency, worker) {
+    const safeConcurrency = Math.max(1, Math.min(concurrency, items.length || 1));
+    const results = new Array(items.length);
+    let index = 0;
+
+    async function runWorker() {
+        while (index < items.length) {
+            const current = index++;
+            results[current] = await worker(items[current], current);
+        }
+    }
+
+    await Promise.all(Array.from({ length: safeConcurrency }, runWorker));
+    return results;
 }
 
 function extractHtmlFromProxyPayload(text) {
@@ -404,10 +422,13 @@ async function allInitialsRanked() {
     const parser = new DOMParser();
 
     const totals = {};      // initials -> { retailTotal, wholesaleTotal, qty }
-    const priceCache = {};  // sku -> price
 
     const getPriceForSku = async (sku) => {
-        if (priceCache[sku] !== undefined) return priceCache[sku];
+        const now = Date.now();
+        const cached = rankedPriceCache.get(sku);
+        if (cached && now - cached.cachedAt < PRICE_CACHE_TTL_MS) {
+            return cached.price;
+        }
 
         const searchUrl = `https://www.tempetyres.com.au/search?q=${encodeURIComponent(sku)}`;
         let price = 0;
@@ -447,19 +468,21 @@ async function allInitialsRanked() {
             console.error(`Error fetching price for SKU ${sku}:`, e);
         }
 
-        priceCache[sku] = price;
+        rankedPriceCache.set(sku, { price, cachedAt: now });
         return price;
     };
 
     let grandTotal = 0;
     let itemTotal = 0;
 
-    // Process each initial one-by-one (your logic), but all fetches go via local proxy
+    const rankedConcurrency = 4;
+
+    // Process each initial with bounded concurrency.
     const processType = async (type) => {
         const baseUrl = urlMap[type];
         const dateSelector = type === "retail" ? "strong" : "b a";
 
-        for (const initials of allInitials) {
+        await mapWithConcurrency(allInitials, rankedConcurrency, async (initials) => {
             try {
                 const intranetUrl =
                     `${baseUrl}?day=0&month=0&year=0&q=${encodeURIComponent(initials)}&searchin=EnteredBy`;
@@ -467,6 +490,7 @@ async function allInitialsRanked() {
                 const text = await fetchProxyText(intranetUrl);
                 const doc = parser.parseFromString(text, "text/html");
                 const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
+                const lineItems = [];
 
                 for (const row of rows) {
                     const columns = row.querySelectorAll("td");
@@ -485,27 +509,34 @@ async function allInitialsRanked() {
                     const sku = skuElement.textContent.trim();
                     const quantity = parseInt(quantityElement.textContent.trim(), 10);
 
-                    // Make sure each row actually belongs to THIS initials
-                    if (!rowInitials || rowInitials !== initials) continue;
-
-                    const price = await getPriceForSku(sku);
-                    const lineTotal = price * quantity;
-
-                    if (!totals[initials]) {
-                        totals[initials] = { retailTotal: 0, wholesaleTotal: 0, qty: 0 };
-                    }
-
-                    if (type === "retail") totals[initials].retailTotal += lineTotal;
-                    else totals[initials].wholesaleTotal += lineTotal;
-
-                    totals[initials].qty += quantity;
-                    grandTotal += lineTotal;
-                    itemTotal += quantity;
+                    if (!rowInitials || rowInitials !== initials || !sku || !Number.isFinite(quantity)) continue;
+                    lineItems.push({ sku, quantity });
                 }
+
+                if (lineItems.length === 0) return;
+
+                // Resolve all SKU prices for this initial concurrently (bounded).
+                const pricedLines = await mapWithConcurrency(lineItems, rankedConcurrency, async ({ sku, quantity }) => {
+                    const price = await getPriceForSku(sku);
+                    return { quantity, lineTotal: price * quantity };
+                });
+
+                const totalForInitial = pricedLines.reduce((acc, row) => acc + row.lineTotal, 0);
+                const qtyForInitial = pricedLines.reduce((acc, row) => acc + row.quantity, 0);
+
+                if (!totals[initials]) {
+                    totals[initials] = { retailTotal: 0, wholesaleTotal: 0, qty: 0 };
+                }
+
+                if (type === "retail") totals[initials].retailTotal += totalForInitial;
+                else totals[initials].wholesaleTotal += totalForInitial;
+                totals[initials].qty += qtyForInitial;
+                grandTotal += totalForInitial;
+                itemTotal += qtyForInitial;
             } catch (e) {
                 console.error(`Error processing ${type} for ${initials}:`, e);
             }
-        }
+        });
     };
 
     try {
