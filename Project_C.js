@@ -5,9 +5,39 @@ console.log("Project_C.js loaded successfully");
    ========================= */
 
 const LOCAL_PROXY = "http://localhost:8787/proxy?url=";
+const CF_PROXY = "https://pepektires.tommyvenzin.workers.dev/?url=";
 
-function proxify(url) {
-    return LOCAL_PROXY + encodeURIComponent(url);
+function isLocalHostRuntime() {
+    const host = window.location.hostname;
+    return host === "localhost" || host === "127.0.0.1";
+}
+
+function getProxyCandidates() {
+    // GitHub Pages / HTTPS cannot call localhost due to private network access restrictions.
+    return isLocalHostRuntime() ? [LOCAL_PROXY, CF_PROXY] : [CF_PROXY, LOCAL_PROXY];
+}
+
+function proxify(url, proxyBase) {
+    return proxyBase + encodeURIComponent(url);
+}
+
+async function fetchProxyText(targetUrl) {
+    const proxies = getProxyCandidates();
+    let lastError = null;
+
+    for (const proxyBase of proxies) {
+        try {
+            const res = await fetch(proxify(targetUrl, proxyBase));
+            if (!res.ok) throw new Error(`Proxy ${proxyBase} returned ${res.status}`);
+            const rawText = await res.text();
+            return extractHtmlFromProxyPayload(rawText);
+        } catch (error) {
+            lastError = error;
+            console.warn(`Proxy request failed via ${proxyBase}`, error);
+        }
+    }
+
+    throw lastError || new Error("All proxy attempts failed.");
 }
 
 function extractHtmlFromProxyPayload(text) {
@@ -121,10 +151,7 @@ async function checkPrices(type = "retail") {
         const intranetUrl =
             `${urlMap[type]}?day=0&month=0&year=0&q=${encodeURIComponent(initialsInput.join(","))}&searchin=EnteredBy`;
 
-        const response = await fetch(proxify(intranetUrl));
-        if (!response.ok) throw new Error("Network response was not ok");
-        const rawText = await response.text();
-        const text = extractHtmlFromProxyPayload(rawText);
+        const text = await fetchProxyText(intranetUrl);
 
         const doc = parser.parseFromString(text, "text/html");
         const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
@@ -160,9 +187,7 @@ async function checkPrices(type = "retail") {
 
             try {
                 // ✅ tempetyres search fetch via local proxy
-                const res = await fetch(proxify(searchUrl));
-                const rawHtml = await res.text();
-                const html = extractHtmlFromProxyPayload(rawHtml);
+                const html = await fetchProxyText(searchUrl);
                 const doc = parser.parseFromString(html, "text/html");
 
                 // Try search page price
@@ -197,9 +222,7 @@ async function checkPrices(type = "retail") {
                         productUrl = `https://www.tempetyres.com.au${productLinkElement.getAttribute("href")}`;
 
                         // ✅ tempetyres product fetch via local proxy
-                        const productRes = await fetch(proxify(productUrl));
-                        const rawProductHtml = await productRes.text();
-                        const productHtml = extractHtmlFromProxyPayload(rawProductHtml);
+                        const productHtml = await fetchProxyText(productUrl);
                         const productDoc = parser.parseFromString(productHtml, "text/html");
 
                         // Wheels
@@ -390,9 +413,7 @@ async function allInitialsRanked() {
         let price = 0;
 
         try {
-            const res = await fetch(proxify(searchUrl));
-            const rawHtml = await res.text();
-            const html = extractHtmlFromProxyPayload(rawHtml);
+            const html = await fetchProxyText(searchUrl);
             const doc = parser.parseFromString(html, "text/html");
 
             let priceText = doc.querySelector(".sale-price span")?.textContent.trim();
@@ -408,9 +429,7 @@ async function allInitialsRanked() {
                 const productLinkElement = doc.querySelector(".product-container .image-container a");
                 if (productLinkElement) {
                     const productUrl = `https://www.tempetyres.com.au${productLinkElement.getAttribute("href")}`;
-                    const productRes = await fetch(proxify(productUrl));
-                    const rawProductHtml = await productRes.text();
-                    const productHtml = extractHtmlFromProxyPayload(rawProductHtml);
+                    const productHtml = await fetchProxyText(productUrl);
                     const productDoc = parser.parseFromString(productHtml, "text/html");
 
                     const price2 = productDoc.querySelector("#price2")?.textContent.trim();
@@ -445,11 +464,7 @@ async function allInitialsRanked() {
                 const intranetUrl =
                     `${baseUrl}?day=0&month=0&year=0&q=${encodeURIComponent(initials)}&searchin=EnteredBy`;
 
-                const response = await fetch(proxify(intranetUrl));
-                if (!response.ok) continue;
-
-                const rawText = await response.text();
-                const text = extractHtmlFromProxyPayload(rawText);
+                const text = await fetchProxyText(intranetUrl);
                 const doc = parser.parseFromString(text, "text/html");
                 const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
 
