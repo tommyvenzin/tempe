@@ -10,6 +10,68 @@ function proxify(url) {
     return LOCAL_PROXY + encodeURIComponent(url);
 }
 
+function extractHtmlFromProxyPayload(text) {
+    // Some proxy implementations return JSON payloads instead of raw HTML.
+    const trimmed = text.trim();
+    if (!trimmed.startsWith("{")) return text;
+
+    try {
+        const parsed = JSON.parse(trimmed);
+        if (typeof parsed.contents === "string") return parsed.contents;
+        if (typeof parsed.body === "string") return parsed.body;
+    } catch {
+        // Not JSON; keep raw text.
+    }
+
+    return text;
+}
+
+function toDateKey(rawDateText) {
+    if (!rawDateText) return null;
+
+    // Prefer compact YYYYMMDD if present.
+    const compact = rawDateText.replace(/\D/g, "");
+    const compactMatch = compact.match(/(20\d{2})(0[1-9]|1[0-2])([0-2]\d|3[01])/);
+    if (compactMatch) return compactMatch[0];
+
+    // Support common separators (DD-MM-YYYY / MM-DD-YYYY / YYYY-MM-DD).
+    const m = rawDateText.match(/(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})/);
+    if (!m) return null;
+
+    const a = parseInt(m[1], 10);
+    const b = parseInt(m[2], 10);
+    const c = parseInt(m[3], 10);
+
+    let year;
+    let month;
+    let day;
+
+    if (m[1].length === 4) {
+        year = a; month = b; day = c; // YYYY-MM-DD
+    } else if (m[3].length === 4) {
+        year = c;
+        // AU intranet is generally DD-MM-YYYY; fallback to MM-DD-YYYY if needed.
+        if (a > 12) {
+            day = a; month = b;
+        } else if (b > 12) {
+            month = a; day = b;
+        } else {
+            day = a; month = b;
+        }
+    } else {
+        return null;
+    }
+
+    if (
+        !Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day) ||
+        month < 1 || month > 12 || day < 1 || day > 31
+    ) {
+        return null;
+    }
+
+    return `${year}${String(month).padStart(2, "0")}${String(day).padStart(2, "0")}`;
+}
+
 /* =========================
    Main: Check Prices
    ========================= */
@@ -61,7 +123,8 @@ async function checkPrices(type = "retail") {
 
         const response = await fetch(proxify(intranetUrl));
         if (!response.ok) throw new Error("Network response was not ok");
-        const text = await response.text();
+        const rawText = await response.text();
+        const text = extractHtmlFromProxyPayload(rawText);
 
         const doc = parser.parseFromString(text, "text/html");
         const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
@@ -73,7 +136,7 @@ async function checkPrices(type = "retail") {
             if (columns.length < 7) continue;
 
             const rawDateText = columns[1].querySelector(dateSelector)?.textContent.trim();
-            const dateText = rawDateText?.split("-")[2]?.slice(0, 8);
+            const dateText = toDateKey(rawDateText);
             if (!dateText || dateText < startDate || dateText > endDate) continue;
 
             const initialsElement = columns[3].querySelector("a");
@@ -98,7 +161,8 @@ async function checkPrices(type = "retail") {
             try {
                 // ✅ tempetyres search fetch via local proxy
                 const res = await fetch(proxify(searchUrl));
-                const html = await res.text();
+                const rawHtml = await res.text();
+                const html = extractHtmlFromProxyPayload(rawHtml);
                 const doc = parser.parseFromString(html, "text/html");
 
                 // Try search page price
@@ -134,7 +198,8 @@ async function checkPrices(type = "retail") {
 
                         // ✅ tempetyres product fetch via local proxy
                         const productRes = await fetch(proxify(productUrl));
-                        const productHtml = await productRes.text();
+                        const rawProductHtml = await productRes.text();
+                        const productHtml = extractHtmlFromProxyPayload(rawProductHtml);
                         const productDoc = parser.parseFromString(productHtml, "text/html");
 
                         // Wheels
@@ -326,7 +391,8 @@ async function allInitialsRanked() {
 
         try {
             const res = await fetch(proxify(searchUrl));
-            const html = await res.text();
+            const rawHtml = await res.text();
+            const html = extractHtmlFromProxyPayload(rawHtml);
             const doc = parser.parseFromString(html, "text/html");
 
             let priceText = doc.querySelector(".sale-price span")?.textContent.trim();
@@ -343,7 +409,8 @@ async function allInitialsRanked() {
                 if (productLinkElement) {
                     const productUrl = `https://www.tempetyres.com.au${productLinkElement.getAttribute("href")}`;
                     const productRes = await fetch(proxify(productUrl));
-                    const productHtml = await productRes.text();
+                    const rawProductHtml = await productRes.text();
+                    const productHtml = extractHtmlFromProxyPayload(rawProductHtml);
                     const productDoc = parser.parseFromString(productHtml, "text/html");
 
                     const price2 = productDoc.querySelector("#price2")?.textContent.trim();
@@ -381,7 +448,8 @@ async function allInitialsRanked() {
                 const response = await fetch(proxify(intranetUrl));
                 if (!response.ok) continue;
 
-                const text = await response.text();
+                const rawText = await response.text();
+                const text = extractHtmlFromProxyPayload(rawText);
                 const doc = parser.parseFromString(text, "text/html");
                 const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
 
@@ -390,7 +458,7 @@ async function allInitialsRanked() {
                     if (columns.length < 7) continue;
 
                     const rawDateText = columns[1].querySelector(dateSelector)?.textContent.trim();
-                    const dateText = rawDateText?.split("-")[2]?.slice(0, 8);
+                    const dateText = toDateKey(rawDateText);
                     if (!dateText || dateText < startDate || dateText > endDate) continue;
 
                     const initialsElement = columns[3].querySelector("a");
