@@ -8,10 +8,18 @@
 </head>
 <body>
     <nav class="navbar">
-        <a href="index.html">F Alt Tab</a>
-        <a href="Project_C.html">Project C</a>
-        <a href="Tyrestinder.html">Tyres Tinder</a>
-        <a href="Fitment_Planner.html">Fitment Planner</a>
+        <div class="navbar-links">
+            <a href="index.html">F Alt Tab</a>
+            <a href="Project_C.html">Project C</a>
+            <a href="Tyrestinder.html">Tyres Tinder</a>
+            <a href="Fitment_Planner.html">Fitment Planner</a>
+        </div>
+        <select class="nav-dropdown" aria-label="Navigation menu" onchange="if (this.value) window.location.href=this.value;">
+            <option value="index.html">F Alt Tab</option>
+            <option value="Project_C.html">Project C</option>
+            <option value="Tyrestinder.html">Tyres Tinder</option>
+            <option value="Fitment_Planner.html" selected>Fitment Planner</option>
+        </select>
     </nav>
 
     <h1>Tyre Fitment Planner</h1>
