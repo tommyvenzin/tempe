@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tempe Orders Helper</title>
+    <link rel="stylesheet" href="./allaround.css">
+    <style>
+        .page-wrap {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .card {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 1.25rem;
+        }
+
+        .muted {
+            opacity: 0.8;
+            font-size: 0.95rem;
+        }
+
+        .status-line {
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .order-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .order-item {
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 12px;
+            background: #111827;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .order-item:hover {
+            transform: translateY(-1px);
+            border-color: #f97316;
+        }
+
+        .order-item.active {
+            border-color: #22c55e;
+            box-shadow: 0 0 0 2px rgba(34,197,94,0.2);
+        }
+
+        .order-id {
+            font-weight: 800;
+            font-size: 1.05rem;
+            margin-bottom: 4px;
+        }
+
+        .order-meta {
+            font-size: 0.92rem;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .field-grid {
+            display: grid;
+            grid-template-columns: 170px 1fr auto;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .field-grid + .field-grid {
+            margin-top: 10px;
+        }
+
+        .field-label {
+            font-weight: 700;
+            color: #cbd5e1;
+        }
+
+        .field-value {
+            background: #020617;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 10px 12px;
+            word-break: break-word;
+            min-height: 22px;
+        }
+
+        .copy-btn, .main-btn {
+            background: #f97316;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .copy-btn:hover, .main-btn:hover {
+            filter: brightness(1.05);
+        }
+
+        .copy-btn.secondary, .main-btn.secondary {
+            background: #334155;
+        }
+
+        .empty-state {
+            padding: 14px;
+            border: 1px dashed #475569;
+            border-radius: 12px;
+            opacity: 0.9;
+        }
+
+        .success-flash {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            background: #16a34a;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+            z-index: 9999;
+        }
+
+        @media (max-width: 980px) {
+            .page-wrap {
+                grid-template-columns: 1fr;
+            }
+
+            .field-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-links">
+            <a href="index.html">F Alt Tab</a>
+            <a href="Project_C.html">Project C</a>
+            <a href="Tyrestinder.html">Tyres Tinder</a>
+            <a href="Fitment_Planner.html">Fitment Planner</a>
+            <a href="Tempe_Orders_Helper.html">Tempe Orders</a>
+        </div>
+        <select class="nav-dropdown" aria-label="Navigation menu" onchange="if (this.value) window.location.href=this.value;">
+            <option value="index.html">F Alt Tab</option>
+            <option value="Project_C.html">Project C</option>
+            <option value="Tyrestinder.html">Tyres Tinder</option>
+            <option value="Fitment_Planner.html">Fitment Planner</option>
+            <option value="Tempe_Orders_Helper.html" selected>Tempe Orders</option>
+        </select>
+    </nav>
+
+    <h1>Tempe Orders Helper</h1>
+
+    <div class="toolbar">
+        <button class="main-btn" id="refreshBtn">Refresh Today’s Tempe Orders</button>
+        <button class="main-btn secondary" id="copyAllBtn">Copy All</button>
+    </div>
+
+    <div class="status-line" id="statusLine">Ready.</div>
+
+    <div class="page-wrap">
+        <section class="card">
+            <h2>Today’s Tempe Orders</h2>
+            <p class="muted">Auto-filtered by Store = Tempe NSW and Order Date = today (Sydney time).</p>
+            <div id="orderList" class="order-list">
+                <div class="empty-state">Click refresh to load orders.</div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Selected Order</h2>
+            <div id="detailsWrap">
+                <div class="empty-state">No order selected yet.</div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const LOCAL_PROXY = "http://localhost:8787/proxy?url=";
+        const ORDERS_URL = "https://www.tempetyres.com.au/orders?action=showall";
+        const BASE_URL = "https://www.tempetyres.com.au/";
+
+        let selectedOrderData = null;
+        let currentSelectedOrderId = null;
+        let filteredOrdersCache = [];
+
+        function proxify(url) {
+            return LOCAL_PROXY + encodeURIComponent(url);
+        }
+
+        async function fetchHtml(url) {
+            const res = await fetch(proxify(url));
+            if (!res.ok) {
+                throw new Error(`Proxy returned ${res.status}`);
+            }
+            return await res.text();
+        }
+
+        function parseHtml(html) {
+            return new DOMParser().parseFromString(html, "text/html");
+        }
+
+        function getSydneyTodayKey() {
+            const now = new Date();
+            const parts = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Australia/Sydney",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit"
+            }).formatToParts(now);
+
+            const year = parts.find(p => p.type === "year")?.value || "";
+            const month = parts.find(p => p.type === "month")?.value || "";
+            const day = parts.find(p => p.type === "day")?.value || "";
+
+            return `${year}${month}${day}`;
+        }
+
+        function normalizeOrderDateToKey(raw) {
+            if (!raw) return null;
+            const match = raw.trim().match(/(20\d{2})-(\d{2})-(\d{2})/);
+            if (!match) return null;
+            return `${match[1]}${match[2]}${match[3]}`;
+        }
+
+        function extractStoreOnly(storeCell) {
+            if (!storeCell) return "";
+            const firstNode = storeCell.childNodes[0];
+            return (firstNode?.textContent || "").replace(/\s+/g, " ").trim();
+        }
+
+        function cleanMoney(text) {
+            return Number(String(text || "").replace(/[^\d.]/g, "")) || 0;
+        }
+
+        function toAbsoluteUrl(relativeOrAbsolute) {
+            if (!relativeOrAbsolute) return "";
+            if (/^https?:\/\//i.test(relativeOrAbsolute)) return relativeOrAbsolute;
+            return new URL(relativeOrAbsolute, BASE_URL).href;
+        }
+
+        function escapeHtml(text) {
+            return String(text ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function flashCopied(message = "Copied") {
+            const existing = document.querySelector(".success-flash");
+            if (existing) existing.remove();
+
+            const el = document.createElement("div");
+            el.className = "success-flash";
+            el.textContent = message;
+            document.body.appendChild(el);
+
+            setTimeout(() => {
+                el.remove();
+            }, 1200);
+        }
+
+        async function copyText(text, message = "Copied") {
+            try {
+                await navigator.clipboard.writeText(text || "");
+                flashCopied(message);
+            } catch (err) {
+                console.error("Copy failed", err);
+                alert("Copy failed.");
+            }
+        }
+
+        function uppercaseSafe(value) {
+            return String(value || "").trim().toUpperCase();
+        }
+
+        function extractLabeledValue(root, label) {
+            const tds = Array.from(root.querySelectorAll("td"));
+            for (let i = 0; i < tds.length - 1; i++) {
+                const left = tds[i].textContent.replace(/\s+/g, " ").trim();
+                if (left === label) {
+                    return tds[i + 1].textContent.replace(/\s+/g, " ").trim();
+                }
+            }
+            return "";
+        }
+
+        function findSectionByHeading(doc, headingText) {
+            const spans = Array.from(doc.querySelectorAll("span, td"));
+            return spans.find(el =>
+                el.textContent.replace(/\s+/g, " ").trim().toUpperCase().includes(headingText.toUpperCase())
+            );
+        }
+
+        function extractBillingAddressBlock(doc) {
+            const spans = Array.from(doc.querySelectorAll("span"));
+            const billingSpan = spans.find(s => s.textContent.replace(/\s+/g, " ").trim() === "BILLING ADDRESS:");
+            if (!billingSpan) return null;
+
+            const td = billingSpan.closest("td");
+            if (!td) return null;
+
+            const html = td.innerHTML;
+            const afterHeading = html.split("</span>")[1] || "";
+            const parts = afterHeading
+                .split(/<br\s*\/?>/i)
+                .map(x => x.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim())
+                .filter(Boolean);
+
+            return parts;
+        }
+
+        function splitAddress(parts) {
+            // Expected example:
+            // [name, street, suburb postcode, ... ignore NSW/AU/Phone/Email]
+            const useful = parts.filter(line =>
+                !/^Phone:/i.test(line) &&
+                !/^Email:/i.test(line) &&
+                !/New South Wales/i.test(line) &&
+                !/^AU$/i.test(line)
+            );
+
+            const streetAddress = useful[1] || "";
+            const suburbPostcodeLine = useful[2] || "";
+
+            let suburb = "";
+            let postcode = "";
+
+            const match = suburbPostcodeLine.match(/^(.*?)(\d{4})$/);
+            if (match) {
+                suburb = match[1].trim();
+                postcode = match[2].trim();
+            } else {
+                suburb = suburbPostcodeLine.trim();
+            }
+
+            return {
+                streetAddress,
+                suburb,
+                postcode
+            };
+        }
+
+        function extractCollectInStoreDetails(doc) {
+            const spans = Array.from(doc.querySelectorAll("span"));
+            const target = spans.find(s => s.textContent.replace(/\s+/g, " ").trim() === "COLLECT IN-STORE DETAILS:");
+            if (!target) return { location: "", collectDate: "", collectTime: "" };
+
+            const td = target.closest("td");
+            if (!td) return { location: "", collectDate: "", collectTime: "" };
+
+            const text = td.textContent.replace(/\s+/g, " ").trim();
+
+            const location = (text.match(/Location:\s*(.*?)(Date:|Time:|$)/i)?.[1] || "").trim();
+            const collectDate = (text.match(/Date:\s*(.*?)(Time:|$)/i)?.[1] || "").trim();
+            const collectTime = (text.match(/Time:\s*(.*)$/i)?.[1] || "").trim();
+
+            return { location, collectDate, collectTime };
+        }
+
+        function extractVehicleInfo(doc) {
+            const td = Array.from(doc.querySelectorAll("td")).find(el =>
+                el.textContent.includes("Vehicle Information:")
+            );
+
+            if (!td) {
+                return { vehicleInfo: "", rego: "" };
+            }
+
+            const full = td.textContent.replace(/\s+/g, " ").trim();
+            let vehicle = full.replace(/^Vehicle Information:\s*/i, "").trim();
+            let rego = "";
+
+            const regoMatch = vehicle.match(/\[Rego:\s*([^\]]+)\]/i);
+            if (regoMatch) {
+                rego = regoMatch[1].trim();
+                vehicle = vehicle.replace(/\[Rego:\s*[^\]]+\]/i, "").trim();
+            }
+
+            return {
+                vehicleInfo: vehicle,
+                rego
+            };
+        }
+
+        function extractSku(doc) {
+            const rows = Array.from(doc.querySelectorAll("tr"));
+            const productRow = rows.find(row => {
+                const cells = row.querySelectorAll("td");
+                if (cells.length !== 4) return false;
+                const first = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
+                const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
+                const price = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
+                const total = cells[3]?.textContent.replace(/\s+/g, " ").trim() || "";
+
+                return /^\d+\s*:/.test(first) && /^\d+$/.test(qty) && /^\$/.test(price) && /^\$/.test(total);
+            });
+
+            if (!productRow) return "";
+
+            const productText = productRow.querySelectorAll("td")[0]?.textContent.replace(/\s+/g, " ").trim() || "";
+            const sku = productText.split(":")[0].trim();
+
+            return sku;
+        }
+
+        function buildCopyablePayload(data) {
+            return [
+                `NAME: ${data.name}`,
+                `ADDRESS: ${data.streetAddress}`,
+                `SUBURB: ${data.suburb}`,
+                `POSTCODE: ${data.postcode}`,
+                `PHONE: ${data.phone}`,
+                `EMAIL: ${data.email}`,
+                `VEHICLE INFORMATION: ${data.vehicleInfo}`,
+                `REGO: ${data.rego}`,
+                `SKU: ${data.sku}`,
+                `ORDER ID: ${data.orderId}`
+            ].join("\n");
+        }
+
+        function renderDetails(data) {
+            selectedOrderData = data;
+
+            const detailsWrap = document.getElementById("detailsWrap");
+            detailsWrap.innerHTML = `
+                <div class="field-grid">
+                    <div class="field-label">NAME</div>
+                    <div class="field-value">${escapeHtml(data.name)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.name)}" data-msg="Name copied">Copy</button>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-label">ADDRESS</div>
+                    <div class="field-value">${escapeHtml(data.streetAddress)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.streetAddress)}" data-msg="Address copied">Copy</button>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-label">SUBURB</div>
+                    <div class="field-value">${escapeHtml(data.suburb)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.suburb)}" data-msg="Suburb copied">Copy</button>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-label">POSTCODE</div>
+                    <div class="field-value">${escapeHtml(data.postcode)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.postcode)}" data-msg="Postcode copied">Copy</button>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-label">PHONE</div>
+                    <div class="field-value">${escapeHtml(data.phone)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.phone)}" data-msg="Phone copied">Copy</button>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-label">EMAIL</div>
+                    <div class="field-value">${escapeHtml(data.email)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.email)}" data-msg="Email copied">Copy</button>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-label">VEHICLE INFORMATION</div>
+                    <div class="field-value">${escapeHtml(data.vehicleInfo)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.vehicleInfo)}" data-msg="Vehicle info copied">Copy</button>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-label">REGO</div>
+                    <div class="field-value">${escapeHtml(data.rego)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.rego)}" data-msg="Rego copied">Copy</button>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-label">SKU</div>
+                    <div class="field-value">${escapeHtml(data.sku)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.sku)}" data-msg="SKU copied">Copy</button>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-label">ORDER ID</div>
+                    <div class="field-value">${escapeHtml(data.orderId)}</div>
+                    <button class="copy-btn" data-copy="${escapeHtml(data.orderId)}" data-msg="Order ID copied">Copy</button>
+                </div>
+            `;
+
+            detailsWrap.querySelectorAll(".copy-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    copyText(btn.dataset.copy || "", btn.dataset.msg || "Copied");
+                });
+            });
+        }
+
+        function renderOrderList(items) {
+            const orderList = document.getElementById("orderList");
+
+            if (!items.length) {
+                orderList.innerHTML = `<div class="empty-state">No Tempe NSW orders found for today.</div>`;
+                return;
+            }
+
+            orderList.innerHTML = items.map(item => `
+                <div class="order-item ${currentSelectedOrderId === item.orderId ? "active" : ""}" data-order-id="${escapeHtml(item.orderId)}">
+                    <div class="order-id">${escapeHtml(item.orderId)}</div>
+                    <div class="order-meta">
+                        <div><strong>Store:</strong> ${escapeHtml(item.store)}</div>
+                        <div><strong>Amount:</strong> ${escapeHtml(item.amountText)}</div>
+                        <div><strong>Order Date:</strong> ${escapeHtml(item.orderDateRaw)}</div>
+                        <div><strong>Pickup:</strong> ${escapeHtml(item.pickupPreview)}</div>
+                    </div>
+                </div>
+            `).join("");
+
+            orderList.querySelectorAll(".order-item").forEach(el => {
+                el.addEventListener("click", async () => {
+                    const orderId = el.dataset.orderId;
+                    const match = filteredOrdersCache.find(x => x.orderId === orderId);
+                    if (!match) return;
+
+                    currentSelectedOrderId = orderId;
+                    renderOrderList(filteredOrdersCache);
+                    await loadOrderDetails(match);
+                });
+            });
+        }
+
+        async function loadFilteredOrders() {
+            const statusLine = document.getElementById("statusLine");
+            statusLine.textContent = "Loading orders...";
+
+            try {
+                const html = await fetchHtml(ORDERS_URL);
+                const doc = parseHtml(html);
+                const rows = Array.from(doc.querySelectorAll("#table_data tbody tr"));
+
+                const todayKey = getSydneyTodayKey();
+
+                const items = rows.map(row => {
+                    const cols = row.querySelectorAll("td");
+                    if (cols.length < 6) return null;
+
+                    const linkEl = cols[0]?.querySelector("a");
+                    const orderId = linkEl?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const orderLink = toAbsoluteUrl(linkEl?.getAttribute("href") || "");
+
+                    const amountText = cols[1]?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const deliveryOption = cols[2]?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const store = extractStoreOnly(cols[3]);
+                    const pickupPreview = cols[3]?.querySelector("small")?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const paymentOption = cols[4]?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const orderDateRaw = cols[5]?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const orderDateKey = normalizeOrderDateToKey(orderDateRaw);
+
+                    return {
+                        orderId,
+                        orderLink,
+                        amountText,
+                        amountNumber: cleanMoney(amountText),
+                        deliveryOption,
+                        store,
+                        pickupPreview,
+                        paymentOption,
+                        orderDateRaw,
+                        orderDateKey
+                    };
+                }).filter(Boolean);
+
+                filteredOrdersCache = items.filter(item =>
+                    item.store.includes("Tempe") &&
+                    item.orderDateKey === todayKey
+                );
+
+                renderOrderList(filteredOrdersCache);
+                statusLine.textContent = `Loaded ${filteredOrdersCache.length} Tempe order(s) for today.`;
+
+                if (filteredOrdersCache.length) {
+                    currentSelectedOrderId = filteredOrdersCache[0].orderId;
+                    renderOrderList(filteredOrdersCache);
+                    await loadOrderDetails(filteredOrdersCache[0]);
+                } else {
+                    selectedOrderData = null;
+                    currentSelectedOrderId = null;
+                    document.getElementById("detailsWrap").innerHTML =
+                        `<div class="empty-state">No matching order selected.</div>`;
+                }
+
+            } catch (err) {
+                console.error(err);
+                statusLine.textContent = `Failed to load orders: ${err.message}`;
+                document.getElementById("orderList").innerHTML =
+                    `<div class="empty-state">Could not load orders.</div>`;
+            }
+        }
+
+        async function loadOrderDetails(order) {
+            const statusLine = document.getElementById("statusLine");
+            statusLine.textContent = `Loading ${order.orderId}...`;
+
+            try {
+                const html = await fetchHtml(order.orderLink);
+                const doc = parseHtml(html);
+
+                const orderId = uppercaseSafe(extractLabeledValue(doc, "Order ID:") || order.orderId);
+                const customerName = uppercaseSafe(extractLabeledValue(doc, "Customer:"));
+                const phone = extractLabeledValue(doc, "Phone:");
+                const email = extractLabeledValue(doc, "Email:");
+
+                const billingParts = extractBillingAddressBlock(doc) || [];
+                const addressParts = splitAddress(billingParts);
+
+                const vehicle = extractVehicleInfo(doc);
+                const sku = uppercaseSafe(extractSku(doc));
+
+                const data = {
+                    orderId,
+                    name: customerName,
+                    streetAddress: uppercaseSafe(addressParts.streetAddress),
+                    suburb: uppercaseSafe(addressParts.suburb),
+                    postcode: addressParts.postcode,
+                    phone,
+                    email,
+                    vehicleInfo: uppercaseSafe(vehicle.vehicleInfo),
+                    rego: uppercaseSafe(vehicle.rego),
+                    sku
+                };
+
+                renderDetails(data);
+                statusLine.textContent = `${order.orderId} loaded.`;
+
+            } catch (err) {
+                console.error(err);
+                statusLine.textContent = `Failed to load ${order.orderId}: ${err.message}`;
+                document.getElementById("detailsWrap").innerHTML =
+                    `<div class="empty-state">Could not load order details.</div>`;
+            }
+        }
+
+        document.getElementById("refreshBtn").addEventListener("click", loadFilteredOrders);
+
+        document.getElementById("copyAllBtn").addEventListener("click", () => {
+            if (!selectedOrderData) {
+                alert("No order selected.");
+                return;
+            }
+            copyText(buildCopyablePayload(selectedOrderData), "All fields copied");
+        });
+
+        loadFilteredOrders();
+    </script>
+</body>
+</html>
