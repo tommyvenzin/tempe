@@ -158,6 +158,21 @@
             z-index: 9999;
         }
 
+        .field-value.product-stock-high {
+            background: #123524;
+            border-color: #16a34a;
+        }
+
+        .field-value.product-stock-mid {
+            background: #4b2a12;
+            border-color: #f97316;
+        }
+
+        .field-value.product-stock-low {
+            background: #4b1113;
+            border-color: #ef4444;
+        }
+
         @media (max-width: 980px) {
             .page-wrap {
                 grid-template-columns: 1fr;
@@ -479,6 +494,31 @@
             return enriched;
         }
 
+        function parseStockQuantity(stockText) {
+            const normalized = String(stockText || "").toLowerCase();
+
+            if (!normalized) return 0;
+            if (normalized.includes("out of stock")) return 0;
+            if (normalized.includes("on order")) return 0;
+
+            if (normalized.includes("8+ in stock")) return 8;
+
+            const match = normalized.match(/(\d+)\s*(?:\+)?\s*in stock/);
+            if (match) {
+                return Number(match[1]) || 0;
+            }
+
+            return 0;
+        }
+
+        function getProductStockClass(stockText) {
+            const qty = parseStockQuantity(stockText);
+
+            if (qty >= 8) return "product-stock-high";
+            if (qty >= 4) return "product-stock-mid";
+            return "product-stock-low";
+        }
+
         function buildCopyablePayload(data) {
             const lines = [
                 `TTW LINK: ${data.orderLink}`,
@@ -496,21 +536,21 @@
             (data.products || []).forEach((item, index) => {
                 lines.push(`SKU ${index + 1}: ${item.sku}`);
                 lines.push(`QTY ${index + 1}: ${item.qty}`);
-                lines.push(`PRODUCT ${index + 1}: ${item.product}`);
-                lines.push(`STOCK ${index + 1}: ${item.stock}`);
+                lines.push(`PRODUCT ${index + 1}: ${item.product} (${item.stock})`);
             });
 
             return lines.join("\n");
         }
 
-        function renderClickableField(label, value, copyValue, message, isLink = false) {
+        function renderClickableField(label, value, copyValue, message, isLink = false, extraClass = "") {
             const safeValue = escapeHtml(value || "");
             const safeCopy = escapeHtml(copyValue || "");
+            const classes = ["field-value", isLink ? "link-value" : "", extraClass].filter(Boolean).join(" ");
 
             return `
                 <div class="field-grid">
                     <div class="field-label">${escapeHtml(label)}</div>
-                    <div class="field-value ${isLink ? "link-value" : ""}" data-copy="${safeCopy}" data-msg="${escapeHtml(message)}">${safeValue}</div>
+                    <div class="${classes}" data-copy="${safeCopy}" data-msg="${escapeHtml(message)}">${safeValue}</div>
                 </div>
             `;
         }
@@ -539,12 +579,16 @@
                 ${renderClickableField("ORDER ID", data.orderId, data.orderId, "Order ID copied")}
             `;
 
-            const productFields = (data.products || []).map((item, index) => `
-                ${renderClickableField(`SKU ${index + 1}`, item.sku, item.sku, `SKU ${index + 1} copied`)}
-                ${renderClickableField(`QTY ${index + 1}`, item.qty, item.qty, `Quantity ${index + 1} copied`)}
-                ${renderClickableField(`PRODUCT ${index + 1}`, item.product, item.product, `Product ${index + 1} copied`)}
-                ${renderClickableField(`STOCK ${index + 1}`, item.stock, item.stock, `Stock ${index + 1} copied`)}
-            `).join("");
+            const productFields = (data.products || []).map((item, index) => {
+                const productLabel = `${item.product} (${item.stock})`;
+                const stockClass = getProductStockClass(item.stock);
+
+                return `
+                    ${renderClickableField(`SKU ${index + 1}`, item.sku, item.sku, `SKU ${index + 1} copied`)}
+                    ${renderClickableField(`QTY ${index + 1}`, item.qty, item.qty, `Quantity ${index + 1} copied`)}
+                    ${renderClickableField(`PRODUCT ${index + 1}`, productLabel, productLabel, `Product ${index + 1} copied`, false, stockClass)}
+                `;
+            }).join("");
 
             const detailsWrap = document.getElementById("detailsWrap");
             detailsWrap.innerHTML = staticFields + productFields;
