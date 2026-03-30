@@ -222,7 +222,7 @@
         let selectedOrderData = null;
         let currentSelectedOrderId = null;
         let filteredOrdersCache = [];
-        let dayMode = "today"; // today | tomorrow
+        let dayMode = "today";
 
         function proxify(url) {
             return LOCAL_PROXY + encodeURIComponent(url);
@@ -253,17 +253,9 @@
             return `${year}${month}${day}`;
         }
 
-        function normalizeOrderDateToKey(raw) {
-            if (!raw) return null;
-            const match = raw.trim().match(/(20\d{2})-(\d{2})-(\d{2})/);
-            if (!match) return null;
-            return `${match[1]}${match[2]}${match[3]}`;
-        }
-
         function normalizePickupPreviewToKey(raw) {
             if (!raw) return null;
 
-            // Example: Mon, 30 Mar 2026 15:00
             const match = raw.match(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+(\d{1,2})\s+([A-Za-z]{3})\s+(20\d{2})/i);
             if (!match) return null;
 
@@ -401,23 +393,16 @@
                 return { vehicleInfo: "", rego: "" };
             }
 
-            let rego = "";
-            let vehicleInfo = "";
-
             const rawText = td.textContent.replace(/\s+/g, " ").trim();
-            const regoMatch = rawText.match(/\[Rego:\s*([^\]]+)\]/i);
-            if (regoMatch) {
-                rego = regoMatch[1].trim();
-            }
 
-            const textNodes = Array.from(td.childNodes)
-                .filter(node => node.nodeType === Node.TEXT_NODE)
-                .map(node => node.textContent)
-                .join(" ")
+            const regoMatch = rawText.match(/\[Rego:\s*([^\]]+)\]/i);
+            const rego = regoMatch ? regoMatch[1].trim() : "";
+
+            let vehicleInfo = rawText
+                .replace(/^Vehicle Information:\s*/i, "")
+                .replace(/\[Rego:\s*[^\]]+\]/i, "")
                 .replace(/\s+/g, " ")
                 .trim();
-
-            vehicleInfo = textNodes.replace(/^Vehicle Information:\s*/i, "").trim();
 
             return {
                 vehicleInfo,
@@ -425,7 +410,7 @@
             };
         }
 
-        function extractSku(doc) {
+        function extractProductRow(doc) {
             const rows = Array.from(doc.querySelectorAll("tr"));
             const productRow = rows.find(row => {
                 const cells = row.querySelectorAll("td");
@@ -439,10 +424,54 @@
                 return /^\d+\s*:/.test(first) && /^\d+$/.test(qty) && /^\$/.test(price) && /^\$/.test(total);
             });
 
-            if (!productRow) return "";
+            if (!productRow) {
+                return {
+                    sku: "",
+                    qty: "",
+                    product: "",
+                    unitPrice: "",
+                    lineTotal: ""
+                };
+            }
 
-            const productText = productRow.querySelectorAll("td")[0]?.textContent.replace(/\s+/g, " ").trim() || "";
-            return productText.split(":")[0].trim();
+            const cells = productRow.querySelectorAll("td");
+            const firstCell = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
+            const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
+            const unitPrice = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
+            const lineTotal = cells[3]?.textContent.replace(/\s+/g, " ").trim() || "";
+
+            const colonIndex = firstCell.indexOf(":");
+            const sku = colonIndex >= 0 ? firstCell.slice(0, colonIndex).trim() : "";
+            const product = colonIndex >= 0 ? firstCell.slice(colonIndex + 1).trim() : firstCell;
+
+            return {
+                sku,
+                qty,
+                product,
+                unitPrice,
+                lineTotal
+            };
+        }
+
+        async function fetchStockBySku(sku) {
+            if (!sku) return "";
+
+            try {
+                const searchUrl = `https://www.tempetyres.com.au/search?q=${encodeURIComponent(sku)}`;
+                const html = await fetchHtml(searchUrl);
+                const doc = parseHtml(html);
+
+                const stockEl =
+                    doc.querySelector(".stocklevel-small .stock-label") ||
+                    Array.from(doc.querySelectorAll(".stock-label")).find(el =>
+                        el.textContent.toUpperCase().includes("STOCK")
+                    );
+
+                return stockEl?.textContent.replace(/\s+/g, " ").trim() || "";
+            } catch (err) {
+                console.error("Stock fetch failed for SKU:", sku, err);
+                return "";
+            }
         }
 
         function buildCopyablePayload(data) {
@@ -457,6 +486,9 @@
                 `VEHICLE INFORMATION: ${data.vehicleInfo}`,
                 `REGO: ${data.rego}`,
                 `SKU: ${data.sku}`,
+                `QTY: ${data.qty}`,
+                `PRODUCT: ${data.product}`,
+                `STOCK: ${data.stock}`,
                 `ORDER ID: ${data.orderId}`
             ].join("\n");
         }
@@ -496,6 +528,9 @@
                 ${renderClickableField("VEHICLE INFORMATION", data.vehicleInfo, data.vehicleInfo, "Vehicle information copied")}
                 ${renderClickableField("REGO", data.rego, data.rego, "Rego copied")}
                 ${renderClickableField("SKU", data.sku, data.sku, "SKU copied")}
+                ${renderClickableField("QTY", data.qty, data.qty, "Quantity copied")}
+                ${renderClickableField("PRODUCT", data.product, data.product, "Product copied")}
+                ${renderClickableField("STOCK", data.stock, data.stock, "Stock copied")}
                 ${renderClickableField("ORDER ID", data.orderId, data.orderId, "Order ID copied")}
             `;
 
@@ -566,26 +601,18 @@
                     const orderLink = toAbsoluteUrl(linkEl?.getAttribute("href") || "");
 
                     const amountText = cols[1]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const deliveryOption = cols[2]?.textContent.replace(/\s+/g, " ").trim() || "";
                     const store = extractStoreOnly(cols[3]);
                     const pickupPreview = cols[3]?.querySelector("small")?.textContent.replace(/\s+/g, " ").trim() || "";
                     const pickupDateKey = normalizePickupPreviewToKey(pickupPreview);
-                    const paymentOption = cols[4]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const orderDateRaw = cols[5]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const orderDateKey = normalizeOrderDateToKey(orderDateRaw);
 
                     return {
                         orderId,
                         orderLink,
                         amountText,
                         amountNumber: cleanMoney(amountText),
-                        deliveryOption,
                         store,
                         pickupPreview,
-                        pickupDateKey,
-                        paymentOption,
-                        orderDateRaw,
-                        orderDateKey
+                        pickupDateKey
                     };
                 }).filter(Boolean);
 
@@ -633,7 +660,8 @@
                 const addressParts = splitAddress(billingParts);
 
                 const vehicle = extractVehicleInfo(doc);
-                const sku = uppercaseSafe(extractSku(doc));
+                const productRow = extractProductRow(doc);
+                const stock = await fetchStockBySku(productRow.sku);
 
                 const data = {
                     orderLink: order.orderLink,
@@ -646,7 +674,10 @@
                     email,
                     vehicleInfo: uppercaseSafe(vehicle.vehicleInfo),
                     rego: uppercaseSafe(vehicle.rego),
-                    sku
+                    sku: uppercaseSafe(productRow.sku),
+                    qty: productRow.qty,
+                    product: uppercaseSafe(productRow.product),
+                    stock: uppercaseSafe(stock)
                 };
 
                 renderDetails(data);
