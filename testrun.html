@@ -411,46 +411,37 @@
             };
         }
 
-        function extractProductRow(doc) {
+        function extractProductRows(doc) {
             const rows = Array.from(doc.querySelectorAll("tr"));
-        
-            const productRow = rows.find(row => {
-                const cells = row.querySelectorAll("td");
-                if (cells.length !== 4) return false;
-        
-                const first = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
-                const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
-                const price = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
-                const total = cells[3]?.textContent.replace(/\s+/g, " ").trim() || "";
-        
-                return /^[A-Z0-9]+\s*:/.test(first) && /^\d+$/.test(qty) && /^\$/.test(price) && /^\$/.test(total);
-            });
-        
-            if (!productRow) {
-                return {
-                    sku: "",
-                    qty: "",
-                    product: "",
-                    unitPrice: "",
-                    lineTotal: ""
-                };
-            }
-        
-            const cells = productRow.querySelectorAll("td");
-            const firstCell = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
-            const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
-            const unitPrice = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
-            const lineTotal = cells[3]?.textContent.replace(/\s+/g, " ").trim() || "";
-        
-            const skuMatch = firstCell.match(/^([A-Z0-9]+)\s*:\s*(.+)$/i);
-        
-            return {
-                sku: skuMatch ? skuMatch[1].trim() : "",
-                qty,
-                product: skuMatch ? skuMatch[2].trim() : firstCell,
-                unitPrice,
-                lineTotal
-            };
+
+            const productRows = rows
+                .map(row => {
+                    const cells = row.querySelectorAll("td");
+                    if (cells.length !== 4) return null;
+
+                    const first = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const unitPrice = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const lineTotal = cells[3]?.textContent.replace(/\s+/g, " ").trim() || "";
+
+                    if (!/^[A-Z0-9]+\s*:/.test(first)) return null;
+                    if (!/^\d+$/.test(qty)) return null;
+                    if (!/^\$/.test(unitPrice)) return null;
+                    if (!/^\$/.test(lineTotal)) return null;
+
+                    const skuMatch = first.match(/^([A-Z0-9]+)\s*:\s*(.+)$/i);
+
+                    return {
+                        sku: skuMatch ? skuMatch[1].trim() : "",
+                        qty,
+                        product: skuMatch ? skuMatch[2].trim() : first,
+                        unitPrice,
+                        lineTotal
+                    };
+                })
+                .filter(Boolean);
+
+            return productRows;
         }
 
         async function fetchStockBySku(sku) {
@@ -474,8 +465,22 @@
             }
         }
 
+        async function enrichProductsWithStock(productRows) {
+            const enriched = await Promise.all(
+                productRows.map(async (item) => {
+                    const stock = await fetchStockBySku(item.sku);
+                    return {
+                        ...item,
+                        stock: uppercaseSafe(stock)
+                    };
+                })
+            );
+
+            return enriched;
+        }
+
         function buildCopyablePayload(data) {
-            return [
+            const lines = [
                 `TTW LINK: ${data.orderLink}`,
                 `NAME: ${data.name}`,
                 `ADDRESS: ${data.streetAddress}`,
@@ -485,12 +490,17 @@
                 `EMAIL: ${data.email}`,
                 `VEHICLE INFORMATION: ${data.vehicleInfo}`,
                 `REGO: ${data.rego}`,
-                `SKU: ${data.sku}`,
-                `QTY: ${data.qty}`,
-                `PRODUCT: ${data.product}`,
-                `STOCK: ${data.stock}`,
                 `ORDER ID: ${data.orderId}`
-            ].join("\n");
+            ];
+
+            (data.products || []).forEach((item, index) => {
+                lines.push(`SKU ${index + 1}: ${item.sku}`);
+                lines.push(`QTY ${index + 1}: ${item.qty}`);
+                lines.push(`PRODUCT ${index + 1}: ${item.product}`);
+                lines.push(`STOCK ${index + 1}: ${item.stock}`);
+            });
+
+            return lines.join("\n");
         }
 
         function renderClickableField(label, value, copyValue, message, isLink = false) {
@@ -516,8 +526,7 @@
         function renderDetails(data) {
             selectedOrderData = data;
 
-            const detailsWrap = document.getElementById("detailsWrap");
-            detailsWrap.innerHTML = `
+            const staticFields = `
                 ${renderClickableField("TTW LINK", data.orderLink, data.orderLink, "TTW link copied", true)}
                 ${renderClickableField("NAME", data.name, data.name, "Name copied")}
                 ${renderClickableField("ADDRESS", data.streetAddress, data.streetAddress, "Address copied")}
@@ -527,12 +536,18 @@
                 ${renderClickableField("EMAIL", data.email, data.email, "Email copied")}
                 ${renderClickableField("VEHICLE INFORMATION", data.vehicleInfo, data.vehicleInfo, "Vehicle information copied")}
                 ${renderClickableField("REGO", data.rego, data.rego, "Rego copied")}
-                ${renderClickableField("SKU", data.sku, data.sku, "SKU copied")}
-                ${renderClickableField("QTY", data.qty, data.qty, "Quantity copied")}
-                ${renderClickableField("PRODUCT", data.product, data.product, "Product copied")}
-                ${renderClickableField("STOCK", data.stock, data.stock, "Stock copied")}
                 ${renderClickableField("ORDER ID", data.orderId, data.orderId, "Order ID copied")}
             `;
+
+            const productFields = (data.products || []).map((item, index) => `
+                ${renderClickableField(`SKU ${index + 1}`, item.sku, item.sku, `SKU ${index + 1} copied`)}
+                ${renderClickableField(`QTY ${index + 1}`, item.qty, item.qty, `Quantity ${index + 1} copied`)}
+                ${renderClickableField(`PRODUCT ${index + 1}`, item.product, item.product, `Product ${index + 1} copied`)}
+                ${renderClickableField(`STOCK ${index + 1}`, item.stock, item.stock, `Stock ${index + 1} copied`)}
+            `).join("");
+
+            const detailsWrap = document.getElementById("detailsWrap");
+            detailsWrap.innerHTML = staticFields + productFields;
 
             attachFieldCopyHandlers();
         }
@@ -660,8 +675,8 @@
                 const addressParts = splitAddress(billingParts);
 
                 const vehicle = extractVehicleInfo(doc);
-                const productRow = extractProductRow(doc);
-                const stock = await fetchStockBySku(productRow.sku);
+                const productRows = extractProductRows(doc);
+                const productsWithStock = await enrichProductsWithStock(productRows);
 
                 const data = {
                     orderLink: order.orderLink,
@@ -674,10 +689,12 @@
                     email,
                     vehicleInfo: uppercaseSafe(vehicle.vehicleInfo),
                     rego: uppercaseSafe(vehicle.rego),
-                    sku: uppercaseSafe(productRow.sku),
-                    qty: productRow.qty,
-                    product: uppercaseSafe(productRow.product),
-                    stock: uppercaseSafe(stock)
+                    products: productsWithStock.map(item => ({
+                        sku: uppercaseSafe(item.sku),
+                        qty: item.qty,
+                        product: uppercaseSafe(item.product),
+                        stock: item.stock
+                    }))
                 };
 
                 renderDetails(data);
