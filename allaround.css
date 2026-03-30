@@ -132,6 +132,13 @@ td a:hover {
     margin-bottom: 20px;
 }
 
+.navbar-links {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
 .navbar a {
     color: white;
     padding: 14px 20px;
@@ -139,6 +146,13 @@ td a:hover {
     font-size: 1.1em;
     font-weight: 500;
     transition: background-color 0.3s;
+}
+
+.nav-dropdown {
+    display: none;
+    width: 100%;
+    max-width: 340px;
+    margin: 0 auto;
 }
 
 .navbar a:hover {
@@ -894,17 +908,15 @@ tfoot td,
     }
 
     .navbar {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
         padding: 10px;
     }
 
-    .navbar a {
-        width: 100%;
-        text-align: center;
-        padding: 10px;
-        font-size: 1em;
+    .navbar-links {
+        display: none;
+    }
+
+    .nav-dropdown {
+        display: block;
     }
 
     textarea,
