@@ -151,8 +151,34 @@ td a:hover {
 .nav-dropdown {
     display: none;
     width: 100%;
-    max-width: 340px;
+    max-width: 360px;
     margin: 0 auto;
+    padding: 11px 44px 11px 14px;
+    border-radius: 999px;
+    border: 1px solid #334155;
+    background-color: #0b1220;
+    color: #f8fafc;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image:
+        linear-gradient(45deg, transparent 50%, #f8fafc 50%),
+        linear-gradient(135deg, #f8fafc 50%, transparent 50%);
+    background-position:
+        calc(100% - 20px) calc(50% - 3px),
+        calc(100% - 14px) calc(50% - 3px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(2, 6, 23, 0.45);
+}
+
+.nav-dropdown:focus {
+    outline: none;
+    border-color: #f97316;
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.28);
 }
 
 .navbar a:hover {
@@ -172,7 +198,7 @@ tfoot td {
 
 /* ---------- ORIGINAL MOBILE (OVERRIDDEN / EXTENDED BELOW) ---------- */
 
-@media (max-width: 768px) {
+@media (max-width: 768px) and (hover: none) and (pointer: coarse) {
     body {
         padding: 15px;
     }
@@ -892,7 +918,7 @@ tfoot td,
 /*   MOBILE TWEAKS FOR DARK THEME */
 /* ============================= */
 
-@media (max-width: 768px) {
+@media (max-width: 768px) and (hover: none) and (pointer: coarse) {
     body {
         max-width: 100%;
         margin: 0;
@@ -917,6 +943,7 @@ tfoot td,
 
     .nav-dropdown {
         display: block;
+        margin-top: 2px;
     }
 
     textarea,
