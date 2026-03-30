@@ -85,7 +85,7 @@
 
         .field-grid {
             display: grid;
-            grid-template-columns: 170px 1fr auto;
+            grid-template-columns: 170px 1fr;
             gap: 10px;
             align-items: center;
         }
@@ -106,9 +106,21 @@
             padding: 10px 12px;
             word-break: break-word;
             min-height: 22px;
+            cursor: pointer;
+            transition: 0.2s ease;
         }
 
-        .copy-btn, .main-btn {
+        .field-value:hover {
+            border-color: #f97316;
+            background: #0b1220;
+        }
+
+        .field-value.link-value {
+            color: #93c5fd;
+            text-decoration: underline;
+        }
+
+        .main-btn {
             background: #f97316;
             color: white;
             border: none;
@@ -118,11 +130,11 @@
             cursor: pointer;
         }
 
-        .copy-btn:hover, .main-btn:hover {
+        .main-btn:hover {
             filter: brightness(1.05);
         }
 
-        .copy-btn.secondary, .main-btn.secondary {
+        .main-btn.secondary {
             background: #334155;
         }
 
@@ -178,7 +190,8 @@
     <h1>Tempe Orders Helper</h1>
 
     <div class="toolbar">
-        <button class="main-btn" id="refreshBtn">Refresh Today’s Tempe Orders</button>
+        <button class="main-btn" id="refreshBtn">Refresh Orders</button>
+        <button class="main-btn secondary" id="toggleDayBtn">Tomorrow Orders</button>
         <button class="main-btn secondary" id="copyAllBtn">Copy All</button>
     </div>
 
@@ -186,8 +199,8 @@
 
     <div class="page-wrap">
         <section class="card">
-            <h2>Today’s Tempe Orders</h2>
-            <p class="muted">Auto-filtered by Store = Tempe NSW and Order Date = today (Sydney time).</p>
+            <h2 id="listTitle">Today Orders</h2>
+            <p class="muted" id="listSubtitle">Auto-filtered by Store = Tempe NSW and Pickup Date = today (Sydney time).</p>
             <div id="orderList" class="order-list">
                 <div class="empty-state">Click refresh to load orders.</div>
             </div>
@@ -209,6 +222,7 @@
         let selectedOrderData = null;
         let currentSelectedOrderId = null;
         let filteredOrdersCache = [];
+        let dayMode = "today"; // today | tomorrow
 
         function proxify(url) {
             return LOCAL_PROXY + encodeURIComponent(url);
@@ -226,18 +240,15 @@
             return new DOMParser().parseFromString(html, "text/html");
         }
 
-        function getSydneyTodayKey() {
+        function getSydneyDateKey(offsetDays = 0) {
             const now = new Date();
-            const parts = new Intl.DateTimeFormat("en-CA", {
-                timeZone: "Australia/Sydney",
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit"
-            }).formatToParts(now);
+            const sydneyString = now.toLocaleString("en-US", { timeZone: "Australia/Sydney" });
+            const sydneyDate = new Date(sydneyString);
+            sydneyDate.setDate(sydneyDate.getDate() + offsetDays);
 
-            const year = parts.find(p => p.type === "year")?.value || "";
-            const month = parts.find(p => p.type === "month")?.value || "";
-            const day = parts.find(p => p.type === "day")?.value || "";
+            const year = sydneyDate.getFullYear();
+            const month = String(sydneyDate.getMonth() + 1).padStart(2, "0");
+            const day = String(sydneyDate.getDate()).padStart(2, "0");
 
             return `${year}${month}${day}`;
         }
@@ -247,6 +258,29 @@
             const match = raw.trim().match(/(20\d{2})-(\d{2})-(\d{2})/);
             if (!match) return null;
             return `${match[1]}${match[2]}${match[3]}`;
+        }
+
+        function normalizePickupPreviewToKey(raw) {
+            if (!raw) return null;
+
+            // Example: Mon, 30 Mar 2026 15:00
+            const match = raw.match(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+(\d{1,2})\s+([A-Za-z]{3})\s+(20\d{2})/i);
+            if (!match) return null;
+
+            const day = String(match[1]).padStart(2, "0");
+            const monText = match[2].toLowerCase();
+            const year = match[3];
+
+            const monthMap = {
+                jan: "01", feb: "02", mar: "03", apr: "04",
+                may: "05", jun: "06", jul: "07", aug: "08",
+                sep: "09", oct: "10", nov: "11", dec: "12"
+            };
+
+            const month = monthMap[monText];
+            if (!month) return null;
+
+            return `${year}${month}${day}`;
         }
 
         function extractStoreOnly(storeCell) {
@@ -313,13 +347,6 @@
             return "";
         }
 
-        function findSectionByHeading(doc, headingText) {
-            const spans = Array.from(doc.querySelectorAll("span, td"));
-            return spans.find(el =>
-                el.textContent.replace(/\s+/g, " ").trim().toUpperCase().includes(headingText.toUpperCase())
-            );
-        }
-
         function extractBillingAddressBlock(doc) {
             const spans = Array.from(doc.querySelectorAll("span"));
             const billingSpan = spans.find(s => s.textContent.replace(/\s+/g, " ").trim() === "BILLING ADDRESS:");
@@ -330,17 +357,13 @@
 
             const html = td.innerHTML;
             const afterHeading = html.split("</span>")[1] || "";
-            const parts = afterHeading
+            return afterHeading
                 .split(/<br\s*\/?>/i)
                 .map(x => x.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim())
                 .filter(Boolean);
-
-            return parts;
         }
 
         function splitAddress(parts) {
-            // Expected example:
-            // [name, street, suburb postcode, ... ignore NSW/AU/Phone/Email]
             const useful = parts.filter(line =>
                 !/^Phone:/i.test(line) &&
                 !/^Email:/i.test(line) &&
@@ -369,23 +392,6 @@
             };
         }
 
-        function extractCollectInStoreDetails(doc) {
-            const spans = Array.from(doc.querySelectorAll("span"));
-            const target = spans.find(s => s.textContent.replace(/\s+/g, " ").trim() === "COLLECT IN-STORE DETAILS:");
-            if (!target) return { location: "", collectDate: "", collectTime: "" };
-
-            const td = target.closest("td");
-            if (!td) return { location: "", collectDate: "", collectTime: "" };
-
-            const text = td.textContent.replace(/\s+/g, " ").trim();
-
-            const location = (text.match(/Location:\s*(.*?)(Date:|Time:|$)/i)?.[1] || "").trim();
-            const collectDate = (text.match(/Date:\s*(.*?)(Time:|$)/i)?.[1] || "").trim();
-            const collectTime = (text.match(/Time:\s*(.*)$/i)?.[1] || "").trim();
-
-            return { location, collectDate, collectTime };
-        }
-
         function extractVehicleInfo(doc) {
             const td = Array.from(doc.querySelectorAll("td")).find(el =>
                 el.textContent.includes("Vehicle Information:")
@@ -395,18 +401,26 @@
                 return { vehicleInfo: "", rego: "" };
             }
 
-            const full = td.textContent.replace(/\s+/g, " ").trim();
-            let vehicle = full.replace(/^Vehicle Information:\s*/i, "").trim();
             let rego = "";
+            let vehicleInfo = "";
 
-            const regoMatch = vehicle.match(/\[Rego:\s*([^\]]+)\]/i);
+            const rawText = td.textContent.replace(/\s+/g, " ").trim();
+            const regoMatch = rawText.match(/\[Rego:\s*([^\]]+)\]/i);
             if (regoMatch) {
                 rego = regoMatch[1].trim();
-                vehicle = vehicle.replace(/\[Rego:\s*[^\]]+\]/i, "").trim();
             }
 
+            const textNodes = Array.from(td.childNodes)
+                .filter(node => node.nodeType === Node.TEXT_NODE)
+                .map(node => node.textContent)
+                .join(" ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+            vehicleInfo = textNodes.replace(/^Vehicle Information:\s*/i, "").trim();
+
             return {
-                vehicleInfo: vehicle,
+                vehicleInfo,
                 rego
             };
         }
@@ -416,6 +430,7 @@
             const productRow = rows.find(row => {
                 const cells = row.querySelectorAll("td");
                 if (cells.length !== 4) return false;
+
                 const first = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
                 const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
                 const price = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
@@ -427,13 +442,12 @@
             if (!productRow) return "";
 
             const productText = productRow.querySelectorAll("td")[0]?.textContent.replace(/\s+/g, " ").trim() || "";
-            const sku = productText.split(":")[0].trim();
-
-            return sku;
+            return productText.split(":")[0].trim();
         }
 
         function buildCopyablePayload(data) {
             return [
+                `TTW LINK: ${data.orderLink}`,
                 `NAME: ${data.name}`,
                 `ADDRESS: ${data.streetAddress}`,
                 `SUBURB: ${data.suburb}`,
@@ -447,84 +461,62 @@
             ].join("\n");
         }
 
+        function renderClickableField(label, value, copyValue, message, isLink = false) {
+            const safeValue = escapeHtml(value || "");
+            const safeCopy = escapeHtml(copyValue || "");
+
+            return `
+                <div class="field-grid">
+                    <div class="field-label">${escapeHtml(label)}</div>
+                    <div class="field-value ${isLink ? "link-value" : ""}" data-copy="${safeCopy}" data-msg="${escapeHtml(message)}">${safeValue}</div>
+                </div>
+            `;
+        }
+
+        function attachFieldCopyHandlers() {
+            document.querySelectorAll(".field-value[data-copy]").forEach(el => {
+                el.addEventListener("click", () => {
+                    copyText(el.dataset.copy || "", el.dataset.msg || "Copied");
+                });
+            });
+        }
+
         function renderDetails(data) {
             selectedOrderData = data;
 
             const detailsWrap = document.getElementById("detailsWrap");
             detailsWrap.innerHTML = `
-                <div class="field-grid">
-                    <div class="field-label">NAME</div>
-                    <div class="field-value">${escapeHtml(data.name)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.name)}" data-msg="Name copied">Copy</button>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field-label">ADDRESS</div>
-                    <div class="field-value">${escapeHtml(data.streetAddress)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.streetAddress)}" data-msg="Address copied">Copy</button>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field-label">SUBURB</div>
-                    <div class="field-value">${escapeHtml(data.suburb)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.suburb)}" data-msg="Suburb copied">Copy</button>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field-label">POSTCODE</div>
-                    <div class="field-value">${escapeHtml(data.postcode)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.postcode)}" data-msg="Postcode copied">Copy</button>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field-label">PHONE</div>
-                    <div class="field-value">${escapeHtml(data.phone)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.phone)}" data-msg="Phone copied">Copy</button>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field-label">EMAIL</div>
-                    <div class="field-value">${escapeHtml(data.email)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.email)}" data-msg="Email copied">Copy</button>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field-label">VEHICLE INFORMATION</div>
-                    <div class="field-value">${escapeHtml(data.vehicleInfo)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.vehicleInfo)}" data-msg="Vehicle info copied">Copy</button>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field-label">REGO</div>
-                    <div class="field-value">${escapeHtml(data.rego)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.rego)}" data-msg="Rego copied">Copy</button>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field-label">SKU</div>
-                    <div class="field-value">${escapeHtml(data.sku)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.sku)}" data-msg="SKU copied">Copy</button>
-                </div>
-
-                <div class="field-grid">
-                    <div class="field-label">ORDER ID</div>
-                    <div class="field-value">${escapeHtml(data.orderId)}</div>
-                    <button class="copy-btn" data-copy="${escapeHtml(data.orderId)}" data-msg="Order ID copied">Copy</button>
-                </div>
+                ${renderClickableField("TTW LINK", data.orderLink, data.orderLink, "TTW link copied", true)}
+                ${renderClickableField("NAME", data.name, data.name, "Name copied")}
+                ${renderClickableField("ADDRESS", data.streetAddress, data.streetAddress, "Address copied")}
+                ${renderClickableField("SUBURB", data.suburb, data.suburb, "Suburb copied")}
+                ${renderClickableField("POSTCODE", data.postcode, data.postcode, "Postcode copied")}
+                ${renderClickableField("PHONE", data.phone, data.phone, "Phone copied")}
+                ${renderClickableField("EMAIL", data.email, data.email, "Email copied")}
+                ${renderClickableField("VEHICLE INFORMATION", data.vehicleInfo, data.vehicleInfo, "Vehicle information copied")}
+                ${renderClickableField("REGO", data.rego, data.rego, "Rego copied")}
+                ${renderClickableField("SKU", data.sku, data.sku, "SKU copied")}
+                ${renderClickableField("ORDER ID", data.orderId, data.orderId, "Order ID copied")}
             `;
 
-            detailsWrap.querySelectorAll(".copy-btn").forEach(btn => {
-                btn.addEventListener("click", () => {
-                    copyText(btn.dataset.copy || "", btn.dataset.msg || "Copied");
-                });
-            });
+            attachFieldCopyHandlers();
         }
 
         function renderOrderList(items) {
             const orderList = document.getElementById("orderList");
+            const listTitle = document.getElementById("listTitle");
+            const listSubtitle = document.getElementById("listSubtitle");
+
+            if (dayMode === "today") {
+                listTitle.textContent = "Today Orders";
+                listSubtitle.textContent = "Auto-filtered by Store = Tempe NSW and Pickup Date = today (Sydney time).";
+            } else {
+                listTitle.textContent = "Tomorrow Orders";
+                listSubtitle.textContent = "Auto-filtered by Store = Tempe NSW and Pickup Date = tomorrow (Sydney time).";
+            }
 
             if (!items.length) {
-                orderList.innerHTML = `<div class="empty-state">No Tempe NSW orders found for today.</div>`;
+                orderList.innerHTML = `<div class="empty-state">No Tempe NSW ${dayMode} orders found.</div>`;
                 return;
             }
 
@@ -534,7 +526,6 @@
                     <div class="order-meta">
                         <div><strong>Store:</strong> ${escapeHtml(item.store)}</div>
                         <div><strong>Amount:</strong> ${escapeHtml(item.amountText)}</div>
-                        <div><strong>Order Date:</strong> ${escapeHtml(item.orderDateRaw)}</div>
                         <div><strong>Pickup:</strong> ${escapeHtml(item.pickupPreview)}</div>
                     </div>
                 </div>
@@ -562,7 +553,9 @@
                 const doc = parseHtml(html);
                 const rows = Array.from(doc.querySelectorAll("#table_data tbody tr"));
 
-                const todayKey = getSydneyTodayKey();
+                const targetKey = dayMode === "today"
+                    ? getSydneyDateKey(0)
+                    : getSydneyDateKey(1);
 
                 const items = rows.map(row => {
                     const cols = row.querySelectorAll("td");
@@ -576,6 +569,7 @@
                     const deliveryOption = cols[2]?.textContent.replace(/\s+/g, " ").trim() || "";
                     const store = extractStoreOnly(cols[3]);
                     const pickupPreview = cols[3]?.querySelector("small")?.textContent.replace(/\s+/g, " ").trim() || "";
+                    const pickupDateKey = normalizePickupPreviewToKey(pickupPreview);
                     const paymentOption = cols[4]?.textContent.replace(/\s+/g, " ").trim() || "";
                     const orderDateRaw = cols[5]?.textContent.replace(/\s+/g, " ").trim() || "";
                     const orderDateKey = normalizeOrderDateToKey(orderDateRaw);
@@ -588,6 +582,7 @@
                         deliveryOption,
                         store,
                         pickupPreview,
+                        pickupDateKey,
                         paymentOption,
                         orderDateRaw,
                         orderDateKey
@@ -596,11 +591,11 @@
 
                 filteredOrdersCache = items.filter(item =>
                     item.store.includes("Tempe") &&
-                    item.orderDateKey === todayKey
+                    item.pickupDateKey === targetKey
                 );
 
                 renderOrderList(filteredOrdersCache);
-                statusLine.textContent = `Loaded ${filteredOrdersCache.length} Tempe order(s) for today.`;
+                statusLine.textContent = `Loaded ${filteredOrdersCache.length} Tempe order(s) for ${dayMode}.`;
 
                 if (filteredOrdersCache.length) {
                     currentSelectedOrderId = filteredOrdersCache[0].orderId;
@@ -641,6 +636,7 @@
                 const sku = uppercaseSafe(extractSku(doc));
 
                 const data = {
+                    orderLink: order.orderLink,
                     orderId,
                     name: customerName,
                     streetAddress: uppercaseSafe(addressParts.streetAddress),
@@ -665,6 +661,13 @@
         }
 
         document.getElementById("refreshBtn").addEventListener("click", loadFilteredOrders);
+
+        document.getElementById("toggleDayBtn").addEventListener("click", async () => {
+            dayMode = dayMode === "today" ? "tomorrow" : "today";
+            document.getElementById("toggleDayBtn").textContent =
+                dayMode === "today" ? "Tomorrow Orders" : "Today Orders";
+            await loadFilteredOrders();
+        });
 
         document.getElementById("copyAllBtn").addEventListener("click", () => {
             if (!selectedOrderData) {
