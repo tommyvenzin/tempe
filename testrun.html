@@ -412,73 +412,44 @@
         }
 
         function extractProductRow(doc) {
-            const tables = Array.from(doc.querySelectorAll("table"));
+            const rows = Array.from(doc.querySelectorAll("tr"));
         
-            for (const table of tables) {
-                const rows = Array.from(table.querySelectorAll(":scope > tbody > tr, :scope > tr"));
-                if (!rows.length) continue;
+            const productRow = rows.find(row => {
+                const cells = row.querySelectorAll("td");
+                if (cells.length !== 4) return false;
         
-                let headerFound = false;
+                const first = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
+                const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
+                const price = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
+                const total = cells[3]?.textContent.replace(/\s+/g, " ").trim() || "";
         
-                for (let i = 0; i < rows.length; i++) {
-                    const cells = Array.from(rows[i].querySelectorAll(":scope > td, :scope > th"));
-                    const rowText = cells.map(cell => cell.textContent.replace(/\s+/g, " ").trim().toUpperCase()).join(" | ");
+                return /^[A-Z0-9]+\s*:/.test(first) && /^\d+$/.test(qty) && /^\$/.test(price) && /^\$/.test(total);
+            });
         
-                    if (!headerFound) {
-                        if (
-                            rowText.includes("PRODUCT") &&
-                            rowText.includes("QUANTITY") &&
-                            rowText.includes("PRICE") &&
-                            rowText.includes("TOTAL")
-                        ) {
-                            headerFound = true;
-                        }
-                        continue;
-                    }
-        
-                    if (cells.length !== 4) continue;
-        
-                    const first = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const unitPrice = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const lineTotal = cells[3]?.textContent.replace(/\s+/g, " ").trim() || "";
-        
-                    if (!first) continue;
-        
-                    if (/sub-?total|delivery charges|discount code|card surcharge|total amount/i.test(first)) {
-                        continue;
-                    }
-        
-                    const skuMatch = first.match(/^([A-Z0-9]+)\s*:\s*(.+)$/i);
-        
-                    if (skuMatch && qty && /^\$/.test(unitPrice) && /^\$/.test(lineTotal)) {
-                        return {
-                            sku: skuMatch[1].trim(),
-                            qty: qty.trim(),
-                            product: skuMatch[2].trim(),
-                            unitPrice: unitPrice.trim(),
-                            lineTotal: lineTotal.trim()
-                        };
-                    }
-        
-                    if (qty && /^\$/.test(unitPrice) && /^\$/.test(lineTotal)) {
-                        return {
-                            sku: "",
-                            qty: qty.trim(),
-                            product: first.trim(),
-                            unitPrice: unitPrice.trim(),
-                            lineTotal: lineTotal.trim()
-                        };
-                    }
-                }
+            if (!productRow) {
+                return {
+                    sku: "",
+                    qty: "",
+                    product: "",
+                    unitPrice: "",
+                    lineTotal: ""
+                };
             }
         
+            const cells = productRow.querySelectorAll("td");
+            const firstCell = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
+            const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
+            const unitPrice = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
+            const lineTotal = cells[3]?.textContent.replace(/\s+/g, " ").trim() || "";
+        
+            const skuMatch = firstCell.match(/^([A-Z0-9]+)\s*:\s*(.+)$/i);
+        
             return {
-                sku: "",
-                qty: "",
-                product: "",
-                unitPrice: "",
-                lineTotal: ""
+                sku: skuMatch ? skuMatch[1].trim() : "",
+                qty,
+                product: skuMatch ? skuMatch[2].trim() : firstCell,
+                unitPrice,
+                lineTotal
             };
         }
 
