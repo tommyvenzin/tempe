@@ -56,10 +56,16 @@ function selectTyreForFitment(tyre) {
     }
 }
 
-// Enter key support on F Alt Tab textarea
+// Enter/Done key support on F Alt Tab textarea
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
         e.preventDefault();
+        checkPrices();
+    }
+}
+
+function handleSkuInputDone(e) {
+    if (e.target.value.trim()) {
         checkPrices();
     }
 }
