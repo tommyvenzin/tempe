@@ -257,34 +257,34 @@ tfoot td {
 
 
 /* ============================= */
-/*   LOW-LIGHT ELEGANT THEME     */
+/*   AEON OF TWILIGHT THEME      */
 /* ============================= */
 
 :root {
-    --bg-main: #1a1724;
-    --bg-elevated: #221e30;
-    --bg-panel: #2a2438;
-    --bg-soft: #322c44;
-    --text-main: #eee9f7;
-    --text-soft: #bfb4d4;
-    --line-main: #4b4163;
-    --accent: #b6a6d9;
-    --accent-strong: #cabde6;
-    --accent-warm: #e6c7d1;
+    --bg-main: #0f1020;
+    --bg-elevated: #171a2e;
+    --bg-panel: #1d2140;
+    --bg-soft: #242a4f;
+    --text-main: #e8edff;
+    --text-soft: #a9b4df;
+    --line-main: #313a6b;
+    --accent: #6ee7ff;
+    --accent-strong: #a78bfa;
+    --accent-warm: #ff8acb;
 }
 
 body {
-    background: radial-gradient(circle at top, #3b3350 0%, var(--bg-main) 52%, #120f1a 100%);
+    background: radial-gradient(circle at top, #2a2f5e 0%, #151936 48%, var(--bg-main) 100%);
     color: var(--text-main);
-    border: 1px solid #433a58;
-    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.58);
+    border: 1px solid #2d3563;
+    box-shadow: 0 14px 34px rgba(2, 6, 23, 0.68);
 }
 
 h1 {
-    background: linear-gradient(135deg, #4a3f63, #3a3150 55%, #4a3a57);
-    color: #f7f2ff;
-    border-color: #7f6aa2;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.42);
+    background: linear-gradient(135deg, #2a2f5e, #1c2350 55%, #3a2560);
+    color: #f2f6ff;
+    border-color: #6ee7ff;
+    box-shadow: 0 8px 20px rgba(10, 15, 37, 0.62);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
@@ -293,8 +293,8 @@ h1 {
 /* ============================= */
 
 .fitment-card {
-    background: rgba(15, 23, 42, 0.75);
-    border: 1px solid #1f2937;
+    background: rgba(24, 28, 54, 0.85);
+    border: 1px solid #2f3a71;
     border-radius: 12px;
     padding: 14px;
     margin-bottom: 16px;
@@ -333,14 +333,14 @@ h1 {
     width: 200px;
     height: 250px;
     border-radius: 48px;
-    border: 2px solid #93c5fd;
+    border: 2px solid var(--accent);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
     letter-spacing: 3px;
-    color: #93c5fd;
-    background: rgba(30, 41, 59, 0.55);
+    color: var(--accent);
+    background: rgba(24, 32, 64, 0.68);
 }
 
 .position-btn {
@@ -348,8 +348,8 @@ h1 {
     min-width: 112px;
     padding: 10px;
     font-size: 0.9rem;
-    border: 1px solid #334155;
-    background: #0f172a;
+    border: 1px solid #354282;
+    background: #171e3d;
 }
 
 .position-btn[data-position="front-left"] { top: 8px; left: 56px; }
@@ -416,7 +416,7 @@ h1 {
 }
 
 .better-map {
-    border: 1px dashed #334155;
+    border: 1px dashed #4653a3;
     border-radius: 12px;
     padding: 18px 6px;
 }
@@ -426,7 +426,7 @@ h1 {
     text-align: center;
     font-weight: 700;
     letter-spacing: 1px;
-    color: #fbbf24;
+    color: #ff8acb;
 }
 
 .rear-label {
@@ -437,8 +437,8 @@ h1 {
 }
 
 .detailed-car {
-    border-color: #38bdf8;
-    background: linear-gradient(180deg, rgba(14, 116, 144, 0.35), rgba(15, 23, 42, 0.8));
+    border-color: #6ee7ff;
+    background: linear-gradient(180deg, rgba(53, 125, 190, 0.35), rgba(25, 32, 66, 0.85));
 }
 
 .car-center-text {
@@ -466,15 +466,15 @@ h1 {
     width: 100%;
     max-width: 500px;
     min-height: 220px;
-    border: 1px solid #334155;
+    border: 1px solid #3b478d;
     border-radius: 10px;
-    background: rgba(2, 6, 23, 0.85);
+    background: rgba(12, 18, 43, 0.9);
 }
 
 .sku-copy-btn {
-    background: #0f172a;
-    border: 1px solid #38bdf8;
-    color: #bae6fd;
+    background: #182143;
+    border: 1px solid var(--accent);
+    color: #cff7ff;
     padding: 2px 8px;
     border-radius: 6px;
     cursor: pointer;
@@ -560,9 +560,9 @@ h1 {
 }
 
 .navbar {
-    background: linear-gradient(90deg, #3a3150, #2a2438 48%, #3a304c);
+    background: linear-gradient(90deg, #1f2754, #171d42 48%, #2f1f57);
     border-radius: 10px;
-    border: 1px solid #584b75;
+    border: 1px solid #3e4b92;
 }
 
 .navbar a {
@@ -571,7 +571,7 @@ h1 {
 }
 
 .navbar a:hover {
-    background-color: #5c4c7c;
+    background-color: #3a4688;
     border-radius: 999px;
 }
 
@@ -596,19 +596,19 @@ input[type="tel"]:focus,
 input[type="number"]:focus,
 select:focus {
     border-color: var(--accent-strong);
-    box-shadow: 0 0 0 3px rgba(202, 189, 230, 0.26);
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.26);
     outline: none;
 }
 
 button {
-    background: linear-gradient(135deg, #6e5a95, #564678);
+    background: linear-gradient(135deg, #3d4ea3, #563192);
     color: #f6f9ff;
-    border: 1px solid #8670b1;
+    border: 1px solid #7a6de0;
     box-shadow: 0 5px 14px rgba(0, 0, 0, 0.46);
 }
 
 button:hover {
-    background: linear-gradient(135deg, #7f6aa9, #675489);
+    background: linear-gradient(135deg, #4b60c2, #6a3eb6);
     transform: translateY(-1px);
 }
 
@@ -618,7 +618,7 @@ button:active {
 
 .table-container {
     background-color: var(--bg-elevated);
-    border: 1px solid #4f4468;
+    border: 1px solid #3c488f;
     box-shadow: 0 8px 26px rgba(0, 0, 0, 0.52);
 }
 
@@ -627,19 +627,19 @@ table {
 }
 
 th {
-    background: linear-gradient(90deg, #5f4f83, #4f426c);
+    background: linear-gradient(90deg, #33458f, #3d2f82);
     color: #f7f9fd;
     border-bottom: 2px solid var(--accent);
 }
 
 td {
     background-color: transparent;   /* let the <tr> background show */
-    border: 1px solid #4f4468;
+    border: 1px solid #333f7e;
     color: var(--text-main);
 }
 
 table tbody tr:hover {
-    background-color: rgba(198, 181, 230, 0.14);
+    background-color: rgba(110, 231, 255, 0.12);
 }
 
 tfoot td,
