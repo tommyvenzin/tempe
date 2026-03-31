@@ -563,6 +563,28 @@
             });
         }
 
+        function getKeyboardCopyBindings(data) {
+            return {
+                e: { value: data.name, message: "Name copied" },
+                r: { value: data.streetAddress, message: "Address copied" },
+                a: { value: data.suburb, message: "Suburb copied" },
+                s: { value: data.postcode, message: "Postcode copied" },
+                q: { value: data.phone, message: "Phone copied" },
+                w: { value: data.email, message: "Email copied" },
+                z: { value: data.products?.[0]?.sku || "", message: "SKU 1 copied" },
+                x: { value: data.products?.[1]?.sku || "", message: "SKU 2 copied" },
+                c: { value: data.vehicleInfo, message: "Vehicle information copied" },
+                v: { value: data.rego, message: "Rego copied" },
+                d: { value: data.orderLink, message: "TTW link copied" }
+            };
+        }
+
+        function isTypingTarget(target) {
+            if (!target) return false;
+            const tag = target.tagName?.toLowerCase();
+            return tag === "input" || tag === "textarea" || target.isContentEditable;
+        }
+
         function renderDetails(data) {
             selectedOrderData = data;
 
@@ -767,6 +789,25 @@
                 return;
             }
             copyText(buildCopyablePayload(selectedOrderData), "All fields copied");
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (!selectedOrderData) return;
+            if (event.altKey || event.ctrlKey || event.metaKey) return;
+            if (isTypingTarget(event.target)) return;
+
+            const key = String(event.key || "").toLowerCase();
+            const bindings = getKeyboardCopyBindings(selectedOrderData);
+            const selected = bindings[key];
+
+            if (!selected) return;
+            if (!selected.value) {
+                flashCopied("Nothing to copy for this field");
+                return;
+            }
+
+            event.preventDefault();
+            copyText(selected.value, selected.message);
         });
 
         loadFilteredOrders();
