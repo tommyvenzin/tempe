@@ -252,31 +252,40 @@ tfoot td {
 }
 
 /* -------------------------------------------------- */
-/*  END OF ORIGINAL FILE — CHRISTMAS DARK BELOW       */
+/*  END OF ORIGINAL FILE — LOW-LIGHT ELEGANT BELOW    */
 /* -------------------------------------------------- */
 
 
 /* ============================= */
-/*   CHRISTMAS DARK THEME        */
+/*   LOW-LIGHT ELEGANT THEME     */
 /* ============================= */
 
+:root {
+    --bg-main: #0f141c;
+    --bg-elevated: #151c26;
+    --bg-panel: #1a2330;
+    --bg-soft: #202b3a;
+    --text-main: #e7ecf3;
+    --text-soft: #a9b4c4;
+    --line-main: #2d3a4c;
+    --accent: #7aa2d6;
+    --accent-strong: #8fb2df;
+    --accent-warm: #d2b48c;
+}
+
 body {
-    background: radial-gradient(circle at top, #1f2933 0%, #020617 55%, #000000 100%);
-    color: #e5e7eb;
-    border: 1px solid #111827;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    background: radial-gradient(circle at top, #222d3c 0%, var(--bg-main) 52%, #0a0d12 100%);
+    color: var(--text-main);
+    border: 1px solid #273244;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.58);
 }
 
 h1 {
-    background: linear-gradient(90deg, #b91c1c, #14532d);
-    color: #f9fafb;
-    border-color: #b91c1c;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-}
-
-h1::after {
-    content: " 🎄";
+    background: linear-gradient(135deg, #243244, #1a2432 55%, #1f2e40);
+    color: #f4f7fb;
+    border-color: #3b4f69;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.42);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 /* ============================= */
@@ -822,8 +831,9 @@ h1::after {
 }
 
 .navbar {
-    background: linear-gradient(90deg, #022c22, #111827);
+    background: linear-gradient(90deg, #17212d, #111827 48%, #1a2431);
     border-radius: 10px;
+    border: 1px solid #2f3d50;
 }
 
 .navbar a {
@@ -832,7 +842,7 @@ h1::after {
 }
 
 .navbar a:hover {
-    background-color: #b91c1c;
+    background-color: #28374b;
     border-radius: 999px;
 }
 
@@ -841,14 +851,14 @@ input[type="text"],
 input[type="tel"],
 input[type="number"],
 select {
-    background-color: #020617;
-    color: #e5e7eb;
-    border: 1px solid #374151;
+    background-color: var(--bg-elevated);
+    color: var(--text-main);
+    border: 1px solid var(--line-main);
 }
 
 textarea::placeholder,
 input[type="text"]::placeholder {
-    color: #6b7280;
+    color: var(--text-soft);
 }
 
 textarea:focus,
@@ -856,19 +866,20 @@ input[type="text"]:focus,
 input[type="tel"]:focus,
 input[type="number"]:focus,
 select:focus {
-    border-color: #f97373;
-    box-shadow: 0 0 10px rgba(248, 113, 113, 0.7);
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px rgba(143, 178, 223, 0.25);
     outline: none;
 }
 
 button {
-    background: linear-gradient(135deg, #b91c1c, #7f1d1d);
-    color: #f9fafb;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+    background: linear-gradient(135deg, #30445e, #243346);
+    color: #f6f9ff;
+    border: 1px solid #3e5471;
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.46);
 }
 
 button:hover {
-    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    background: linear-gradient(135deg, #3a5372, #2c4058);
     transform: translateY(-1px);
 }
 
@@ -877,37 +888,37 @@ button:active {
 }
 
 .table-container {
-    background-color: #020617;
-    border: 1px solid #1f2937;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+    background-color: var(--bg-elevated);
+    border: 1px solid #2a3647;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.52);
 }
 
 table {
-    background-color: #020617;
+    background-color: var(--bg-elevated);
 }
 
 th {
-    background: linear-gradient(90deg, #14532d, #064e3b);
-    color: #f9fafb;
-    border-bottom: 2px solid #b91c1c;
+    background: linear-gradient(90deg, #2f4159, #25354a);
+    color: #f7f9fd;
+    border-bottom: 2px solid var(--accent);
 }
 
 td {
     background-color: transparent;   /* let the <tr> background show */
-    border: 1px solid #1f2937;
-    color: #e5e7eb;
+    border: 1px solid #2a3647;
+    color: var(--text-main);
 }
 
 table tbody tr:hover {
-    background-color: rgba(248, 113, 113, 0.14);
+    background-color: rgba(122, 162, 214, 0.12);
 }
 
 tfoot td,
 .grand-total,
 .item-total {
-    background-color: #111827;
-    color: #f9fafb;
-    border-top: 2px solid #b91c1c;
+    background-color: var(--bg-panel);
+    color: #f8fbff;
+    border-top: 2px solid var(--accent);
 }
 
 .button-group {
