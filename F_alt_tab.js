@@ -4,10 +4,56 @@ console.log("F_alt_tab.js loaded successfully");
    Shared helpers
    ========================= */
 
-// ✅ Cloudflare Worker proxy (yours)
-const CF_PROXY_BASE = "https://pepektires.tommyvenzin.workers.dev/?url=";
-function proxify(targetUrl) {
-    return CF_PROXY_BASE + encodeURIComponent(targetUrl);
+// ✅ Proxy chain with fallback (Cloudflare Worker -> jina ai mirror)
+const PROXY_CANDIDATES = [
+    "https://pepektires.tommyvenzin.workers.dev/?url=",
+    "https://r.jina.ai/http://",
+    "https://r.jina.ai/http://www.",
+];
+
+function buildProxyUrl(targetUrl, proxyBase) {
+    if (proxyBase.includes("?url=")) {
+        return proxyBase + encodeURIComponent(targetUrl);
+    }
+
+    const sanitized = targetUrl
+        .replace(/^https?:\/\//i, "")
+        .replace(/^www\./i, "");
+
+    return proxyBase + sanitized;
+}
+
+function looksLikeCaptchaPage(html) {
+    const text = (html || "").toLowerCase();
+    return (
+        text.includes("verify you are human") ||
+        text.includes("verification required") ||
+        text.includes("g-recaptcha") ||
+        text.includes("/captcha-verify")
+    );
+}
+
+async function fetchHtmlWithFallback(targetUrl) {
+    let lastError = null;
+
+    for (const proxyBase of PROXY_CANDIDATES) {
+        try {
+            const res = await fetch(buildProxyUrl(targetUrl, proxyBase));
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+
+            const html = await res.text();
+            if (!html || looksLikeCaptchaPage(html)) {
+                throw new Error("captcha-or-empty-response");
+            }
+
+            return html;
+        } catch (err) {
+            lastError = err;
+            console.warn(`Proxy failed: ${proxyBase}`, err);
+        }
+    }
+
+    throw lastError || new Error("All proxy endpoints failed.");
 }
 
 // Click-to-copy SKU helper
@@ -137,11 +183,8 @@ async function Tinder() {
 
         // ✅ Use your Worker instead of cors.moesif.net
         const targetUrl = `https://www.tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
-        const url = proxify(targetUrl);
-
         try {
-            const res = await fetch(url);
-            const html = await res.text();
+            const html = await fetchHtmlWithFallback(targetUrl);
             const doc = new DOMParser().parseFromString(html, "text/html");
             const items = doc.querySelectorAll(".product-container");
 
@@ -262,11 +305,8 @@ async function checkPrices() {
 
         // ✅ Use your Worker instead of cors.moesif.net
         const targetUrl = `https://tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
-        const url = proxify(targetUrl);
-
         try {
-            const res = await fetch(url);
-            const text = await res.text();
+            const text = await fetchHtmlWithFallback(targetUrl);
             const doc = new DOMParser().parseFromString(text, "text/html");
             const items = doc.querySelectorAll(".product-container");
 
@@ -311,7 +351,7 @@ async function checkPrices() {
                     <td>
                         <button
                             type="button"
-                            onclick="selectTyreForFitment({ sku: '${safeSku}', make: '${safeMake}', model: '${safeModel}', price: ${price.toFixed(2)}, stock: '${safeStock}', link: '${safeLink}' }); window.location.href='Fitment_Planner.html';"
+                            onclick="selectTyreForFitment({ sku: '${safeSku}', make: '${safeMake}', model: '${safeModel}', price: ${price.toFixed(2)}, stock: '${safeStock}', link: '${safeLink}' });"
                         >
                             Add to Fitment Planner
                         </button>
@@ -323,7 +363,8 @@ async function checkPrices() {
         }
     }));
 
-    resultsTable.innerHTML = rows.flat().join("\n");
+    const rendered = rows.flat().join("\n").trim();
+    resultsTable.innerHTML = rendered || `<tr><td colspan="5">No results returned. Source may be blocking automated requests (captcha).</td></tr>`;
     sortTableByPrice();
 }
 
