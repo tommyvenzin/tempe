@@ -10,7 +10,7 @@ const JINA_PROXY = "https://r.jina.ai/http://";
 const JINA_PROXY_WWW = "https://r.jina.ai/http://www.";
 
 function getProxyCandidates() {
-    return [LOCAL_PROXY, CF_PROXY, JINA_PROXY, JINA_PROXY_WWW];
+    return [LOCAL_PROXY];
 }
 
 function buildProxyUrl(targetUrl, proxyBase) {
