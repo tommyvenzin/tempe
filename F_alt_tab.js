@@ -102,7 +102,9 @@ for (const proxyBase of getProxyCandidates()) {
                 throw new Error("empty-response");
             }
 
-            if (looksLikeBlockedPage(text)) {
+            const hasProducts = text.includes("product-container");
+
+            if (!hasProducts && looksLikeBlockedPage(text)) {
                 throw new Error("captcha-or-blocked-response");
             }
 
