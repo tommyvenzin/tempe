@@ -9,14 +9,8 @@ const CF_PROXY = "https://pepektires.tommyvenzin.workers.dev/?url=";
 const PRICE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 mins
 const rankedPriceCache = new Map(); // sku -> { price, cachedAt }
 
-function isLocalHostRuntime() {
-    const host = window.location.hostname;
-    return host === "localhost" || host === "127.0.0.1";
-}
-
 function getProxyCandidates() {
-    // GitHub Pages / HTTPS cannot call localhost due to private network access restrictions.
-    return isLocalHostRuntime() ? [LOCAL_PROXY, CF_PROXY] : [CF_PROXY, LOCAL_PROXY];
+    return [LOCAL_PROXY, CF_PROXY];
 }
 
 function proxify(url, proxyBase) {
@@ -29,6 +23,7 @@ async function fetchProxyText(targetUrl) {
 
     for (const proxyBase of proxies) {
         try {
+           console.log("Trying proxy:", proxyBase);
             const res = await fetch(proxify(targetUrl, proxyBase));
             if (!res.ok) throw new Error(`Proxy ${proxyBase} returned ${res.status}`);
             const rawText = await res.text();
