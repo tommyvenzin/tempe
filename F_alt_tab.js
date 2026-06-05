@@ -9,15 +9,8 @@ const CF_PROXY = "https://pepektires.tommyvenzin.workers.dev/?url=";
 const JINA_PROXY = "https://r.jina.ai/http://";
 const JINA_PROXY_WWW = "https://r.jina.ai/http://www.";
 
-function isLocalHostRuntime() {
-    const host = window.location.hostname;
-    return host === "localhost" || host === "127.0.0.1";
-}
-
 function getProxyCandidates() {
-    return isLocalHostRuntime()
-        ? [LOCAL_PROXY, CF_PROXY, JINA_PROXY, JINA_PROXY_WWW]
-        : [CF_PROXY, JINA_PROXY, JINA_PROXY_WWW];
+    return [LOCAL_PROXY, CF_PROXY, JINA_PROXY, JINA_PROXY_WWW];
 }
 
 function buildProxyUrl(targetUrl, proxyBase) {
@@ -94,9 +87,11 @@ function looksLikeJinaResponse(text) {
 async function fetchTextWithFallback(targetUrl) {
     let lastError = null;
 
-    for (const proxyBase of getProxyCandidates()) {
-        try {
-            const proxyUrl = buildProxyUrl(targetUrl, proxyBase);
+for (const proxyBase of getProxyCandidates()) {
+    try {
+        console.log("Trying proxy:", proxyBase);
+
+        const proxyUrl = buildProxyUrl(targetUrl, proxyBase);
             const res = await fetch(proxyUrl);
             if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
