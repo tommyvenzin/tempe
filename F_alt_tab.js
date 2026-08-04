@@ -461,6 +461,66 @@ function renderFAltProductRow(item) {
    ========================= */
 
 let savedTinderResults = {};
+let activeTinderResults = {};
+
+function cloneTinderResults(data) {
+    return Object.fromEntries(
+        Object.entries(data || {}).map(([brand, sets]) => [
+            brand,
+            {
+                front: [...(sets.front || [])],
+                rear: [...(sets.rear || [])],
+            },
+        ])
+    );
+}
+
+function tinderItemMatches(item, keyword) {
+    if (!item) return false;
+
+    return [
+        item.brand,
+        item.pattern,
+        item.stock,
+        item.sku,
+        item.price,
+    ].some((value) => String(value || "").toLowerCase().includes(keyword));
+}
+
+function applyTinderTextFilter(keyword) {
+    const normalizedKeyword = String(keyword || "").toLowerCase().trim();
+    const baseResults = Object.keys(activeTinderResults).length
+        ? activeTinderResults
+        : savedTinderResults;
+
+    if (!normalizedKeyword) {
+        renderTinderResults(cloneTinderResults(baseResults));
+        return;
+    }
+
+    const filtered = {};
+
+    for (const [brand, sets] of Object.entries(baseResults)) {
+        const brandMatches = brand.toLowerCase().includes(normalizedKeyword);
+
+        const matchingFront = brandMatches
+            ? [...sets.front]
+            : sets.front.filter((item) => tinderItemMatches(item, normalizedKeyword));
+
+        const matchingRear = brandMatches
+            ? [...sets.rear]
+            : sets.rear.filter((item) => tinderItemMatches(item, normalizedKeyword));
+
+        if (matchingFront.length || matchingRear.length) {
+            filtered[brand] = {
+                front: matchingFront,
+                rear: matchingRear,
+            };
+        }
+    }
+
+    renderTinderResults(filtered);
+}
 
 async function Tinder() {
     const skuInput = document.getElementById("skuInput").value.trim();
@@ -498,7 +558,8 @@ async function Tinder() {
         (front.includes(item) ? savedTinderResults[item.brand].front : savedTinderResults[item.brand].rear).push(item);
     });
 
-    renderTinderResults(grouped);
+    activeTinderResults = cloneTinderResults(savedTinderResults);
+    renderTinderResults(cloneTinderResults(activeTinderResults));
 }
 
 function renderTinderResults(data) {
@@ -548,15 +609,21 @@ function removeOutOfStockTinder() {
     const filtered = {};
 
     for (const [brand, sets] of Object.entries(savedTinderResults)) {
-        const goodFront = sets.front.filter(f => isAvailableStock(f.stock));
-        const goodRear = sets.rear.filter(r => isAvailableStock(r.stock));
+        const goodFront = sets.front.filter((item) => isAvailableStock(item.stock));
+        const goodRear = sets.rear.filter((item) => isAvailableStock(item.stock));
 
         if (goodFront.length && goodRear.length) {
-            filtered[brand] = { front: goodFront, rear: goodRear };
+            filtered[brand] = {
+                front: goodFront,
+                rear: goodRear,
+            };
         }
     }
 
-    renderTinderResults(filtered);
+    activeTinderResults = cloneTinderResults(filtered);
+
+    const currentKeyword = document.getElementById("searchBar")?.value || "";
+    applyTinderTextFilter(currentKeyword);
 }
 
 /* =========================
@@ -622,7 +689,20 @@ function removeOutOfStock() {
 }
 
 function filterTable() {
-    const keyword = document.getElementById("searchBar").value.toLowerCase().trim();
+    const searchBar = document.getElementById("searchBar");
+    const keyword = searchBar?.value.toLowerCase().trim() || "";
+
+    // Tyres Tinder uses grouped rows with rowspans. Re-rendering the matching
+    // data keeps every brand cell and rowspan valid after searches like "runflat".
+    if (
+        document.body.classList.contains("tinder-page") &&
+        Object.keys(savedTinderResults).length
+    ) {
+        applyTinderTextFilter(keyword);
+        return;
+    }
+
+    // Standard row filtering for F Alt Tab.
     const rows = document.querySelectorAll("#resultsTable tbody tr");
 
     rows.forEach((row) => {
@@ -632,11 +712,10 @@ function filterTable() {
         }
 
         const brand = (row.dataset.brand || "").toLowerCase();
-        const matchInCells = [...row.cells].some((c) =>
-            c.textContent.toLowerCase().includes(keyword)
+        const matchInCells = [...row.cells].some((cell) =>
+            cell.textContent.toLowerCase().includes(keyword)
         );
 
-        const match = matchInCells || brand.includes(keyword);
-        row.style.display = match ? "" : "none";
+        row.style.display = matchInCells || brand.includes(keyword) ? "" : "none";
     });
 }
