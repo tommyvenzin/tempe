@@ -4,8 +4,18 @@ console.log("Project_C.js loaded successfully");
    PROJECT C CONFIGURATION
    ========================= */
 
-const PROJECT_C_INITIALS = ["TOG", "MHA", "JZA", "MOR", "MRA", "DB"];
-const MASKED_INITIAL_LABEL = "TOG";
+const PROJECT_C_INITIALS = ["TOG", "MOR", "MRA", "DK", "MHA", "JZA", "DB", "SA"];
+
+const INITIAL_DISPLAY_NAMES = Object.freeze({
+    TOG: "god",
+    MOR: "babi",
+    MRA: "monyet",
+    DK: "kontol",
+    MHA: "tolol",
+    JZA: "maling",
+    DB: "okelah",
+    SA: "mabok"
+});
 const WEEKLY_TARGET = 90000;
 
 const LOCAL_PROXY = "http://localhost:8787/proxy?url=";
@@ -404,7 +414,7 @@ async function loadWeeklyRanking() {
                 <td>
                     <div class="rank-cell">
                         <span class="rank-badge">#${index + 1}</span>
-                        <span class="masked-initial">${MASKED_INITIAL_LABEL}</span>
+                        <span class="masked-initial">${INITIAL_DISPLAY_NAMES[data.initials] ?? "unknown"}</span>
                     </div>
                 </td>
                 <td>$${data.retailTotal.toFixed(2)}</td>
