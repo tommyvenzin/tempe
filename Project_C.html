@@ -3,83 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tom Does it all</title>
+    <meta name="color-scheme" content="dark">
+    <title>Project C Dashboard</title>
     <link rel="stylesheet" href="allaround.css">
-
-    <style>
-        .form-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 16px;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .form-row label {
-            min-width: 120px;
-            font-weight: 500;
-        }
-        .form-row input,
-        .form-row select {
-            flex: 1;
-            min-width: 140px;
-            padding: 8px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-        }
-        #loadingIndicator {
-            display: none;
-            margin-top: 10px;
-            font-weight: bold;
-        }
-
-        /* Progress bar for leaderboard */
-        .progress-wrapper {
-            min-width: 180px;
-        }
-        .progress-label {
-            font-size: 0.85em;
-            margin-bottom: 4px;
-            opacity: 0.9;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 10px;
-            border-radius: 999px;
-            overflow: hidden;
-            border: 1px solid #1f2937;
-            background-color: #020617;
-        }
-        .progress-fill {
-            height: 100%;
-            width: 0;
-            transition: width 0.4s ease;
-        }
-        .progress-fill.grade-keepgoing {
-            background: linear-gradient(90deg, #4b5563, #9ca3af);
-        }
-        .progress-fill.grade-level1 {
-            background: linear-gradient(90deg, #f59e0b, #d97706);
-        }
-        .progress-fill.grade-level2 {
-            background: linear-gradient(90deg, #22c55e, #16a34a);
-        }
-        .progress-fill.grade-sitdown {
-            background: linear-gradient(90deg, #e11d48, #b91c1c);
-        }
-    </style>
 </head>
 
-<body>
-
-    <!-- Navigation -->
-    <nav class="navbar">
+<body class="project-c-page">
+    <nav class="navbar project-nav" aria-label="Primary navigation">
         <div class="navbar-links">
             <a href="index.html">F Alt Tab</a>
-            <a href="Project_C.html">Project C</a>
+            <a href="Project_C.html" aria-current="page">Project C</a>
             <a href="Tyrestinder.html">Tyres Tinder</a>
             <a href="Fitment_Planner.html">Fitment Planner</a>
             <a href="testrun.html">Tempe Orders</a>
         </div>
+
         <select class="nav-dropdown" aria-label="Navigation menu" onchange="if (this.value) window.location.href=this.value;">
             <option value="index.html">F Alt Tab</option>
             <option value="Project_C.html" selected>Project C</option>
@@ -89,66 +27,76 @@
         </select>
     </nav>
 
-    <h1>Cannibalism for commission.</h1>
-    <p>Note: Does not include WA, puncture, SF, or any price that is not on the website.</p>
+    <main class="project-shell">
+        <section class="project-hero">
+            <div class="hero-copy">
+                <span class="eyebrow">PROJECT C</span>
+                <h1>Cannibalism for commission.</h1>
+                <p class="hero-description">
+                    Weekly retail and wholesale performance, automatically ranked from Friday to today.
+                </p>
+            </div>
 
-    <!-- Initials Selection -->
-    <div class="form-row">
-        <label for="skuInput">Initials:</label>
-        <select id="skuInput" multiple>
-            <option value="TOG">TOG</option>
-            <option value="MHA">TOG</option>
-            <option value="JZA">TOG</option>
-            <option value="MOR">TOG</option>
-            <option value="MRA">TOG</option>
-            <option value="DB">TOG</option>
-        </select>
-    </div>
+            <div class="hero-status" aria-label="Dashboard status">
+                <span class="status-chip status-chip-live">
+                    <span class="status-dot"></span>
+                    Live ranking
+                </span>
+                <span class="status-chip" id="rangeSummary">Loading current sales week…</span>
+            </div>
+        </section>
 
-    <!-- Date Range -->
-    <div class="form-row">
-        <label for="startDateInput">Start Date (MM-DD):</label>
-        <input type="text" id="startDateInput" placeholder="MM-DD">
+        <div class="notice-card">
+            <strong>Coverage note</strong>
+            <span>Does not include WA, puncture, SF, or any price that is not listed on the website.</span>
+        </div>
 
-        <label for="endDateInput">End Date (MM-DD):</label>
-        <input type="text" id="endDateInput" placeholder="MM-DD">
-    </div>
+        <div id="loadingIndicator" class="loading-banner" role="status" aria-live="polite">
+            <span class="loading-spinner" aria-hidden="true"></span>
+            <span data-loading-text>Loading weekly rankings…</span>
+        </div>
 
-    <!-- Buttons -->
-    <div class="button-group">
-        <button onclick="autoFillSalesPeriod()">Auto Select This Week</button>
-        <button onclick="checkPrices()">Check Prices</button>
-        <button onclick="wholesalePrices()">Wholesale Prices</button>
-        <!-- Leaderboard / grade button -->
-        <button onclick="allInitialsRanked()">All Initials (Ranked + Grade)</button>
-    </div>
+        <section class="summary-grid summary-grid-ranking" aria-label="Performance totals">
+            <article class="metric-card metric-card-total">
+                <span class="metric-label">Combined value</span>
+                <p id="grandTotal" class="grand-total">$0.00</p>
+                <span class="metric-caption">Retail + wholesale</span>
+            </article>
 
-    <div id="loadingIndicator">⏳ Loading… Please wait…</div>
+            <article class="metric-card">
+                <span class="metric-label">Total quantity</span>
+                <p id="itemTotal" class="item-total">0</p>
+                <span class="metric-caption">Items in the current sales week</span>
+            </article>
+        </section>
 
-    <!-- Totals Summary -->
-    <b>Total : <p id="grandTotal" class="grand-total"></p></b>
-    <b>Quantity : <p id="itemTotal" class="item-total"></p></b>
+        <section class="dashboard-card results-card" aria-labelledby="resultsHeading">
+            <div class="section-heading results-heading">
+                <div>
+                    <span class="section-kicker">Weekly ranking</span>
+                    <h2 id="resultsHeading">Performance table</h2>
+                </div>
+                <span class="privacy-pill">IDs masked on screen</span>
+            </div>
 
-    <!-- Results Table -->
-    <table id="resultsTable">
-        <thead>
-            <tr>
-                <th>SKU</th>
-                <th>Quantity</th>
-                <th>Original Price (AUD)</th>
-                <th>Total Price (AUD)</th>
-                <th>Description</th>
-                <th>Link</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+            <div class="table-container project-table-container">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Rank / Initial</th>
+                            <th>Retail Total (AUD)</th>
+                            <th>Wholesale Total (AUD)</th>
+                            <th>Combined Total (AUD)</th>
+                            <th>Total Quantity</th>
+                            <th>Progress / Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
 
     <script src="Project_C.js" defer></script>
 </body>
 </html>
-
-
-
-
-
