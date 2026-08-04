@@ -7,7 +7,7 @@
     <title>Fitment Planner</title>
     <link rel="stylesheet" href="./allaround.css">
 </head>
-<body class="app-page fitment-page">
+<body class="app-page fitment-page fitment-v2">
     <nav class="navbar app-nav" aria-label="Primary navigation">
         <div class="navbar-links">
             <a href="index.html">F Alt Tab</a>
@@ -25,91 +25,238 @@
         </select>
     </nav>
 
-    <main class="app-shell">
-        <section class="app-hero">
+    <main class="fitment-workspace">
+        <header class="fitment-topbar">
             <div>
                 <span class="eyebrow">FITMENT PLANNER</span>
-                <h1>Tyre Fitment Planner</h1>
-                <p class="hero-description">Build the customer quote, mark new tyre positions, and map tyre rotations in one view.</p>
+                <h1>Customer tyre job</h1>
             </div>
-            <span class="status-chip">Interactive fitment map</span>
-        </section>
+            <div class="fitment-top-actions">
+                <span id="saveStatus" class="save-status" aria-live="polite">Draft ready</span>
+                <button type="button" class="quiet-button" id="savedJobsBtn">Saved jobs <span id="savedJobsCount">0</span></button>
+                <button type="button" class="danger-ghost" id="newJobBtn">New job</button>
+            </div>
+        </header>
 
-        <section class="fitment-card dashboard-card compact-card">
-            <div class="section-heading">
+        <nav class="workflow-tabs" aria-label="Job stages">
+            <button type="button" class="workflow-tab is-active" data-stage-target="outside">
+                <span>1</span> Outside check
+            </button>
+            <button type="button" class="workflow-tab" data-stage-target="inside">
+                <span>2</span> Inside quote
+            </button>
+            <button type="button" class="workflow-tab" data-stage-target="summary">
+                <span>3</span> Summary
+            </button>
+        </nav>
+
+        <section class="workflow-stage is-active" data-stage="outside">
+            <div class="stage-heading">
                 <div>
-                    <span class="section-kicker">Customer + pricing</span>
-                    <h2>Quote details</h2>
+                    <span class="section-kicker">OUTSIDE WITH CUSTOMER</span>
+                    <h2>Capture the job in one walkaround</h2>
                 </div>
+                <span class="stage-hint">Autosaves on every change</span>
             </div>
 
-            <div class="fitment-customer-grid compact-grid">
-                <label for="customerName">Customer</label>
-                <input type="text" id="customerName" placeholder="Name">
+            <section class="fitment-panel customer-panel">
+                <div class="compact-field-grid customer-fields">
+                    <label class="field field-rego">
+                        <span>Rego</span>
+                        <input id="rego" data-bind="customer.rego" type="text" autocapitalize="characters" placeholder="ABC12D">
+                    </label>
+                    <label class="field">
+                        <span>Customer</span>
+                        <input data-bind="customer.name" type="text" autocomplete="name" placeholder="Name">
+                    </label>
+                    <label class="field">
+                        <span>Phone</span>
+                        <input data-bind="customer.phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="04…">
+                    </label>
+                    <label class="field field-wide">
+                        <span>Vehicle</span>
+                        <input data-bind="customer.vehicle" type="text" placeholder="Make / model / year">
+                    </label>
+                    <label class="field">
+                        <span>Odometer</span>
+                        <input data-bind="customer.odometer" type="number" inputmode="numeric" min="0" placeholder="km">
+                    </label>
+                    <label class="field field-wide">
+                        <span>Customer request</span>
+                        <input data-bind="customer.request" type="text" placeholder="Noise, puncture, replacement, vibration…">
+                    </label>
+                </div>
+            </section>
 
-                <label for="customerPhone">Phone</label>
-                <input type="tel" id="customerPhone" inputmode="numeric" pattern="[0-9]*" placeholder="0400000000">
+            <section class="fitment-panel inspection-panel">
+                <div class="panel-heading-row">
+                    <div>
+                        <span class="section-kicker">TYRE INSPECTION</span>
+                        <h2>Tap status, then enter only what matters</h2>
+                    </div>
+                    <div class="quick-actions">
+                        <button type="button" class="quiet-button" id="copyFrontBtn">Copy FL → FR</button>
+                        <button type="button" class="quiet-button" id="copyRearBtn">Copy RL → RR</button>
+                        <button type="button" class="quiet-button" id="copySizeAllBtn">FL size → all</button>
+                    </div>
+                </div>
 
-                <label for="quantityInput">Qty</label>
-                <input type="number" id="quantityInput" min="1" max="5" value="2">
-            </div>
+                <div id="inspectionGrid" class="inspection-grid"></div>
 
-            <p id="selectedTyreText" class="selected-tyre-inline">No tyre selected yet. Go to F Alt Tab and select a tyre result first.</p>
-
-            <div class="compact-pricing-row">
-                <label class="fitment-checkbox">
-                    <input type="checkbox" id="alignmentEnabled">
-                    Alignment
+                <label class="field notes-field">
+                    <span>Walkaround notes</span>
+                    <textarea class="fitment-notes" data-bind="outsideNotes" placeholder="Damage, locking nut location, wheel condition, customer comments…"></textarea>
                 </label>
-                <label><input type="radio" name="alignmentType" value="front" checked> Front $50</label>
-                <label><input type="radio" name="alignmentType" value="full"> Front+Rear $70</label>
-                <strong id="totalPriceText" class="fitment-total">Total: $0.00</strong>
+            </section>
+
+            <div class="stage-actions stage-actions-right">
+                <button type="button" class="primary-action" id="finishOutsideBtn">Finish outside check →</button>
             </div>
         </section>
 
-        <section class="fitment-card dashboard-card compact-card">
-            <div class="section-heading">
+        <section class="workflow-stage" data-stage="inside" hidden>
+            <div class="stage-heading">
                 <div>
-                    <span class="section-kicker">Vehicle map</span>
-                    <h2>Fitment + Rotation Map</h2>
+                    <span class="section-kicker">INSIDE AT THE DESK</span>
+                    <h2>Turn the inspection into a quote</h2>
                 </div>
+                <button type="button" class="quiet-button" id="useReplacePositionsBtn">Use “Replace” positions</button>
             </div>
 
-            <p class="map-help">Tap wheel positions to mark new tyres. Turn on rotation mode, then tap FROM and TO points to draw arrows.</p>
+            <section class="fitment-panel selected-product-panel">
+                <div class="panel-heading-row">
+                    <div>
+                        <span class="section-kicker">SELECTED PRODUCT</span>
+                        <h2>Tyre and pricing</h2>
+                    </div>
+                    <a class="inline-link" href="index.html">Search in F Alt Tab</a>
+                </div>
 
-            <div class="map-controls">
-                <label class="fitment-checkbox"><input type="checkbox" id="rotationMode"> Rotation draw mode</label>
-                <button type="button" id="clearRotationBtn">Clear rotations</button>
+                <div id="selectedTyreBanner" class="selected-tyre-banner">No tyre selected from F Alt Tab yet.</div>
+
+                <div class="compact-field-grid quote-product-grid">
+                    <label class="field">
+                        <span>SKU</span>
+                        <input data-bind="quote.sku" type="text" placeholder="SKU">
+                    </label>
+                    <label class="field field-wide">
+                        <span>Product</span>
+                        <input data-bind="quote.product" type="text" placeholder="Brand / pattern / size">
+                    </label>
+                    <label class="field">
+                        <span>Price each</span>
+                        <input data-bind="quote.priceEach" data-money type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+                    </label>
+                    <label class="field">
+                        <span>Quantity</span>
+                        <input data-bind="quote.qty" type="number" inputmode="numeric" min="1" max="5" step="1">
+                    </label>
+                </div>
+            </section>
+
+            <section class="fitment-panel work-panel">
+                <div class="panel-heading-row">
+                    <div>
+                        <span class="section-kicker">WORK PLAN</span>
+                        <h2>Positions and services</h2>
+                    </div>
+                </div>
+
+                <div class="work-layout">
+                    <div>
+                        <span class="field-label">Fit new tyres to</span>
+                        <div class="position-choice-row" id="fitPositionChoices">
+                            <button type="button" data-fit-position="fl">FL</button>
+                            <button type="button" data-fit-position="fr">FR</button>
+                            <button type="button" data-fit-position="rl">RL</button>
+                            <button type="button" data-fit-position="rr">RR</button>
+                            <button type="button" data-fit-position="spare">Spare</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="field-label">Alignment</span>
+                        <div class="segmented-row" id="alignmentChoices">
+                            <button type="button" data-alignment="none" data-price="0">None</button>
+                            <button type="button" data-alignment="front" data-price="50">Front $50</button>
+                            <button type="button" data-alignment="full" data-price="70">Front + rear $70</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="compact-field-grid extras-grid">
+                    <label class="field">
+                        <span>Fitting / extras</span>
+                        <input data-bind="quote.extras" data-money type="number" inputmode="decimal" min="0" step="0.01" value="0">
+                    </label>
+                    <label class="field">
+                        <span>Disposal</span>
+                        <input data-bind="quote.disposal" data-money type="number" inputmode="decimal" min="0" step="0.01" value="0">
+                    </label>
+                    <label class="field">
+                        <span>Discount</span>
+                        <input data-bind="quote.discount" data-money type="number" inputmode="decimal" min="0" step="0.01" value="0">
+                    </label>
+                    <label class="field field-wide">
+                        <span>Rotation / work instruction</span>
+                        <input data-bind="quote.workInstruction" type="text" placeholder="Example: New tyres rear, move rears to front">
+                    </label>
+                </div>
+
+                <label class="field notes-field">
+                    <span>Quote notes</span>
+                    <textarea class="fitment-notes" data-bind="quote.notes" placeholder="Availability, ETA, customer approval, special instructions…"></textarea>
+                </label>
+
+                <div class="quote-total-bar">
+                    <div>
+                        <span>Quote total</span>
+                        <strong id="quoteTotal">$0.00</strong>
+                    </div>
+                    <small id="quoteBreakdown">0 tyres</small>
+                </div>
+            </section>
+
+            <div class="stage-actions">
+                <button type="button" class="quiet-button" data-stage-target="outside">← Back outside</button>
+                <button type="button" class="primary-action" id="reviewSummaryBtn">Review summary →</button>
+            </div>
+        </section>
+
+        <section class="workflow-stage" data-stage="summary" hidden>
+            <div class="stage-heading">
+                <div>
+                    <span class="section-kicker">READY TO USE</span>
+                    <h2>Job summary</h2>
+                </div>
+                <span class="stage-hint" id="summaryUpdatedAt"></span>
             </div>
 
-            <div class="map-controls">
-                <label class="fitment-checkbox"><input type="checkbox" id="spareMountedMode"> Spare is currently mounted</label>
-                <select id="spareMountedAt" disabled>
-                    <option value="">Choose where spare is mounted</option>
-                    <option value="front-left">Front Left (FL)</option>
-                    <option value="front-right">Front Right (FR)</option>
-                    <option value="rear-left">Rear Left (RL)</option>
-                    <option value="rear-right">Rear Right (RR)</option>
-                </select>
-            </div>
-
-            <div class="car-map better-map" id="carMap">
-                <div class="front-label">FRONT</div>
-                <div class="car-shape detailed-car"><div class="car-center-text">TOP VIEW</div></div>
-                <button type="button" class="position-btn" data-position="front-left">FL</button>
-                <button type="button" class="position-btn" data-position="front-right">FR</button>
-                <button type="button" class="position-btn" data-position="rear-left">RL</button>
-                <button type="button" class="position-btn" data-position="rear-right">RR</button>
-                <button type="button" class="position-btn boot" data-position="boot">Spare</button>
-                <svg id="rotationArrows" class="rotation-arrows overlay" viewBox="0 0 500 350" aria-label="Rotation arrows"></svg>
-                <div class="rear-label">REAR</div>
-            </div>
-
-            <p id="rotationFlowInline" class="rotation-flow-inline">Rotation flow: none</p>
-            <p id="spareMountedText" class="rotation-flow-inline"></p>
+            <section class="fitment-panel summary-panel">
+                <div class="summary-toolbar">
+                    <button type="button" class="primary-action" id="copySummaryBtn">Copy summary</button>
+                    <button type="button" class="quiet-button" id="saveJobBtn">Save job</button>
+                    <button type="button" class="quiet-button" data-stage-target="inside">Edit quote</button>
+                    <button type="button" class="quiet-button" data-stage-target="outside">Edit inspection</button>
+                </div>
+                <pre id="summaryOutput" class="summary-output"></pre>
+            </section>
         </section>
     </main>
 
-    <script src="./Fitment_Planner.js"></script>
+    <dialog id="savedJobsDialog" class="saved-jobs-dialog">
+        <div class="dialog-heading">
+            <div>
+                <span class="section-kicker">SAVED JOBS</span>
+                <h2>Open a previous job</h2>
+            </div>
+            <button type="button" class="icon-button" id="closeSavedJobsBtn" aria-label="Close">×</button>
+        </div>
+        <div id="savedJobsList" class="saved-jobs-list"></div>
+    </dialog>
+
+    <div id="fitmentToast" class="fitment-toast" role="status" aria-live="polite"></div>
+
+    <script src="./Fitment_Planner.js" defer></script>
 </body>
 </html>
