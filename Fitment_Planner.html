@@ -2,260 +2,158 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="dark">
-    <title>Fitment Planner</title>
+    <title>Mobile Job Card</title>
     <link rel="stylesheet" href="./allaround.css">
 </head>
-<body class="app-page fitment-page fitment-v2">
+
+<body class="app-page mobile-jobcard-page">
     <nav class="navbar app-nav" aria-label="Primary navigation">
         <div class="navbar-links">
             <a href="index.html">F Alt Tab</a>
             <a href="Project_C.html">Project C</a>
             <a href="Tyrestinder.html">Tyres Tinder</a>
-            <a href="Fitment_Planner.html" aria-current="page">Fitment Planner</a>
+            <a href="Fitment_Planner.html" aria-current="page">Job Card</a>
             <a href="testrun.html">Tempe Orders</a>
         </div>
-        <select class="nav-dropdown" aria-label="Navigation menu" onchange="if (this.value) window.location.href=this.value;">
+
+        <select class="nav-dropdown" aria-label="Navigation menu"
+            onchange="if (this.value) window.location.href=this.value;">
             <option value="index.html">F Alt Tab</option>
             <option value="Project_C.html">Project C</option>
             <option value="Tyrestinder.html">Tyres Tinder</option>
-            <option value="Fitment_Planner.html" selected>Fitment Planner</option>
+            <option value="Fitment_Planner.html" selected>Job Card</option>
             <option value="testrun.html">Tempe Orders</option>
         </select>
     </nav>
 
-    <main class="fitment-workspace">
-        <header class="fitment-topbar">
+    <main class="jobcard-shell">
+        <header class="jobcard-header">
             <div>
-                <span class="eyebrow">FITMENT PLANNER</span>
-                <h1>Customer tyre job</h1>
+                <span class="eyebrow">MOBILE JOB CARD</span>
+                <h1>Customer details</h1>
+                <p>Capture only what you need outside, then use the summary when you return inside.</p>
             </div>
-            <div class="fitment-top-actions">
-                <span id="saveStatus" class="save-status" aria-live="polite">Draft ready</span>
-                <button type="button" class="quiet-button" id="savedJobsBtn">Saved jobs <span id="savedJobsCount">0</span></button>
-                <button type="button" class="danger-ghost" id="newJobBtn">New job</button>
+
+            <div class="jobcard-header-actions">
+                <span id="saveStatus" class="jobcard-save-status" aria-live="polite">Saved</span>
+                <button type="button" id="newJobBtn" class="jobcard-quiet-button">New job</button>
             </div>
         </header>
 
-        <nav class="workflow-tabs" aria-label="Job stages">
-            <button type="button" class="workflow-tab is-active" data-stage-target="outside">
-                <span>1</span> Outside check
-            </button>
-            <button type="button" class="workflow-tab" data-stage-target="inside">
-                <span>2</span> Inside quote
-            </button>
-            <button type="button" class="workflow-tab" data-stage-target="summary">
-                <span>3</span> Summary
-            </button>
-        </nav>
-
-        <section class="workflow-stage is-active" data-stage="outside">
-            <div class="stage-heading">
-                <div>
-                    <span class="section-kicker">OUTSIDE WITH CUSTOMER</span>
-                    <h2>Capture the job in one walkaround</h2>
-                </div>
-                <span class="stage-hint">Autosaves on every change</span>
+        <section id="selectedTyreStrip" class="selected-tyre-strip" hidden>
+            <div>
+                <small>Selected from F Alt Tab</small>
+                <strong id="selectedTyreText"></strong>
             </div>
-
-            <section class="fitment-panel customer-panel">
-                <div class="compact-field-grid customer-fields">
-                    <label class="field field-rego">
-                        <span>Rego</span>
-                        <input id="rego" data-bind="customer.rego" type="text" autocapitalize="characters" placeholder="ABC12D">
-                    </label>
-                    <label class="field">
-                        <span>Customer</span>
-                        <input data-bind="customer.name" type="text" autocomplete="name" placeholder="Name">
-                    </label>
-                    <label class="field">
-                        <span>Phone</span>
-                        <input data-bind="customer.phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="04…">
-                    </label>
-                    <label class="field field-wide">
-                        <span>Vehicle</span>
-                        <input data-bind="customer.vehicle" type="text" placeholder="Make / model / year">
-                    </label>
-                    <label class="field">
-                        <span>Odometer</span>
-                        <input data-bind="customer.odometer" type="number" inputmode="numeric" min="0" placeholder="km">
-                    </label>
-                    <label class="field field-wide">
-                        <span>Customer request</span>
-                        <input data-bind="customer.request" type="text" placeholder="Noise, puncture, replacement, vibration…">
-                    </label>
-                </div>
-            </section>
-
-            <section class="fitment-panel inspection-panel">
-                <div class="panel-heading-row">
-                    <div>
-                        <span class="section-kicker">TYRE INSPECTION</span>
-                        <h2>Tap status, then enter only what matters</h2>
-                    </div>
-                    <div class="quick-actions">
-                        <button type="button" class="quiet-button" id="copyFrontBtn">Copy FL → FR</button>
-                        <button type="button" class="quiet-button" id="copyRearBtn">Copy RL → RR</button>
-                        <button type="button" class="quiet-button" id="copySizeAllBtn">FL size → all</button>
-                    </div>
-                </div>
-
-                <div id="inspectionGrid" class="inspection-grid"></div>
-
-                <label class="field notes-field">
-                    <span>Walkaround notes</span>
-                    <textarea class="fitment-notes" data-bind="outsideNotes" placeholder="Damage, locking nut location, wheel condition, customer comments…"></textarea>
-                </label>
-            </section>
-
-            <div class="stage-actions stage-actions-right">
-                <button type="button" class="primary-action" id="finishOutsideBtn">Finish outside check →</button>
-            </div>
+            <button type="button" id="useSelectedTyreBtn">Use tyre</button>
         </section>
 
-        <section class="workflow-stage" data-stage="inside" hidden>
-            <div class="stage-heading">
+        <form id="jobCardForm" class="jobcard-form" autocomplete="on">
+            <label class="jobcard-field">
+                <span>Name</span>
+                <input
+                    id="customerName"
+                    name="customerName"
+                    type="text"
+                    autocomplete="name"
+                    autocapitalize="words"
+                    enterkeyhint="next"
+                    placeholder="Customer name"
+                >
+            </label>
+
+            <label class="jobcard-field">
+                <span>Phone number</span>
+                <input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    inputmode="tel"
+                    autocomplete="tel"
+                    enterkeyhint="next"
+                    placeholder="04..."
+                >
+            </label>
+
+            <label class="jobcard-field">
+                <span>Rego</span>
+                <input
+                    id="rego"
+                    name="rego"
+                    type="text"
+                    autocapitalize="characters"
+                    autocomplete="off"
+                    enterkeyhint="next"
+                    placeholder="CXB89H"
+                >
+            </label>
+
+            <label class="jobcard-field">
+                <span>Kilometres</span>
+                <div class="jobcard-input-suffix">
+                    <input
+                        id="kilometres"
+                        name="kilometres"
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        enterkeyhint="next"
+                        placeholder="40631"
+                    >
+                    <span>KM</span>
+                </div>
+            </label>
+
+            <label class="jobcard-field jobcard-field-wide">
+                <span>Car make / model</span>
+                <input
+                    id="vehicle"
+                    name="vehicle"
+                    type="text"
+                    autocapitalize="words"
+                    autocomplete="off"
+                    enterkeyhint="next"
+                    placeholder="2014 Tesla Model S"
+                >
+            </label>
+
+            <label class="jobcard-field jobcard-field-wide">
+                <span>What tyre?</span>
+                <textarea
+                    id="tyre"
+                    name="tyre"
+                    rows="2"
+                    autocapitalize="characters"
+                    autocomplete="off"
+                    enterkeyhint="done"
+                    placeholder="MICHELIN 265/35R21 101Y PILOT SPORT 4S (T2)"
+                ></textarea>
+            </label>
+        </form>
+
+        <section class="jobcard-preview-card" aria-labelledby="previewHeading">
+            <div class="jobcard-preview-heading">
                 <div>
-                    <span class="section-kicker">INSIDE AT THE DESK</span>
-                    <h2>Turn the inspection into a quote</h2>
+                    <span class="section-kicker">JOB CARD TEXT</span>
+                    <h2 id="previewHeading">Ready for RepairOrder</h2>
                 </div>
-                <button type="button" class="quiet-button" id="useReplacePositionsBtn">Use “Replace” positions</button>
+                <span id="completionStatus" class="completion-status">0 / 6</span>
             </div>
 
-            <section class="fitment-panel selected-product-panel">
-                <div class="panel-heading-row">
-                    <div>
-                        <span class="section-kicker">SELECTED PRODUCT</span>
-                        <h2>Tyre and pricing</h2>
-                    </div>
-                    <a class="inline-link" href="index.html">Search in F Alt Tab</a>
-                </div>
-
-                <div id="selectedTyreBanner" class="selected-tyre-banner">No tyre selected from F Alt Tab yet.</div>
-
-                <div class="compact-field-grid quote-product-grid">
-                    <label class="field">
-                        <span>SKU</span>
-                        <input data-bind="quote.sku" type="text" placeholder="SKU">
-                    </label>
-                    <label class="field field-wide">
-                        <span>Product</span>
-                        <input data-bind="quote.product" type="text" placeholder="Brand / pattern / size">
-                    </label>
-                    <label class="field">
-                        <span>Price each</span>
-                        <input data-bind="quote.priceEach" data-money type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
-                    </label>
-                    <label class="field">
-                        <span>Quantity</span>
-                        <input data-bind="quote.qty" type="number" inputmode="numeric" min="1" max="5" step="1">
-                    </label>
-                </div>
-            </section>
-
-            <section class="fitment-panel work-panel">
-                <div class="panel-heading-row">
-                    <div>
-                        <span class="section-kicker">WORK PLAN</span>
-                        <h2>Positions and services</h2>
-                    </div>
-                </div>
-
-                <div class="work-layout">
-                    <div>
-                        <span class="field-label">Fit new tyres to</span>
-                        <div class="position-choice-row" id="fitPositionChoices">
-                            <button type="button" data-fit-position="fl">FL</button>
-                            <button type="button" data-fit-position="fr">FR</button>
-                            <button type="button" data-fit-position="rl">RL</button>
-                            <button type="button" data-fit-position="rr">RR</button>
-                            <button type="button" data-fit-position="spare">Spare</button>
-                        </div>
-                    </div>
-
-                    <div>
-                        <span class="field-label">Alignment</span>
-                        <div class="segmented-row" id="alignmentChoices">
-                            <button type="button" data-alignment="none" data-price="0">None</button>
-                            <button type="button" data-alignment="front" data-price="50">Front $50</button>
-                            <button type="button" data-alignment="full" data-price="70">Front + rear $70</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="compact-field-grid extras-grid">
-                    <label class="field">
-                        <span>Fitting / extras</span>
-                        <input data-bind="quote.extras" data-money type="number" inputmode="decimal" min="0" step="0.01" value="0">
-                    </label>
-                    <label class="field">
-                        <span>Disposal</span>
-                        <input data-bind="quote.disposal" data-money type="number" inputmode="decimal" min="0" step="0.01" value="0">
-                    </label>
-                    <label class="field">
-                        <span>Discount</span>
-                        <input data-bind="quote.discount" data-money type="number" inputmode="decimal" min="0" step="0.01" value="0">
-                    </label>
-                    <label class="field field-wide">
-                        <span>Rotation / work instruction</span>
-                        <input data-bind="quote.workInstruction" type="text" placeholder="Example: New tyres rear, move rears to front">
-                    </label>
-                </div>
-
-                <label class="field notes-field">
-                    <span>Quote notes</span>
-                    <textarea class="fitment-notes" data-bind="quote.notes" placeholder="Availability, ETA, customer approval, special instructions…"></textarea>
-                </label>
-
-                <div class="quote-total-bar">
-                    <div>
-                        <span>Quote total</span>
-                        <strong id="quoteTotal">$0.00</strong>
-                    </div>
-                    <small id="quoteBreakdown">0 tyres</small>
-                </div>
-            </section>
-
-            <div class="stage-actions">
-                <button type="button" class="quiet-button" data-stage-target="outside">← Back outside</button>
-                <button type="button" class="primary-action" id="reviewSummaryBtn">Review summary →</button>
-            </div>
+            <pre id="jobCardPreview" class="jobcard-preview"></pre>
         </section>
 
-        <section class="workflow-stage" data-stage="summary" hidden>
-            <div class="stage-heading">
-                <div>
-                    <span class="section-kicker">READY TO USE</span>
-                    <h2>Job summary</h2>
-                </div>
-                <span class="stage-hint" id="summaryUpdatedAt"></span>
-            </div>
-
-            <section class="fitment-panel summary-panel">
-                <div class="summary-toolbar">
-                    <button type="button" class="primary-action" id="copySummaryBtn">Copy summary</button>
-                    <button type="button" class="quiet-button" id="saveJobBtn">Save job</button>
-                    <button type="button" class="quiet-button" data-stage-target="inside">Edit quote</button>
-                    <button type="button" class="quiet-button" data-stage-target="outside">Edit inspection</button>
-                </div>
-                <pre id="summaryOutput" class="summary-output"></pre>
-            </section>
-        </section>
+        <div class="jobcard-bottom-space" aria-hidden="true"></div>
     </main>
 
-    <dialog id="savedJobsDialog" class="saved-jobs-dialog">
-        <div class="dialog-heading">
-            <div>
-                <span class="section-kicker">SAVED JOBS</span>
-                <h2>Open a previous job</h2>
-            </div>
-            <button type="button" class="icon-button" id="closeSavedJobsBtn" aria-label="Close">×</button>
-        </div>
-        <div id="savedJobsList" class="saved-jobs-list"></div>
-    </dialog>
+    <div class="jobcard-action-bar">
+        <button type="button" id="copyBtn" class="jobcard-primary-action">Copy job card</button>
+        <button type="button" id="shareBtn" class="jobcard-secondary-action">Share</button>
+    </div>
 
-    <div id="fitmentToast" class="fitment-toast" role="status" aria-live="polite"></div>
+    <div id="jobcardToast" class="jobcard-toast" role="status" aria-live="polite"></div>
 
     <script src="./Fitment_Planner.js" defer></script>
 </body>
