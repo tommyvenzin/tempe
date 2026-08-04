@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tom Does It All</title>
+    <meta name="color-scheme" content="dark">
+    <title>F Alt Tab — Price Checker</title>
     <link rel="stylesheet" href="./allaround.css">
 </head>
-<body>
-    <!-- Navigation Menu -->
-    <nav class="navbar">
+<body class="app-page price-checker-page">
+    <nav class="navbar app-nav" aria-label="Primary navigation">
         <div class="navbar-links">
-            <a href="index.html">F Alt Tab</a>
+            <a href="index.html" aria-current="page">F Alt Tab</a>
             <a href="Project_C.html">Project C</a>
             <a href="Tyrestinder.html">Tyres Tinder</a>
             <a href="Fitment_Planner.html">Fitment Planner</a>
@@ -25,32 +25,62 @@
         </select>
     </nav>
 
-    <h1>Price Checker Lite Version</h1>
+    <main class="app-shell">
+        <section class="app-hero">
+            <div>
+                <span class="eyebrow">F ALT TAB</span>
+                <h1>Price Checker</h1>
+                <p class="hero-description">Search tyre sizes or SKUs, compare website pricing, and send available products into the Fitment Planner.</p>
+            </div>
+            <span class="status-chip">Live website lookup</span>
+        </section>
 
-    <textarea id="skuInput" rows="4" inputmode="numeric" pattern="[0-9]*" placeholder="Enter tire size or SKU, one per line..." onkeydown="handleSkuInputEnter(event)"></textarea>
+        <section class="dashboard-card controls-card" aria-labelledby="searchHeading">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Product search</span>
+                    <h2 id="searchHeading">Enter sizes or SKUs</h2>
+                </div>
+            </div>
 
-    <input type="text" id="searchBar" placeholder="Search...">
+            <textarea id="skuInput" rows="4" inputmode="numeric" pattern="[0-9]*"
+                placeholder="Enter tyre size or SKU, one per line..."
+                onkeydown="handleSkuInputEnter(event)"></textarea>
 
-    <div class="button-group">
-        <button onclick="checkPrices()">Search</button>
-        <button onclick="removeOutOfStock()">Available Only</button>
-        <button onclick="filterTable()">Filter Search</button>
-    </div>
+            <input type="text" id="searchBar" placeholder="Filter loaded results...">
 
-    <!-- TABLE UPDATED: Link column removed -->
-    <table id="resultsTable">
-        <thead>
-            <tr>
-                <th>Make</th>
-                <th>Model</th>
-                <th>Price (AUD)</th>
-                <th>SKU</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-    
+            <div class="button-group">
+                <button class="primary-action" onclick="checkPrices()">Search</button>
+                <button onclick="removeOutOfStock()">Available Only</button>
+                <button onclick="filterTable()">Filter Search</button>
+            </div>
+        </section>
+
+        <section class="dashboard-card results-card" aria-labelledby="resultsHeading">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Search results</span>
+                    <h2 id="resultsHeading">Products</h2>
+                </div>
+            </div>
+
+            <div class="table-container app-table-container">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Make</th>
+                            <th>Model</th>
+                            <th>Price (AUD)</th>
+                            <th>SKU</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
     <script src="./F_alt_tab.js"></script>
 </body>
 </html>
