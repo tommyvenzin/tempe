@@ -2126,7 +2126,12 @@ body:not(.project-c-page) .table-container,
 .project-c-page .project-table-container {
     border-radius: 10px;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
+
+    /* Horizontal tables remain scrollable, but vertical wheel movement
+       is allowed to continue scrolling the page. */
+    overscroll-behavior-x: auto;
+    overscroll-behavior-y: auto;
+    touch-action: pan-x pan-y;
 }
 
 body:not(.project-c-page) th,
@@ -2311,4 +2316,14 @@ body.project-c-page {
         padding: 11px 12px;
         border-radius: 12px;
     }
+}
+
+
+/* PAGE SCROLL THROUGH TABLES */
+body:not(.project-c-page) .table-container,
+.project-c-page .project-table-container {
+    overflow-x: auto;
+    overflow-y: visible;
+    overscroll-behavior: auto;
+    touch-action: pan-x pan-y;
 }
