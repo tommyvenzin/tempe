@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tom Does It All</title>
+    <meta name="color-scheme" content="dark">
+    <title>Tyres Tinder</title>
     <link rel="stylesheet" href="./allaround.css">
 </head>
-<body>
-    <!-- Navigation Menu -->
-    <nav class="navbar">
+<body class="app-page tinder-page">
+    <nav class="navbar app-nav" aria-label="Primary navigation">
         <div class="navbar-links">
             <a href="index.html">F Alt Tab</a>
             <a href="Project_C.html">Project C</a>
-            <a href="Tyrestinder.html">Tyres Tinder </a>
+            <a href="Tyrestinder.html" aria-current="page">Tyres Tinder</a>
             <a href="Fitment_Planner.html">Fitment Planner</a>
             <a href="testrun.html">Tempe Orders</a>
         </div>
@@ -25,36 +25,71 @@
         </select>
     </nav>
 
-<div class="form-row">
-    <label for="skuInput">Front Size:</label>
-    <input type="text" id="skuInput" placeholder="Front Size" onkeydown="if(event.key==='Enter'){event.preventDefault(); Tinder();}">
+    <main class="app-shell">
+        <section class="app-hero">
+            <div>
+                <span class="eyebrow">TYRES TINDER</span>
+                <h1>Front + Rear Matcher</h1>
+                <p class="hero-description">Compare matching front and rear tyre options by brand, pattern, stock and SKU.</p>
+            </div>
+            <span class="status-chip">Staggered fitment search</span>
+        </section>
 
-    <label for="skuInput2">Rear Size:</label>
-    <input type="text" id="skuInput2" placeholder="Rear Size" onkeydown="if(event.key==='Enter'){event.preventDefault(); Tinder();}">
-</div>
+        <section class="dashboard-card controls-card" aria-labelledby="tinderSearchHeading">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Fitment search</span>
+                    <h2 id="tinderSearchHeading">Enter both tyre sizes</h2>
+                </div>
+            </div>
 
-    <div class="form-row">
-        <label for="searchBar">Search:</label>
-        <input type="text" id="searchBar" placeholder="Filter results..." oninput="filterTable()">
-    </div>
+            <div class="form-row two-column-form">
+                <label for="skuInput">Front Size</label>
+                <input type="text" id="skuInput" placeholder="Example: 2353519"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); Tinder();}">
 
-<div class="button-group">
-    <button onclick="removeOutOfStockTinder()">Available Only</button>
-</div>
+                <label for="skuInput2">Rear Size</label>
+                <input type="text" id="skuInput2" placeholder="Example: 2653519"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); Tinder();}">
+            </div>
 
-    <table id="resultsTable">
-        <thead>
-            <tr>
-                <th>Brand</th>
-                <th>Front Model</th>
-                <th>Rear Model</th>
-                <th>Front SKU</th>
-                <th>Rear SKU</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+            <div class="form-row search-filter-row">
+                <label for="searchBar">Filter results</label>
+                <input type="text" id="searchBar" placeholder="Brand, pattern or SKU..."
+                    oninput="filterTable()">
+            </div>
 
-<script src="F_alt_tab.js" defer></script>
+            <div class="button-group">
+                <button class="primary-action" onclick="Tinder()">Match Tyres</button>
+                <button onclick="removeOutOfStockTinder()">Available Only</button>
+            </div>
+        </section>
+
+        <section class="dashboard-card results-card" aria-labelledby="tinderResultsHeading">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Matched products</span>
+                    <h2 id="tinderResultsHeading">Front and rear options</h2>
+                </div>
+            </div>
+
+            <div class="table-container app-table-container">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Brand</th>
+                            <th>Front Model</th>
+                            <th>Rear Model</th>
+                            <th>Front SKU</th>
+                            <th>Rear SKU</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="F_alt_tab.js" defer></script>
 </body>
 </html>
