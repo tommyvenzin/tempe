@@ -13,6 +13,7 @@ const FIELD_IDS = Object.freeze([
 ]);
 
 let selectedTyre = null;
+let currentTyreSku = "";
 let saveTimer = null;
 let toastTimer = null;
 
@@ -53,6 +54,7 @@ function collectJob() {
         kilometres: fields.kilometres.value.replace(/[^\d]/g, ""),
         vehicle: fields.vehicle.value.trim(),
         tyre: fields.tyre.value.trim(),
+        tyreSku: currentTyreSku.trim().toUpperCase(),
         updatedAt: new Date().toISOString(),
     };
 }
@@ -67,6 +69,7 @@ function populateJob(job) {
 
     fields.rego.value = fields.rego.value.toUpperCase();
     fields.kilometres.value = fields.kilometres.value.replace(/[^\d]/g, "");
+    currentTyreSku = String(safeJob.tyreSku || "").trim().toUpperCase();
 
     updateEverything();
 }
@@ -81,6 +84,97 @@ function formatKilometres(value) {
 
 function valueOrBlank(value) {
     return String(value || "").trim() || "________________";
+}
+
+function uppercaseCopyValue(value) {
+    return String(value || "").trim().toUpperCase();
+}
+
+function getQuickCopyBindings(job = collectJob()) {
+    return {
+        q: {
+            value: uppercaseCopyValue(job.customerName),
+            label: "Name",
+            message: "Name copied",
+        },
+        w: {
+            value: String(job.phone || "").trim(),
+            label: "Mobile",
+            message: "Mobile copied",
+        },
+        e: {
+            value: uppercaseCopyValue(job.tyreSku),
+            label: "SKU",
+            message: "SKU copied",
+        },
+        a: {
+            value: uppercaseCopyValue(job.vehicle),
+            label: "Make / Model",
+            message: "Make / model copied",
+        },
+        s: {
+            value: uppercaseCopyValue(job.rego),
+            label: "Rego",
+            message: "Rego copied",
+        },
+        d: {
+            value: String(job.kilometres || "").replace(/[^\d]/g, ""),
+            label: "Odo",
+            message: "Odometer copied",
+        },
+    };
+}
+
+function isTypingTarget(target) {
+    if (!target) return false;
+
+    const tagName = target.tagName?.toLowerCase();
+    return (
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        target.isContentEditable
+    );
+}
+
+function refreshQuickCopyButtons() {
+    const bindings = getQuickCopyBindings();
+
+    document.querySelectorAll("[data-copy-key]").forEach((button) => {
+        const key = String(button.dataset.copyKey || "").toLowerCase();
+        const binding = bindings[key];
+        const isEmpty = !binding?.value;
+
+        button.classList.toggle("is-empty", isEmpty);
+        button.setAttribute(
+            "aria-label",
+            isEmpty
+                ? `${binding?.label || key.toUpperCase()} has no value`
+                : `Copy ${binding.label} with ${key.toUpperCase()}`
+        );
+    });
+}
+
+async function copyQuickField(key) {
+    const normalizedKey = String(key || "").toLowerCase();
+    const binding = getQuickCopyBindings()[normalizedKey];
+
+    if (!binding) return false;
+
+    if (!binding.value) {
+        showToast(`No ${binding.label.toLowerCase()} to copy`);
+        return true;
+    }
+
+    try {
+        await copyText(binding.value);
+        showToast(`${binding.message} · ${normalizedKey.toUpperCase()}`);
+    } catch (error) {
+        console.error(`${binding.label} copy failed`, error);
+        showToast("Copy failed");
+    }
+
+    return true;
 }
 
 function buildJobCardText(job = collectJob()) {
@@ -133,6 +227,7 @@ function scheduleSave() {
 
 function updateEverything() {
     updatePreview();
+    refreshQuickCopyButtons();
     scheduleSave();
 }
 
@@ -185,11 +280,17 @@ function loadSelectedTyre() {
     }
 
     document.getElementById("selectedTyreText").textContent = description;
+
+    const selectedSku = uppercaseCopyValue(selectedTyre?.sku);
+    const skuElement = document.getElementById("selectedTyreSku");
+    skuElement.textContent = selectedSku ? `SKU: ${selectedSku}` : "SKU unavailable";
+
     strip.hidden = false;
 
     const tyreField = document.getElementById("tyre");
     if (!tyreField.value.trim()) {
         tyreField.value = description;
+        currentTyreSku = selectedSku;
         updateEverything();
     }
 }
@@ -200,6 +301,7 @@ function useSelectedTyre() {
 
     const tyreField = document.getElementById("tyre");
     tyreField.value = description;
+    currentTyreSku = uppercaseCopyValue(selectedTyre?.sku);
     tyreField.focus();
     tyreField.setSelectionRange(tyreField.value.length, tyreField.value.length);
     updateEverything();
@@ -265,6 +367,7 @@ function newJob() {
     }
 
     localStorage.removeItem(JOBCARD_STORAGE_KEY);
+    currentTyreSku = "";
 
     for (const id of FIELD_IDS) {
         document.getElementById(id).value = "";
@@ -312,6 +415,24 @@ function initJobCard() {
         input.addEventListener("keydown", moveToNextField);
     }
 
+    document.querySelectorAll("[data-copy-key]").forEach((button) => {
+        button.addEventListener("click", () => {
+            copyQuickField(button.dataset.copyKey);
+        });
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        if (event.repeat) return;
+        if (isTypingTarget(event.target)) return;
+
+        const key = String(event.key || "").toLowerCase();
+        if (!getQuickCopyBindings()[key]) return;
+
+        event.preventDefault();
+        copyQuickField(key);
+    });
+
     document.getElementById("useSelectedTyreBtn")
         .addEventListener("click", useSelectedTyre);
 
@@ -324,6 +445,7 @@ function initJobCard() {
     document.getElementById("newJobBtn")
         .addEventListener("click", newJob);
 
+    refreshQuickCopyButtons();
     window.addEventListener("pagehide", saveDraft);
 }
 
