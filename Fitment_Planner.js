@@ -184,7 +184,7 @@ function buildJobCardText(job = collectJob()) {
         `CUSTOMER: ${valueOrBlank(job.customerName).toUpperCase()}`,
         `MOBILE: ${valueOrBlank(job.phone)}`,
         "",
-        `TYRE: ${valueOrBlank(job.tyre).toUpperCase()}`,
+        `TYRE: ${valueOrBlank(job.tyreSku).toUpperCase()}`,
         `MAKE/MODEL: ${valueOrBlank(job.vehicle).toUpperCase()}`,
         `REGO NO: ${valueOrBlank(job.rego).toUpperCase()}`,
         `ODOMETER: ${kilometres ? `${kilometres} KMS` : "________________ KMS"}`,
