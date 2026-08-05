@@ -3677,3 +3677,117 @@ body:not(.project-c-page) .table-container,
         white-space: normal;
     }
 }
+
+/* ===================================================== */
+/* MOBILE JOB CARD V4 — QUICK COPY                       */
+/* ===================================================== */
+
+.mobile-jobcard-page .selected-tyre-sku {
+    margin-top: 2px;
+    color: #94a3b8;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.68rem;
+    font-weight: 750;
+}
+
+.mobile-jobcard-page .jobcard-quick-copy {
+    padding: 9px;
+    border: 1px solid var(--job-line);
+    border-radius: 12px;
+    background: rgba(16, 23, 32, 0.94);
+}
+
+.mobile-jobcard-page .jobcard-quick-copy-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 7px;
+}
+
+.mobile-jobcard-page .jobcard-quick-copy-heading h2 {
+    margin: 0;
+    color: var(--job-text);
+    font-size: 0.94rem;
+}
+
+.mobile-jobcard-page .jobcard-quick-copy-heading > span {
+    color: #64748b;
+    font-size: 0.65rem;
+    font-weight: 750;
+}
+
+.mobile-jobcard-page .jobcard-copy-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.mobile-jobcard-page .jobcard-copy-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 38px;
+    margin: 0;
+    padding: 6px 7px;
+    border: 1px solid rgba(56, 189, 248, 0.22);
+    border-radius: 8px;
+    color: #e0f2fe;
+    background: rgba(3, 105, 161, 0.12);
+    box-shadow: none;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.mobile-jobcard-page .jobcard-copy-button:hover {
+    transform: none;
+    border-color: rgba(56, 189, 248, 0.5);
+    background: rgba(3, 105, 161, 0.22);
+}
+
+.mobile-jobcard-page .jobcard-copy-button kbd {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    border: 1px solid rgba(125, 211, 252, 0.35);
+    border-radius: 6px;
+    color: #bae6fd;
+    background: #07131c;
+    font-family: inherit;
+    font-size: 0.68rem;
+    font-weight: 900;
+}
+
+.mobile-jobcard-page .jobcard-copy-button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-jobcard-page .jobcard-copy-button.is-empty {
+    border-color: rgba(148, 163, 184, 0.13);
+    color: #64748b;
+    background: rgba(30, 41, 59, 0.26);
+}
+
+.mobile-jobcard-page .jobcard-copy-button.is-empty kbd {
+    border-color: rgba(148, 163, 184, 0.18);
+    color: #64748b;
+    background: #0b1017;
+}
+
+@media (max-width: 720px) {
+    .mobile-jobcard-page .jobcard-copy-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 390px) {
+    .mobile-jobcard-page .jobcard-copy-button {
+        justify-content: flex-start;
+    }
+}
