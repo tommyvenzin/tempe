@@ -4,39 +4,86 @@ console.log("F_alt_tab.js loaded successfully");
    Shared helpers
    ========================= */
 
-const LOCAL_PROXY = "http://localhost:8787/proxy?url=";
-const CF_PROXY = "https://pepektires.tommyvenzin.workers.dev/?url=";
-const JINA_PROXY = "https://r.jina.ai/http://";
-const JINA_PROXY_WWW = "https://r.jina.ai/http://www.";
+const EXTENSION_BRIDGE_TIMEOUT_MS = 20000;
+let extensionFetchRequestCounter = 0;
 
-function getProxyCandidates() {
-    return [LOCAL_PROXY, CF_PROXY, JINA_PROXY, JINA_PROXY_WWW];
-}
+function fetchViaExtension(targetUrl, options = {}) {
+    return new Promise((resolve, reject) => {
+        const requestId =
+            `general-fetch-${Date.now()}-${++extensionFetchRequestCounter}`;
 
-function buildProxyUrl(targetUrl, proxyBase) {
-    if (proxyBase.includes("?url=")) {
-        return proxyBase + encodeURIComponent(targetUrl);
-    }
+        let settled = false;
 
-    const sanitized = targetUrl
-        .replace(/^https?:\/\//i, "")
-        .replace(/^www\./i, "");
+        const cleanup = () => {
+            window.removeEventListener("message", handleBridgeResponse);
+            window.clearTimeout(timeoutId);
+        };
 
-    return proxyBase + sanitized;
-}
+        const finish = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            callback(value);
+        };
 
-function extractHtmlFromProxyPayload(text) {
-    const trimmed = String(text || "").trim();
-    if (!trimmed.startsWith("{")) return text;
+        const handleBridgeResponse = (event) => {
+            if (event.source !== window) return;
 
-    try {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed.contents === "string") return parsed.contents;
-        if (typeof parsed.body === "string") return parsed.body;
-        if (typeof parsed.html === "string") return parsed.html;
-    } catch {}
+            const data = event.data;
+            if (
+                !data ||
+                data.source !== "GENERAL_FETCH_BRIDGE" ||
+                data.type !== "GENERAL_FETCH_RESPONSE" ||
+                data.id !== requestId
+            ) {
+                return;
+            }
 
-    return text;
+            const result = data.result;
+
+            if (!result?.ok) {
+                finish(
+                    reject,
+                    new Error(result?.error || "Chrome Fetch Bridge request failed")
+                );
+                return;
+            }
+
+            if (
+                typeof result.status === "number" &&
+                (result.status < 200 || result.status >= 400)
+            ) {
+                finish(
+                    reject,
+                    new Error(
+                        `${result.status} ${result.statusText || "HTTP error"}`
+                    )
+                );
+                return;
+            }
+
+            finish(resolve, result);
+        };
+
+        const timeoutId = window.setTimeout(() => {
+            finish(
+                reject,
+                new Error(
+                    "Chrome Fetch Bridge did not respond. Check that the extension is enabled and 'Allow access to file URLs' is turned on."
+                )
+            );
+        }, EXTENSION_BRIDGE_TIMEOUT_MS);
+
+        window.addEventListener("message", handleBridgeResponse);
+
+        window.postMessage({
+            source: "LOCAL_HELPER_PAGE",
+            type: "GENERAL_FETCH_REQUEST",
+            id: requestId,
+            url: targetUrl,
+            options,
+        }, "*");
+    });
 }
 
 function decodeHtmlEntities(text) {
@@ -85,41 +132,32 @@ function looksLikeJinaResponse(text) {
 }
 
 async function fetchTextWithFallback(targetUrl) {
-    let lastError = null;
+    console.log("Fetching through Chrome extension:", targetUrl);
 
-for (const proxyBase of getProxyCandidates()) {
-    try {
-        console.log("Trying proxy:", proxyBase);
+    const result = await fetchViaExtension(targetUrl, {
+        method: "GET",
+        cache: "no-store",
+    });
 
-        const proxyUrl = buildProxyUrl(targetUrl, proxyBase);
-            const res = await fetch(proxyUrl);
-            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const text = String(result.text || "");
 
-            let text = await res.text();
-            text = extractHtmlFromProxyPayload(text);
-
-            if (!text || !text.trim()) {
-                throw new Error("empty-response");
-            }
-
-            const hasProducts = text.includes("product-container");
-
-            if (!hasProducts && looksLikeBlockedPage(text)) {
-                throw new Error("captcha-or-blocked-response");
-            }
-
-            return {
-                text,
-                proxyBase,
-                isJina: proxyBase.includes("r.jina.ai") || looksLikeJinaResponse(text),
-            };
-        } catch (err) {
-            lastError = err;
-            console.warn(`Proxy failed: ${proxyBase}`, err);
-        }
+    if (!text.trim()) {
+        throw new Error("empty-response");
     }
 
-    throw lastError || new Error("All proxy endpoints failed.");
+    const hasProducts = text.includes("product-container");
+
+    if (!hasProducts && looksLikeBlockedPage(text)) {
+        throw new Error("captcha-or-blocked-response");
+    }
+
+    return {
+        text,
+        proxyBase: "chrome-extension",
+        isJina: false,
+        status: result.status,
+        finalUrl: result.finalUrl || targetUrl,
+    };
 }
 
 async function fetchHtmlWithFallback(targetUrl) {
@@ -649,7 +687,7 @@ async function checkPrices() {
             return renderManualFallbackRow(
                 query,
                 result.manualUrl,
-                "Could not load results automatically after Local/Worker/Jina attempts"
+                "Could not load results through Chrome Fetch Bridge"
             );
         }
 
