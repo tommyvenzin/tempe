@@ -18,10 +18,10 @@ const INITIAL_DISPLAY_NAMES = Object.freeze({
 });
 const WEEKLY_TARGET = 90000;
 
-const LOCAL_PROXY = "http://localhost:8787/proxy?url=";
-const CF_PROXY = "https://pepektires.tommyvenzin.workers.dev/?url=";
+const EXTENSION_BRIDGE_TIMEOUT_MS = 20000;
 const PRICE_CACHE_TTL_MS = 30 * 60 * 1000;
 const rankedPriceCache = new Map();
+let extensionFetchRequestCounter = 0;
 
 /* =========================
    UI HELPERS
@@ -147,47 +147,98 @@ function toDateKey(rawDateText) {
    NETWORK HELPERS
    ========================= */
 
-function getProxyCandidates() {
-    return [LOCAL_PROXY, CF_PROXY];
-}
+function fetchViaExtension(targetUrl, options = {}) {
+    return new Promise((resolve, reject) => {
+        const requestId =
+            `general-fetch-${Date.now()}-${++extensionFetchRequestCounter}`;
 
-function proxify(url, proxyBase) {
-    return proxyBase + encodeURIComponent(url);
-}
+        let settled = false;
 
-function extractHtmlFromProxyPayload(text) {
-    const trimmed = text.trim();
-    if (!trimmed.startsWith("{")) return text;
+        const cleanup = () => {
+            window.removeEventListener("message", handleBridgeResponse);
+            window.clearTimeout(timeoutId);
+        };
 
-    try {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed.contents === "string") return parsed.contents;
-        if (typeof parsed.body === "string") return parsed.body;
-    } catch {
-        // The response is raw HTML rather than JSON.
-    }
+        const finish = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            callback(value);
+        };
 
-    return text;
+        const handleBridgeResponse = (event) => {
+            if (event.source !== window) return;
+
+            const data = event.data;
+            if (
+                !data ||
+                data.source !== "GENERAL_FETCH_BRIDGE" ||
+                data.type !== "GENERAL_FETCH_RESPONSE" ||
+                data.id !== requestId
+            ) {
+                return;
+            }
+
+            const result = data.result;
+
+            if (!result?.ok) {
+                finish(
+                    reject,
+                    new Error(result?.error || "Tom does it all request failed")
+                );
+                return;
+            }
+
+            if (
+                typeof result.status === "number" &&
+                (result.status < 200 || result.status >= 400)
+            ) {
+                finish(
+                    reject,
+                    new Error(
+                        `${result.status} ${result.statusText || "HTTP error"}`
+                    )
+                );
+                return;
+            }
+
+            finish(resolve, result);
+        };
+
+        const timeoutId = window.setTimeout(() => {
+            finish(
+                reject,
+                new Error(
+                    "Tom does it all did not respond. Check that the extension is enabled for this page."
+                )
+            );
+        }, EXTENSION_BRIDGE_TIMEOUT_MS);
+
+        window.addEventListener("message", handleBridgeResponse);
+
+        window.postMessage({
+            source: "LOCAL_HELPER_PAGE",
+            type: "GENERAL_FETCH_REQUEST",
+            id: requestId,
+            url: targetUrl,
+            options,
+        }, "*");
+    });
 }
 
 async function fetchProxyText(targetUrl) {
-    let lastError = null;
+    const result = await fetchViaExtension(targetUrl, {
+        method: "GET",
+        cache: "no-store",
+    });
 
-    for (const proxyBase of getProxyCandidates()) {
-        try {
-            const response = await fetch(proxify(targetUrl, proxyBase));
-            if (!response.ok) {
-                throw new Error(`Proxy ${proxyBase} returned ${response.status}`);
-            }
+    const text = String(result.text || "");
 
-            return extractHtmlFromProxyPayload(await response.text());
-        } catch (error) {
-            lastError = error;
-            console.warn(`Proxy request failed via ${proxyBase}`, error);
-        }
+    if (!text.trim()) {
+        throw new Error("Empty response");
     }
 
-    throw lastError || new Error("All proxy attempts failed.");
+    return text;
 }
 
 async function mapWithConcurrency(items, concurrency, worker) {
@@ -444,7 +495,7 @@ async function loadWeeklyRanking() {
         itemTotalElement.textContent = String(itemTotal);
     } catch (error) {
         console.error("Error loading Project C ranking:", error);
-        showEmptyState("The ranking could not be loaded. Check the proxy and refresh the page.");
+        showEmptyState("The ranking could not be loaded. Check Tom does it all and refresh the page.");
     } finally {
         setLoadingState(false);
     }
