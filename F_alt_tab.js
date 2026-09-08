@@ -539,6 +539,169 @@ function copyCurrentTempeSearchLinksImmediate() {
     return copyTempeSearchLinksImmediate(getCurrentSizeQueries());
 }
 
+function extractProductAnalytics(html) {
+    const raw = String(html || "");
+
+    // Look specifically inside dataLayer.push({...}) objects describing a
+    // product page. Tempe exposes both the real product identifier and, for
+    // some products such as Bridgestone, the useful hidden price here.
+    const pushes = raw.matchAll(/dataLayer\.push\(\s*\{([\s\S]*?)\}\s*\);/gi);
+
+    for (const match of pushes) {
+        const block = match[1] || "";
+
+        if (!/['"]ecomm_pagetype['"]\s*:\s*['"]product['"]/i.test(block)) {
+            continue;
+        }
+
+        const valueMatch = block.match(
+            /['"]ecomm_totalvalue['"]\s*:\s*['"]([\d,.]+)['"]/i
+        );
+
+        const productIdMatch = block.match(
+            /['"]ecomm_prodid['"]\s*:\s*\[\s*['"]([^'"]+)['"]\s*\]/i
+        );
+
+        const hiddenPrice = valueMatch
+            ? Number.parseFloat(valueMatch[1].replace(/,/g, ""))
+            : null;
+
+        const sku = productIdMatch
+            ? String(productIdMatch[1] || "").trim().toUpperCase()
+            : "";
+
+        return {
+            hiddenPrice: Number.isFinite(hiddenPrice) ? hiddenPrice : null,
+            sku,
+        };
+    }
+
+    return {
+        hiddenPrice: null,
+        sku: "",
+    };
+}
+
+async function mapWithSmallConcurrency(items, concurrency, worker) {
+    const safeConcurrency = Math.max(
+        1,
+        Math.min(concurrency, items.length || 1)
+    );
+
+    const results = new Array(items.length);
+    let index = 0;
+
+    async function runWorker() {
+        while (index < items.length) {
+            const current = index++;
+            results[current] = await worker(items[current], current);
+        }
+    }
+
+    await Promise.all(
+        Array.from({ length: safeConcurrency }, () => runWorker())
+    );
+
+    return results;
+}
+
+async function enrichProductDetails(products) {
+    const jobs = products
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => {
+            const make = String(item?.make || item?.brand || "")
+                .trim()
+                .toLowerCase();
+
+            const needsBridgestonePrice = make === "bridgestone";
+            const needsSku =
+                !item?.sku ||
+                item.sku === "No SKU" ||
+                item.sku === "No SKU available" ||
+                item.sku === "JINA-N/A";
+
+            return (
+                item?.link &&
+                item.link !== "#" &&
+                (needsBridgestonePrice || needsSku)
+            );
+        });
+
+    if (!jobs.length) {
+        return products;
+    }
+
+    await mapWithSmallConcurrency(
+        jobs,
+        4,
+        async ({ item, index }) => {
+            try {
+                const productHtml = await fetchHtmlWithFallback(item.link);
+                const analytics = extractProductAnalytics(productHtml);
+
+                const make = String(item?.make || item?.brand || "")
+                    .trim()
+                    .toLowerCase();
+
+                const updated = { ...item };
+
+                // Recover SKU from ecomm_prodid whenever the listing page did
+                // not expose one. If analytics does not contain it, keep the
+                // URL-derived SKU as the next fallback.
+                if (
+                    !updated.sku ||
+                    updated.sku === "No SKU" ||
+                    updated.sku === "No SKU available" ||
+                    updated.sku === "JINA-N/A"
+                ) {
+                    const urlSku = extractSkuFromProductUrl(updated.link);
+                    updated.sku =
+                        analytics.sku ||
+                        urlSku ||
+                        "SKU unavailable";
+                }
+
+                // For Bridgestone, always preserve the public/listing price and
+                // override the working price with ecomm_totalvalue when found.
+                if (
+                    make === "bridgestone" &&
+                    Number.isFinite(analytics.hiddenPrice)
+                ) {
+                    updated.originalPrice = Number(item.price || 0);
+                    updated.price = analytics.hiddenPrice;
+                    updated.bridgestoneHiddenPrice = true;
+                }
+
+                products[index] = updated;
+            } catch (error) {
+                console.warn(
+                    `Could not enrich product details for ${item.sku || item.link}:`,
+                    error
+                );
+
+                // Even if the product-page request fails, use a URL-derived SKU
+                // rather than leaving "No SKU" on screen when possible.
+                if (
+                    !item.sku ||
+                    item.sku === "No SKU" ||
+                    item.sku === "No SKU available" ||
+                    item.sku === "JINA-N/A"
+                ) {
+                    const urlSku = extractSkuFromProductUrl(item.link);
+                    if (urlSku) {
+                        products[index] = {
+                            ...item,
+                            sku: urlSku,
+                        };
+                    }
+                }
+            }
+        }
+    );
+
+    return products;
+}
+
 async function fetchTyreProductsBySize(size) {
     if (!size || ![5, 7].includes(size.length)) {
         return {
@@ -556,7 +719,14 @@ async function fetchTyreProductsBySize(size) {
             ? parseJinaMarkdownProducts(result.text)
             : parseTempetyresHtmlProducts(result.text);
 
-        const finalProducts = products.length ? products : parseJinaMarkdownProducts(result.text);
+        const finalProducts = products.length
+            ? products
+            : parseJinaMarkdownProducts(result.text);
+
+        // Bridgestone public/listing prices can be hidden (0) or intentionally
+        // different from the product analytics value. For Bridgestone only,
+        // load each product page and override with ecomm_totalvalue.
+        await enrichProductDetails(finalProducts);
 
         return {
             products: finalProducts,
@@ -586,8 +756,9 @@ function renderFAltProductRow(item) {
     const make = item.make || item.brand || "No make";
     const model = item.model || item.pattern || "No model";
     const price = Number(item.price || 0);
+    const originalPrice = Number(item.originalPrice ?? price);
     const stock = item.stock || "No stock";
-    const sku = item.sku || "No SKU";
+    const sku = item.sku || "SKU unavailable";
     const link = item.link || "#";
 
     const safeStockAttr = escapeHtml(stock);
@@ -613,7 +784,12 @@ function renderFAltProductRow(item) {
             <span style="opacity:0.8; font-size:0.9em;"> (${escapeHtml(stock)})</span>
         </td>
 
-        <td>$${price.toFixed(2)}</td>
+        <td>
+            ${item.bridgestoneHiddenPrice
+                ? `<div style="text-decoration:line-through; opacity:0.55;">$${originalPrice.toFixed(2)}</div>
+                   <div style="font-weight:700;">$${price.toFixed(2)}</div>`
+                : `$${price.toFixed(2)}`}
+        </td>
 
         <td onclick="copySKU('${safeSku}')" style="cursor:pointer; color:#60a5fa;">
             ${skuDisplay}
