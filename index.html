@@ -44,12 +44,12 @@
                 placeholder="Enter tyre size or SKU..."
                 onkeydown="handleSkuInputEnter(event)">
 
-            <input type="text" id="searchBar" placeholder="Filter loaded results...">
+            <input type="text" id="searchBar" placeholder="Filter loaded results..."
+                oninput="filterTable()">
 
             <div class="button-group">
                 <button class="primary-action" onclick="checkPrices()">Search</button>
                 <button onclick="removeOutOfStock()">Available Only</button>
-                <button onclick="filterTable()">Filter Search</button>
             </div>
         </section>
 
