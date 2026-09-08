@@ -193,8 +193,24 @@ function extractSkuFromProductUrl(url) {
 
     try {
         const clean = decodeURIComponent(url.split("?")[1] || url);
-        const last = clean.split("-").pop()?.replace(/[^a-z0-9]/gi, "").trim();
-        if (last && last.length >= 4 && last.length <= 20) return last.toUpperCase();
+        const last = clean
+            .split("-")
+            .pop()
+            ?.replace(/[^a-z0-9]/gi, "")
+            .trim();
+
+        // Tempe commonly leaves the SKU at the end of the product URL even
+        // when the hidden tyresku input disappears for On Order / OOS items.
+        // Requiring at least one digit avoids treating words such as
+        // "runflat" as an SKU.
+        if (
+            last &&
+            last.length >= 4 &&
+            last.length <= 20 &&
+            /\d/.test(last)
+        ) {
+            return last.toUpperCase();
+        }
     } catch {}
 
     return "";
@@ -307,9 +323,12 @@ function parseTempetyresHtmlProducts(html) {
         const rawPrice = item.querySelector(".sale-price span")?.textContent.trim() || "0";
         const price = parseFloat(rawPrice.replace(/[^\d.]/g, "")) || 0;
         const stock = item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "On Order";
-        const sku = item.querySelector("input[name='tyresku']")?.value || "No SKU";
         const linkEl = item.querySelector(".image-container a");
         const link = linkEl ? normalizeAbsoluteUrl(linkEl.getAttribute("href")) : "#";
+
+        const hiddenSku = item.querySelector("input[name='tyresku']")?.value?.trim() || "";
+        const urlSku = extractSkuFromProductUrl(link);
+        const sku = hiddenSku || urlSku || "No SKU";
 
         return {
             make,
