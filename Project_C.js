@@ -21,6 +21,7 @@ const WEEKLY_TARGET = 90000;
 const EXTENSION_BRIDGE_TIMEOUT_MS = 20000;
 const PRICE_CACHE_TTL_MS = 30 * 60 * 1000;
 const rankedPriceCache = new Map();
+const rankedPricePromiseCache = new Map();
 let extensionFetchRequestCounter = 0;
 
 /* =========================
@@ -269,54 +270,69 @@ async function getPriceForSku(sku, parser) {
         return cached.price;
     }
 
-    const searchUrl = `https://www.tempetyres.com.au/search?q=${encodeURIComponent(sku)}`;
-    let price = 0;
-
-    try {
-        const html = await fetchProxyText(searchUrl);
-        const documentFromSearch = parser.parseFromString(html, "text/html");
-
-        let priceText = documentFromSearch.querySelector(".sale-price span")?.textContent.trim();
-
-        if (!priceText) {
-            const wholesalePriceText = documentFromSearch.querySelector(".wh-price")?.textContent;
-            const wholesaleMatch = wholesalePriceText?.match(/\$([\d.]+)/);
-            if (wholesaleMatch) priceText = wholesaleMatch[1];
-        }
-
-        if (
-            priceText &&
-            !priceText.toLowerCase().includes("call") &&
-            Number.isFinite(Number.parseFloat(priceText))
-        ) {
-            price = Number.parseFloat(priceText);
-        } else {
-            const productLink = documentFromSearch.querySelector(".product-container .image-container a");
-
-            if (productLink) {
-                const productUrl = `https://www.tempetyres.com.au${productLink.getAttribute("href")}`;
-                const productHtml = await fetchProxyText(productUrl);
-                const productDocument = parser.parseFromString(productHtml, "text/html");
-
-                const wheelPriceText = productDocument.querySelector("#price2")?.textContent.trim();
-                const wheelPrice = Number.parseFloat(wheelPriceText?.replace("$", ""));
-
-                if (Number.isFinite(wheelPrice)) {
-                    price = wheelPrice;
-                }
-
-                if (price === 0) {
-                    const tyrePriceMatch = productHtml.match(/'ecomm_totalvalue':\s*'(\d+)'/);
-                    if (tyrePriceMatch) price = Number.parseFloat(tyrePriceMatch[1]);
-                }
-            }
-        }
-    } catch (error) {
-        console.error(`Error fetching price for SKU ${sku}:`, error);
+    const pending = rankedPricePromiseCache.get(sku);
+    if (pending) {
+        return pending;
     }
 
-    rankedPriceCache.set(sku, { price, cachedAt: now });
-    return price;
+    const pricePromise = (async () => {
+        const searchUrl = `https://www.tempetyres.com.au/search?q=${encodeURIComponent(sku)}`;
+        let price = 0;
+
+        try {
+            const html = await fetchProxyText(searchUrl);
+            const documentFromSearch = parser.parseFromString(html, "text/html");
+
+            let priceText = documentFromSearch.querySelector(".sale-price span")?.textContent.trim();
+
+            if (!priceText) {
+                const wholesalePriceText = documentFromSearch.querySelector(".wh-price")?.textContent;
+                const wholesaleMatch = wholesalePriceText?.match(/\$([\d.]+)/);
+                if (wholesaleMatch) priceText = wholesaleMatch[1];
+            }
+
+            if (
+                priceText &&
+                !priceText.toLowerCase().includes("call") &&
+                Number.isFinite(Number.parseFloat(priceText))
+            ) {
+                price = Number.parseFloat(priceText);
+            } else {
+                const productLink = documentFromSearch.querySelector(".product-container .image-container a");
+
+                if (productLink) {
+                    const productUrl = `https://www.tempetyres.com.au${productLink.getAttribute("href")}`;
+                    const productHtml = await fetchProxyText(productUrl);
+                    const productDocument = parser.parseFromString(productHtml, "text/html");
+
+                    const wheelPriceText = productDocument.querySelector("#price2")?.textContent.trim();
+                    const wheelPrice = Number.parseFloat(wheelPriceText?.replace("$", ""));
+
+                    if (Number.isFinite(wheelPrice)) {
+                        price = wheelPrice;
+                    }
+
+                    if (price === 0) {
+                        const tyrePriceMatch = productHtml.match(/'ecomm_totalvalue':\s*'(\d+)'/);
+                        if (tyrePriceMatch) price = Number.parseFloat(tyrePriceMatch[1]);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`Error fetching price for SKU ${sku}:`, error);
+        }
+
+        rankedPriceCache.set(sku, { price, cachedAt: Date.now() });
+        return price;
+    })();
+
+    rankedPricePromiseCache.set(sku, pricePromise);
+
+    try {
+        return await pricePromise;
+    } finally {
+        rankedPricePromiseCache.delete(sku);
+    }
 }
 
 /* =========================
@@ -334,12 +350,45 @@ function getGradeInfo(total) {
    AUTOMATIC WEEKLY RANKING
    ========================= */
 
+function getSalesWeekDates(startDate, endDate) {
+    const dates = [];
+    const cursor = new Date(startDate);
+
+    while (cursor <= endDate) {
+        dates.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return dates;
+}
+
+function createSalesBucket() {
+    return Object.fromEntries(
+        PROJECT_C_INITIALS.map((initials) => [
+            initials,
+            {
+                retail: new Map(),
+                wholesale: new Map(),
+            },
+        ])
+    );
+}
+
+function addSkuQuantity(bucket, initials, type, sku, quantity) {
+    if (!bucket[initials] || !sku || !Number.isFinite(quantity)) return;
+
+    const skuMap = bucket[initials][type];
+    skuMap.set(sku, (skuMap.get(sku) || 0) + quantity);
+}
+
 async function loadWeeklyRanking() {
     const resultsBody = document.querySelector("#resultsTable tbody");
     const grandTotalElement = document.getElementById("grandTotal");
     const itemTotalElement = document.getElementById("itemTotal");
 
     if (!resultsBody || !grandTotalElement || !itemTotalElement) return;
+
+    const loadStartedAt = performance.now();
 
     const { startDate, endDate } = getCurrentSalesPeriod();
     const startDateKey = formatDateKey(startDate);
@@ -349,7 +398,7 @@ async function loadWeeklyRanking() {
     resultsBody.innerHTML = "";
     grandTotalElement.textContent = "$0.00";
     itemTotalElement.textContent = "0";
-    setLoadingState(true, "Loading all weekly retail and wholesale totals…");
+    setLoadingState(true, "Loading weekly retail and wholesale data…");
 
     const urlMap = {
         retail: "https://my.tempetyres.com.au/retailpicking/history/",
@@ -357,85 +406,190 @@ async function loadWeeklyRanking() {
     };
 
     const parser = new DOMParser();
-    const totals = {};
-    const concurrency = 4;
+    const salesBucket = createSalesBucket();
+    const intranetConcurrency = 4;
+    const priceConcurrency = 4;
+    const validInitials = new Set(PROJECT_C_INITIALS);
 
-    const processType = async (type) => {
-        const baseUrl = urlMap[type];
-        const dateSelector = type === "retail" ? "strong" : "b a";
+    /*
+     * RETAIL:
+     * Fetch one exact-date page for each day from Friday through today.
+     * The intranet does the date filtering before returning the HTML.
+     */
+    const loadRetailByExactDate = async () => {
+        const salesDates = getSalesWeekDates(startDate, endDate);
 
-        await mapWithConcurrency(PROJECT_C_INITIALS, concurrency, async (initials) => {
-            try {
-                const intranetUrl =
-                    `${baseUrl}?day=0&month=0&year=0&q=${encodeURIComponent(initials)}&searchin=EnteredBy`;
+        await mapWithConcurrency(
+            salesDates,
+            intranetConcurrency,
+            async (date) => {
+                const day = date.getDate();
+                const month = date.getMonth() + 1;
+                const year = date.getFullYear();
 
-                const html = await fetchProxyText(intranetUrl);
-                const intranetDocument = parser.parseFromString(html, "text/html");
-                const rows = intranetDocument.querySelectorAll(".col-md-12 table tbody tr");
-                const lineItems = [];
+                const retailUrl =
+                    `${urlMap.retail}?day=${day}&month=${month}&year=${year}&q=&searchin=ALL`;
 
-                for (const row of rows) {
-                    const columns = row.querySelectorAll("td");
-                    if (columns.length < 7) continue;
+                try {
+                    const html = await fetchProxyText(retailUrl);
+                    const doc = parser.parseFromString(html, "text/html");
+                    const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
 
-                    const rawDateText = columns[1].querySelector(dateSelector)?.textContent.trim();
-                    const rowDateKey = toDateKey(rawDateText);
+                    for (const row of rows) {
+                        const columns = row.querySelectorAll("td");
+                        if (columns.length < 7) continue;
 
-                    if (!rowDateKey || rowDateKey < startDateKey || rowDateKey > endDateKey) continue;
+                        const rowInitials = columns[3].querySelector("a")?.textContent.trim();
+                        const sku = columns[1].querySelector("small")?.textContent.trim();
+                        const quantity = Number.parseInt(columns[5].textContent.trim(), 10);
 
-                    const rowInitials = columns[3].querySelector("a")?.textContent.trim();
-                    const sku = columns[1].querySelector("small")?.textContent.trim();
-                    const quantity = Number.parseInt(columns[5].textContent.trim(), 10);
+                        if (
+                            !validInitials.has(rowInitials) ||
+                            !sku ||
+                            !Number.isFinite(quantity)
+                        ) {
+                            continue;
+                        }
 
-                    if (
-                        rowInitials !== initials ||
-                        !sku ||
-                        !Number.isFinite(quantity)
-                    ) {
-                        continue;
+                        addSkuQuantity(
+                            salesBucket,
+                            rowInitials,
+                            "retail",
+                            sku,
+                            quantity
+                        );
                     }
-
-                    lineItems.push({ sku, quantity });
+                } catch (error) {
+                    console.error(
+                        `Error loading retail for ${year}-${month}-${day}:`,
+                        error
+                    );
                 }
-
-                if (lineItems.length === 0) return;
-
-                const pricedLines = await mapWithConcurrency(
-                    lineItems,
-                    concurrency,
-                    async ({ sku, quantity }) => {
-                        const price = await getPriceForSku(sku, parser);
-                        return { quantity, lineTotal: price * quantity };
-                    }
-                );
-
-                const totalForInitial = pricedLines.reduce((sum, row) => sum + row.lineTotal, 0);
-                const quantityForInitial = pricedLines.reduce((sum, row) => sum + row.quantity, 0);
-
-                if (!totals[initials]) {
-                    totals[initials] = { retailTotal: 0, wholesaleTotal: 0, qty: 0 };
-                }
-
-                if (type === "retail") {
-                    totals[initials].retailTotal += totalForInitial;
-                } else {
-                    totals[initials].wholesaleTotal += totalForInitial;
-                }
-
-                totals[initials].qty += quantityForInitial;
-            } catch (error) {
-                console.error(`Error processing ${type} for ${initials}:`, error);
             }
-        });
+        );
+    };
+
+    /*
+     * WHOLESALE:
+     * Keep the safer existing per-person search because wholesale date pages
+     * can contain too many records and may be truncated by the intranet.
+     */
+    const loadWholesaleByPerson = async () => {
+        const baseUrl = urlMap.wholesale;
+
+        await mapWithConcurrency(
+            PROJECT_C_INITIALS,
+            intranetConcurrency,
+            async (initials) => {
+                try {
+                    const intranetUrl =
+                        `${baseUrl}?day=0&month=0&year=0&q=${encodeURIComponent(initials)}&searchin=EnteredBy`;
+
+                    const html = await fetchProxyText(intranetUrl);
+                    const doc = parser.parseFromString(html, "text/html");
+                    const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
+
+                    for (const row of rows) {
+                        const columns = row.querySelectorAll("td");
+                        if (columns.length < 7) continue;
+
+                        const rawDateText = columns[1].querySelector("b a")?.textContent.trim();
+                        const rowDateKey = toDateKey(rawDateText);
+
+                        if (
+                            !rowDateKey ||
+                            rowDateKey < startDateKey ||
+                            rowDateKey > endDateKey
+                        ) {
+                            continue;
+                        }
+
+                        const rowInitials = columns[3].querySelector("a")?.textContent.trim();
+                        const sku = columns[1].querySelector("small")?.textContent.trim();
+                        const quantity = Number.parseInt(columns[5].textContent.trim(), 10);
+
+                        if (
+                            rowInitials !== initials ||
+                            !sku ||
+                            !Number.isFinite(quantity)
+                        ) {
+                            continue;
+                        }
+
+                        addSkuQuantity(
+                            salesBucket,
+                            initials,
+                            "wholesale",
+                            sku,
+                            quantity
+                        );
+                    }
+                } catch (error) {
+                    console.error(`Error processing wholesale for ${initials}:`, error);
+                }
+            }
+        );
     };
 
     try {
-        await processType("retail");
-        await processType("wholesale");
+        /*
+         * Retail and wholesale now load at the same time instead of one after
+         * the other.
+         */
+        await Promise.all([
+            loadRetailByExactDate(),
+            loadWholesaleByPerson(),
+        ]);
 
-        const rowsData = Object.entries(totals)
-            .map(([initials, data]) => {
-                const combinedTotal = data.retailTotal + data.wholesaleTotal;
+        const intranetFinishedAt = performance.now();
+
+        /*
+         * Build one unique SKU list across every salesperson and both sales
+         * types. A SKU is priced only once.
+         */
+        const uniqueSkus = new Set();
+
+        for (const data of Object.values(salesBucket)) {
+            for (const sku of data.retail.keys()) uniqueSkus.add(sku);
+            for (const sku of data.wholesale.keys()) uniqueSkus.add(sku);
+        }
+
+        setLoadingState(
+            true,
+            `Pricing ${uniqueSkus.size} unique SKU${uniqueSkus.size === 1 ? "" : "s"}…`
+        );
+
+        const skuList = Array.from(uniqueSkus);
+        const priceEntries = await mapWithConcurrency(
+            skuList,
+            priceConcurrency,
+            async (sku) => [sku, await getPriceForSku(sku, parser)]
+        );
+        const priceBySku = new Map(priceEntries);
+
+        const pricingFinishedAt = performance.now();
+
+        const rowsData = PROJECT_C_INITIALS
+            .map((initials) => {
+                const data = salesBucket[initials];
+
+                let retailTotal = 0;
+                let wholesaleTotal = 0;
+                let qty = 0;
+
+                for (const [sku, quantity] of data.retail.entries()) {
+                    retailTotal += (priceBySku.get(sku) || 0) * quantity;
+                    qty += quantity;
+                }
+
+                for (const [sku, quantity] of data.wholesale.entries()) {
+                    wholesaleTotal += (priceBySku.get(sku) || 0) * quantity;
+                    qty += quantity;
+                }
+
+                if (qty === 0) return null;
+
+                const combinedTotal = retailTotal + wholesaleTotal;
                 const grade = getGradeInfo(combinedTotal);
                 const percent = Math.max(
                     0,
@@ -444,15 +598,16 @@ async function loadWeeklyRanking() {
 
                 return {
                     initials,
-                    retailTotal: data.retailTotal,
-                    wholesaleTotal: data.wholesaleTotal,
+                    retailTotal,
+                    wholesaleTotal,
                     combinedTotal,
-                    qty: data.qty,
+                    qty,
                     gradeLabel: grade.label,
                     gradeClass: grade.className,
                     percent
                 };
             })
+            .filter(Boolean)
             .sort((a, b) => b.combinedTotal - a.combinedTotal);
 
         if (rowsData.length === 0) {
@@ -493,6 +648,13 @@ async function loadWeeklyRanking() {
 
         grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
         itemTotalElement.textContent = String(itemTotal);
+
+        console.log(
+            `Project C timing — intranet: ${Math.round(intranetFinishedAt - loadStartedAt)}ms, ` +
+            `pricing: ${Math.round(pricingFinishedAt - intranetFinishedAt)}ms, ` +
+            `total: ${Math.round(performance.now() - loadStartedAt)}ms, ` +
+            `unique SKUs: ${uniqueSkus.size}`
+        );
     } catch (error) {
         console.error("Error loading Project C ranking:", error);
         showEmptyState("The ranking could not be loaded. Check Tom does it all and refresh the page.");
