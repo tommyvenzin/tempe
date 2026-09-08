@@ -400,6 +400,64 @@ function parseJinaMarkdownProducts(text) {
     return products;
 }
 
+function buildTempeTyreSearchUrl(size) {
+    const cleanSize = String(size || "").trim();
+
+    if (!cleanSize || ![5, 7].includes(cleanSize.length)) {
+        return "";
+    }
+
+    const width = cleanSize.slice(0, 3);
+    const diameter = cleanSize.slice(-2);
+    const profile = cleanSize.length === 7
+        ? cleanSize.slice(3, 5)
+        : "Not%20Specified";
+
+    return `https://www.tempetyres.com.au/tyres?TyreWidth=${width}&TyreProfile=${profile}&TyreDiameter=${diameter}`;
+}
+
+async function copyTempeSearchLinks(queries) {
+    const urls = queries
+        .map(buildTempeTyreSearchUrl)
+        .filter(Boolean);
+
+    if (!urls.length) return;
+
+    const uniqueUrls = [...new Set(urls)];
+
+    try {
+        await navigator.clipboard.writeText(uniqueUrls.join("\n"));
+
+        const toast = document.createElement("div");
+        toast.textContent = uniqueUrls.length === 1
+            ? "Tempe link copied"
+            : `${uniqueUrls.length} Tempe links copied`;
+        toast.style.position = "fixed";
+        toast.style.bottom = "20px";
+        toast.style.right = "20px";
+        toast.style.padding = "8px 12px";
+        toast.style.background = "#16a34a";
+        toast.style.color = "white";
+        toast.style.borderRadius = "6px";
+        toast.style.fontSize = "14px";
+        toast.style.opacity = "0";
+        toast.style.transition = "opacity 0.3s ease";
+        toast.style.zIndex = "9999";
+        document.body.appendChild(toast);
+
+        requestAnimationFrame(() => {
+            toast.style.opacity = "1";
+        });
+
+        setTimeout(() => {
+            toast.style.opacity = "0";
+            setTimeout(() => toast.remove(), 300);
+        }, 800);
+    } catch (error) {
+        console.error("Could not copy Tempe search link", error);
+    }
+}
+
 async function fetchTyreProductsBySize(size) {
     if (!size || ![5, 7].includes(size.length)) {
         return {
@@ -409,10 +467,7 @@ async function fetchTyreProductsBySize(size) {
         };
     }
 
-    const w = size.slice(0, 3);
-    const d = size.slice(-2);
-    const p = size.length === 7 ? size.slice(3, 5) : "Not%20Specified";
-    const targetUrl = `https://www.tempetyres.com.au/tyres?TyreWidth=${w}&TyreProfile=${p}&TyreDiameter=${d}`;
+    const targetUrl = buildTempeTyreSearchUrl(size);
 
     try {
         const result = await fetchTextWithFallback(targetUrl);
@@ -671,6 +726,16 @@ function removeOutOfStockTinder() {
 async function checkPrices() {
     const skuInput = document.getElementById("skuInput").value.trim().split("\n");
     const resultsTable = document.querySelector("#resultsTable tbody");
+
+    // Copy the Tempe size-results URL immediately from the user's search action.
+    // This happens before the network requests so the link is ready to paste
+    // into an email while the results are loading.
+    copyTempeSearchLinks(
+        skuInput
+            .map((line) => line.trim())
+            .filter((query) => [5, 7].includes(query.length))
+    );
+
     resultsTable.innerHTML = `<tr><td colspan="5">Searching...</td></tr>`;
 
     const rows = await Promise.all(skuInput.map(async (line) => {
