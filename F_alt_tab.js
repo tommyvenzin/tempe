@@ -248,7 +248,12 @@ function selectTyreForFitment(tyre) {
 function handleSkuInputEnter(e) {
     if (e.key === "Enter") {
         e.preventDefault();
-        checkPrices();
+
+        // Clipboard copy is triggered directly from the physical Enter keypress.
+        // This is more reliable than waiting for the async search flow.
+        copyCurrentTempeSearchLinksImmediate();
+
+        checkPrices({ copyLink: false });
     }
 }
 
@@ -416,46 +421,103 @@ function buildTempeTyreSearchUrl(size) {
     return `https://www.tempetyres.com.au/tyres?TyreWidth=${width}&TyreProfile=${profile}&TyreDiameter=${diameter}`;
 }
 
-async function copyTempeSearchLinks(queries) {
-    const urls = queries
-        .map(buildTempeTyreSearchUrl)
-        .filter(Boolean);
+function getTempeSearchUrlsFromQueries(queries) {
+    return [...new Set(
+        queries
+            .map(buildTempeTyreSearchUrl)
+            .filter(Boolean)
+    )];
+}
 
-    if (!urls.length) return;
+function showTempeLinkCopiedToast(count) {
+    const toast = document.createElement("div");
+    toast.textContent = count === 1
+        ? "Tempe link copied"
+        : `${count} Tempe links copied`;
+    toast.style.position = "fixed";
+    toast.style.bottom = "20px";
+    toast.style.right = "20px";
+    toast.style.padding = "8px 12px";
+    toast.style.background = "#16a34a";
+    toast.style.color = "white";
+    toast.style.borderRadius = "6px";
+    toast.style.fontSize = "14px";
+    toast.style.opacity = "0";
+    toast.style.transition = "opacity 0.3s ease";
+    toast.style.zIndex = "9999";
+    document.body.appendChild(toast);
 
-    const uniqueUrls = [...new Set(urls)];
+    requestAnimationFrame(() => {
+        toast.style.opacity = "1";
+    });
+
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 300);
+    }, 800);
+}
+
+function legacyCopyText(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    textarea.style.opacity = "0";
+
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    let copied = false;
 
     try {
-        await navigator.clipboard.writeText(uniqueUrls.join("\n"));
-
-        const toast = document.createElement("div");
-        toast.textContent = uniqueUrls.length === 1
-            ? "Tempe link copied"
-            : `${uniqueUrls.length} Tempe links copied`;
-        toast.style.position = "fixed";
-        toast.style.bottom = "20px";
-        toast.style.right = "20px";
-        toast.style.padding = "8px 12px";
-        toast.style.background = "#16a34a";
-        toast.style.color = "white";
-        toast.style.borderRadius = "6px";
-        toast.style.fontSize = "14px";
-        toast.style.opacity = "0";
-        toast.style.transition = "opacity 0.3s ease";
-        toast.style.zIndex = "9999";
-        document.body.appendChild(toast);
-
-        requestAnimationFrame(() => {
-            toast.style.opacity = "1";
-        });
-
-        setTimeout(() => {
-            toast.style.opacity = "0";
-            setTimeout(() => toast.remove(), 300);
-        }, 800);
+        copied = document.execCommand("copy");
     } catch (error) {
-        console.error("Could not copy Tempe search link", error);
+        console.error("Legacy clipboard copy failed", error);
     }
+
+    textarea.remove();
+    return copied;
+}
+
+function copyTempeSearchLinksImmediate(queries) {
+    const urls = getTempeSearchUrlsFromQueries(queries);
+    if (!urls.length) return false;
+
+    const text = urls.join("\n");
+
+    // execCommand is intentionally tried first here because it runs
+    // synchronously inside the user's Enter/click gesture.
+    if (legacyCopyText(text)) {
+        showTempeLinkCopiedToast(urls.length);
+        return true;
+    }
+
+    // Modern clipboard API as a fallback.
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text)
+            .then(() => showTempeLinkCopiedToast(urls.length))
+            .catch((error) => console.error("Could not copy Tempe search link", error));
+
+        return true;
+    }
+
+    return false;
+}
+
+function getCurrentSizeQueries() {
+    return document.getElementById("skuInput")
+        .value
+        .trim()
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((query) => [5, 7].includes(query.length));
+}
+
+function copyCurrentTempeSearchLinksImmediate() {
+    return copyTempeSearchLinksImmediate(getCurrentSizeQueries());
 }
 
 async function fetchTyreProductsBySize(size) {
@@ -723,18 +785,15 @@ function removeOutOfStockTinder() {
    F ALT TAB
    ========================= */
 
-async function checkPrices() {
+async function checkPrices({ copyLink = true } = {}) {
     const skuInput = document.getElementById("skuInput").value.trim().split("\n");
     const resultsTable = document.querySelector("#resultsTable tbody");
 
-    // Copy the Tempe size-results URL immediately from the user's search action.
-    // This happens before the network requests so the link is ready to paste
-    // into an email while the results are loading.
-    copyTempeSearchLinks(
-        skuInput
-            .map((line) => line.trim())
-            .filter((query) => [5, 7].includes(query.length))
-    );
+    // Search button clicks still copy automatically.
+    // Enter-key searches already copied directly inside handleSkuInputEnter().
+    if (copyLink) {
+        copyCurrentTempeSearchLinksImmediate();
+    }
 
     resultsTable.innerHTML = `<tr><td colspan="5">Searching...</td></tr>`;
 
