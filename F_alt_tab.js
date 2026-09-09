@@ -266,10 +266,20 @@ function handleSkuInputEnter(e) {
         e.preventDefault();
 
         // Clipboard copy is triggered directly from the physical Enter keypress.
-        // This is more reliable than waiting for the async search flow.
         copyCurrentTempeSearchLinksImmediate();
 
         checkPrices({ copyLink: false });
+
+        // Keep keyboard focus on the tyre-size box after Enter.
+        // Tab then follows the browser's normal/native tab order.
+        const tyreInput = e.currentTarget;
+        if (tyreInput && typeof tyreInput.focus === "function") {
+            try {
+                tyreInput.focus({ preventScroll: true });
+            } catch {
+                tyreInput.focus();
+            }
+        }
     }
 }
 
@@ -477,6 +487,10 @@ function showTempeLinkCopiedToast(count) {
 }
 
 function legacyCopyText(text) {
+    // Remember where keyboard focus was before the temporary clipboard
+    // textarea steals it.
+    const previousActiveElement = document.activeElement;
+
     const textarea = document.createElement("textarea");
     textarea.value = text;
     textarea.setAttribute("readonly", "");
@@ -498,6 +512,19 @@ function legacyCopyText(text) {
     }
 
     textarea.remove();
+
+    // Restore the element that had focus before copying.
+    if (
+        previousActiveElement &&
+        typeof previousActiveElement.focus === "function"
+    ) {
+        try {
+            previousActiveElement.focus({ preventScroll: true });
+        } catch {
+            previousActiveElement.focus();
+        }
+    }
+
     return copied;
 }
 
