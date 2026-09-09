@@ -7,14 +7,14 @@ console.log("Project_C.js loaded successfully");
 const PROJECT_C_INITIALS = ["TOG", "MOR", "MRA", "DK", "MHA", "JZA", "DB", "SA"];
 
 const INITIAL_DISPLAY_NAMES = Object.freeze({
-    TOG: "god",
-    MOR: "babi",
-    MRA: "monyet",
-    DK: "kontol",
-    MHA: "tolol",
-    JZA: "maling",
-    DB: "okelah",
-    SA: "mabok"
+    TOG: ":P",
+    MOR: "Osama been lackin",
+    MRA: "Banglaboy123",
+    DK: "Chhota Bheem but less hair",
+    MHA: "Biman Flight Delay Simulator",
+    JZA: "Shah Rukh Khan from Temu",
+    DB: "Tungtungtungsahur",
+    SA: "Gragas"
 });
 const WEEKLY_TARGET = 90000;
 
