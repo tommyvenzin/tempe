@@ -7,10 +7,10 @@ console.log("Project_C.js loaded successfully");
 const PROJECT_C_INITIALS = ["TOG", "MOR", "MRA", "DK", "MHA", "JZA", "DB", "SA"];
 
 const INITIAL_DISPLAY_NAMES = Object.freeze({
-    TOG: ":P",
+    TOG: "D3f4ult",
     MOR: "Osama been lackin",
-    MRA: "Banglaboy123",
-    DK: "Chhota Bheem but less hair",
+    MRA: "One Question, Seven Seasons",
+    DK: "Kathmandu TED Talk Nobody Asked For",
     MHA: "Biman Flight Delay Simulator",
     JZA: "Shah Rukh Khan from Temu",
     DB: "Tungtungtungsahur",
