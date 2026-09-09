@@ -1,333 +1,11 @@
-console.log("Project_C.js loaded successfully");
+console.log("F_alt_tab.js loaded successfully");
 
 /* =========================
-   PROJECT C CONFIGURATION
+   Shared helpers
    ========================= */
-
-const PROJECT_C_INITIALS = ["TOG", "MOR", "MRA", "DK", "MHA", "JZA", "DB", "SA"];
-
-const INITIAL_DISPLAY_NAMES = Object.freeze({
-    TOG: "god",
-    MOR: "babi",
-    MRA: "monyet",
-    DK: "kontol",
-    MHA: "tolol",
-    JZA: "maling",
-    DB: "okelah",
-    SA: "mabok"
-});
-const WEEKLY_TARGET = 90000;
-
-const PROJECT_C_GOD_INITIALS = "TOG";
-const PROJECT_C_GOD_SKIN_IMAGE = "./project-c-wave.jpg";
 
 const EXTENSION_BRIDGE_TIMEOUT_MS = 20000;
-const PRICE_CACHE_TTL_MS = 30 * 60 * 1000;
-const rankedPriceCache = new Map();
-const rankedPricePromiseCache = new Map();
 let extensionFetchRequestCounter = 0;
-
-/* =========================
-   UI HELPERS
-   ========================= */
-
-function setLoadingState(isLoading, message = "Loading weekly rankings…") {
-    const loadingIndicator = document.getElementById("loadingIndicator");
-    if (!loadingIndicator) return;
-
-    const loadingText = loadingIndicator.querySelector("[data-loading-text]");
-    if (loadingText) loadingText.textContent = message;
-
-    loadingIndicator.classList.toggle("is-visible", isLoading);
-    loadingIndicator.style.display = isLoading ? "flex" : "none";
-}
-
-function setSalesPeriodLabel(startDate, endDate) {
-    const rangeElement = document.getElementById("rangeSummary");
-    if (!rangeElement) return;
-
-    rangeElement.textContent = `${formatDisplayDate(startDate)} → ${formatDisplayDate(endDate)}`;
-}
-
-function showEmptyState(message) {
-    const resultsBody = document.querySelector("#resultsTable tbody");
-    if (!resultsBody) return;
-
-    resultsBody.innerHTML = `
-        <tr>
-            <td colspan="6" class="project-empty-state">${message}</td>
-        </tr>
-    `;
-}
-
-
-function injectProjectCSkinStyles() {
-    if (document.getElementById("projectCGodSkinStyles")) return;
-
-    const style = document.createElement("style");
-    style.id = "projectCGodSkinStyles";
-    style.textContent = `
-        .rank-cell.rank-cell-god {
-            position: relative;
-            overflow: hidden;
-            isolation: isolate;
-            min-height: 72px;
-            padding: 14px 16px;
-            border-radius: 14px;
-            border: 1px solid rgba(141, 180, 214, 0.42);
-            background:
-                linear-gradient(135deg, rgba(7, 15, 24, 0.95), rgba(10, 31, 56, 0.92));
-            box-shadow:
-                inset 0 0 0 1px rgba(255,255,255,0.05),
-                0 10px 24px rgba(0, 0, 0, 0.28);
-        }
-
-        .rank-cell.rank-cell-god::before {
-            content: "";
-            position: absolute;
-            inset: -18%;
-            background-image: url("${PROJECT_C_GOD_SKIN_IMAGE}");
-            background-size: cover;
-            background-position: center center;
-            opacity: 0.52;
-            transform: scale(1.18);
-            animation: projectCGodWavePan 28s linear infinite alternate;
-            filter: saturate(1.05) contrast(1.03);
-            z-index: 0;
-        }
-
-        .rank-cell.rank-cell-god::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background:
-                radial-gradient(circle at 18% 18%, rgba(255,255,255,0.22), transparent 26%),
-                radial-gradient(circle at 82% 72%, rgba(110, 176, 255, 0.18), transparent 30%),
-                linear-gradient(120deg, rgba(255,255,255,0.08), transparent 30%, rgba(255,255,255,0.02) 50%, transparent 72%);
-            animation: projectCGodShimmer 7s ease-in-out infinite;
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        .rank-cell-god .god-wave-runner {
-            position: absolute;
-            inset: auto -30% 8px -30%;
-            height: 38px;
-            background:
-                repeating-linear-gradient(
-                    90deg,
-                    rgba(255,255,255,0.00) 0px,
-                    rgba(255,255,255,0.00) 22px,
-                    rgba(161, 211, 255, 0.26) 32px,
-                    rgba(255,255,255,0.00) 46px,
-                    rgba(255,255,255,0.00) 70px
-                );
-            opacity: 0.68;
-            transform: skewX(-18deg);
-            animation: projectCGodRunner 8s linear infinite;
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        .rank-cell-god .god-rank-content {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .rank-cell-god .masked-initial {
-            font-size: 1.02rem;
-            font-weight: 800;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            text-shadow:
-                0 0 12px rgba(198, 228, 255, 0.30),
-                0 2px 8px rgba(0, 0, 0, 0.45);
-        }
-
-        .rank-cell-god .god-tag {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 52px;
-            height: 26px;
-            padding: 0 10px;
-            border-radius: 999px;
-            border: 1px solid rgba(185, 225, 255, 0.45);
-            background: rgba(8, 23, 41, 0.72);
-            color: #d9eeff;
-            font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            backdrop-filter: blur(2px);
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
-        }
-
-        .rank-cell-god .rank-badge {
-            position: relative;
-            z-index: 2;
-            box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 6px 16px rgba(0,0,0,0.22);
-        }
-
-        @keyframes projectCGodWavePan {
-            0% {
-                background-position: 0% 48%;
-                transform: scale(1.20) translate3d(-1.5%, -0.5%, 0);
-            }
-            50% {
-                background-position: 50% 53%;
-                transform: scale(1.23) translate3d(1.5%, 0.8%, 0);
-            }
-            100% {
-                background-position: 100% 50%;
-                transform: scale(1.19) translate3d(-0.8%, -1.2%, 0);
-            }
-        }
-
-        @keyframes projectCGodRunner {
-            0% {
-                transform: translateX(-18%) skewX(-18deg);
-                opacity: 0.35;
-            }
-            50% {
-                opacity: 0.78;
-            }
-            100% {
-                transform: translateX(18%) skewX(-18deg);
-                opacity: 0.35;
-            }
-        }
-
-        @keyframes projectCGodShimmer {
-            0%, 100% { opacity: 0.42; }
-            50% { opacity: 0.84; }
-        }
-    `;
-
-    document.head.appendChild(style);
-}
-
-function renderRankIdentityCell(data, index) {
-    const displayName = INITIAL_DISPLAY_NAMES[data.initials] ?? "unknown";
-
-    if (data.initials === PROJECT_C_GOD_INITIALS) {
-        return `
-            <td>
-                <div class="rank-cell rank-cell-god">
-                    <div class="god-wave-runner" aria-hidden="true"></div>
-                    <div class="god-rank-content">
-                        <span class="rank-badge">#${index + 1}</span>
-                        <span class="masked-initial">${displayName}</span>
-                        <span class="god-tag">${data.initials}</span>
-                    </div>
-                </div>
-            </td>
-        `;
-    }
-
-    return `
-        <td>
-            <div class="rank-cell">
-                <span class="rank-badge">#${index + 1}</span>
-                <span class="masked-initial">${displayName}</span>
-            </div>
-        </td>
-    `;
-}
-
-/* =========================
-   DATE HELPERS
-   ========================= */
-
-function getCurrentSalesPeriod() {
-    const endDate = new Date();
-    endDate.setHours(0, 0, 0, 0);
-
-    const startDate = new Date(endDate);
-    const day = endDate.getDay();
-
-    if (day !== 5) {
-        const daysSinceFriday = (day + 7 - 5) % 7 || 7;
-        startDate.setDate(endDate.getDate() - daysSinceFriday);
-    }
-
-    return { startDate, endDate };
-}
-
-function formatDateKey(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}${month}${day}`;
-}
-
-function formatDisplayDate(date) {
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${month}-${day}`;
-}
-
-function toDateKey(rawDateText) {
-    if (!rawDateText) return null;
-
-    const compact = rawDateText.replace(/\D/g, "");
-    const compactMatch = compact.match(/(20\d{2})(0[1-9]|1[0-2])([0-2]\d|3[01])/);
-    if (compactMatch) return compactMatch[0];
-
-    const match = rawDateText.match(/(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})/);
-    if (!match) return null;
-
-    const a = Number.parseInt(match[1], 10);
-    const b = Number.parseInt(match[2], 10);
-    const c = Number.parseInt(match[3], 10);
-
-    let year;
-    let month;
-    let day;
-
-    if (match[1].length === 4) {
-        year = a;
-        month = b;
-        day = c;
-    } else if (match[3].length === 4) {
-        year = c;
-
-        // The AU intranet normally uses DD-MM-YYYY.
-        if (a > 12) {
-            day = a;
-            month = b;
-        } else if (b > 12) {
-            month = a;
-            day = b;
-        } else {
-            day = a;
-            month = b;
-        }
-    } else {
-        return null;
-    }
-
-    if (
-        !Number.isInteger(year) ||
-        !Number.isInteger(month) ||
-        !Number.isInteger(day) ||
-        month < 1 ||
-        month > 12 ||
-        day < 1 ||
-        day > 31
-    ) {
-        return null;
-    }
-
-    return `${year}${String(month).padStart(2, "0")}${String(day).padStart(2, "0")}`;
-}
-
-/* =========================
-   NETWORK HELPERS
-   ========================= */
 
 function fetchViaExtension(targetUrl, options = {}) {
     return new Promise((resolve, reject) => {
@@ -366,7 +44,7 @@ function fetchViaExtension(targetUrl, options = {}) {
             if (!result?.ok) {
                 finish(
                     reject,
-                    new Error(result?.error || "Tom does it all request failed")
+                    new Error(result?.error || "Chrome Fetch Bridge request failed")
                 );
                 return;
             }
@@ -391,7 +69,7 @@ function fetchViaExtension(targetUrl, options = {}) {
             finish(
                 reject,
                 new Error(
-                    "Tom does it all did not respond. Check that the extension is enabled for this page."
+                    "Chrome Fetch Bridge did not respond. Check that the extension is enabled and 'Allow access to file URLs' is turned on."
                 )
             );
         }, EXTENSION_BRIDGE_TIMEOUT_MS);
@@ -408,7 +86,54 @@ function fetchViaExtension(targetUrl, options = {}) {
     });
 }
 
-async function fetchProxyText(targetUrl) {
+function decodeHtmlEntities(text) {
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = String(text || "");
+    return textarea.value;
+}
+
+function unwrapPreResponse(text) {
+    const raw = String(text || "");
+    const doc = new DOMParser().parseFromString(raw, "text/html");
+    const preText = doc.querySelector("pre")?.textContent;
+    return preText ? preText : raw;
+}
+
+function looksLikeCaptchaPage(html) {
+    const text = String(html || "").toLowerCase();
+    return (
+        text.includes("verify you are human") ||
+        text.includes("verification required") ||
+        text.includes("g-recaptcha") ||
+        text.includes("/captcha-verify") ||
+        text.includes("captcha") && text.includes("recaptcha")
+    );
+}
+
+function looksLikeBlockedPage(html) {
+    const text = String(html || "").toLowerCase();
+    return (
+        looksLikeCaptchaPage(text) ||
+        text.includes("access denied") ||
+        text.includes("you have been blocked") ||
+        text.includes("temporarily blocked") ||
+        text.includes("blocked by")
+    );
+}
+
+function looksLikeJinaResponse(text) {
+    const raw = unwrapPreResponse(text);
+    return (
+        raw.includes("Markdown Content:") ||
+        raw.includes("URL Source:") ||
+        raw.includes("Title: Buy New") ||
+        raw.includes("[**")
+    );
+}
+
+async function fetchTextWithFallback(targetUrl) {
+    console.log("Fetching through Chrome extension:", targetUrl);
+
     const result = await fetchViaExtension(targetUrl, {
         method: "GET",
         cache: "no-store",
@@ -417,14 +142,452 @@ async function fetchProxyText(targetUrl) {
     const text = String(result.text || "");
 
     if (!text.trim()) {
-        throw new Error("Empty response");
+        throw new Error("empty-response");
     }
 
-    return text;
+    const hasProducts = text.includes("product-container");
+
+    if (!hasProducts && looksLikeBlockedPage(text)) {
+        throw new Error("captcha-or-blocked-response");
+    }
+
+    return {
+        text,
+        proxyBase: "chrome-extension",
+        isJina: false,
+        status: result.status,
+        finalUrl: result.finalUrl || targetUrl,
+    };
 }
 
-async function mapWithConcurrency(items, concurrency, worker) {
-    const safeConcurrency = Math.max(1, Math.min(concurrency, items.length || 1));
+async function fetchHtmlWithFallback(targetUrl) {
+    const result = await fetchTextWithFallback(targetUrl);
+    return result.text;
+}
+
+function normalizeAbsoluteUrl(url) {
+    if (!url || url === "#") return "#";
+    if (/^https?:\/\//i.test(url)) return url.replace(/^http:\/\//i, "https://");
+    return new URL(url, "https://tempetyres.com.au").href;
+}
+
+function escapeHtml(text) {
+    return String(text ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function escapeJsSingle(text) {
+    return String(text ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, " ")
+        .replace(/\r/g, " ");
+}
+
+function extractSkuFromProductUrl(url) {
+    if (!url || url === "#") return "";
+
+    try {
+        const clean = decodeURIComponent(url.split("?")[1] || url);
+        const last = clean
+            .split("-")
+            .pop()
+            ?.replace(/[^a-z0-9]/gi, "")
+            .trim();
+
+        // Tempe commonly leaves the SKU at the end of the product URL even
+        // when the hidden tyresku input disappears for On Order / OOS items.
+        // Requiring at least one digit avoids treating words such as
+        // "runflat" as an SKU.
+        if (
+            last &&
+            last.length >= 4 &&
+            last.length <= 20 &&
+            /\d/.test(last)
+        ) {
+            return last.toUpperCase();
+        }
+    } catch {}
+
+    return "";
+}
+
+function copySKU(sku) {
+    if (!sku || sku === "No SKU" || sku === "No SKU available" || sku === "JINA-N/A") return;
+
+    navigator.clipboard.writeText(sku)
+        .then(() => {
+            const toast = document.createElement("div");
+            toast.textContent = `Copied: ${sku}`;
+            toast.style.position = "fixed";
+            toast.style.bottom = "20px";
+            toast.style.right = "20px";
+            toast.style.padding = "8px 12px";
+            toast.style.background = "#16a34a";
+            toast.style.color = "white";
+            toast.style.borderRadius = "6px";
+            toast.style.fontSize = "14px";
+            toast.style.opacity = "0";
+            toast.style.transition = "opacity 0.3s ease";
+            toast.style.zIndex = "9999";
+            document.body.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.style.opacity = "1";
+            });
+
+            setTimeout(() => {
+                toast.style.opacity = "0";
+                setTimeout(() => toast.remove(), 300);
+            }, 800);
+        })
+        .catch((err) => console.error("Copy failed", err));
+}
+
+function selectTyreForFitment(tyre) {
+    try {
+        localStorage.setItem("fitment:selectedTyre", JSON.stringify({
+            ...tyre,
+            savedAt: new Date().toISOString(),
+        }));
+        window.location.href = "Fitment_Planner.html";
+    } catch (err) {
+        console.error("Could not save tyre for fitment planning", err);
+        alert("Could not open Fitment Planner. Please try again.");
+    }
+}
+
+function handleSkuInputEnter(e) {
+    if (e.key === "Enter") {
+        e.preventDefault();
+
+        // Clipboard copy is triggered directly from the physical Enter keypress.
+        // This is more reliable than waiting for the async search flow.
+        copyCurrentTempeSearchLinksImmediate();
+
+        checkPrices({ copyLink: false });
+    }
+}
+
+function handleSkuInputDone(e) {
+    if (e.target.value.trim()) {
+        checkPrices();
+    }
+}
+
+function getStockColor(stockStatus) {
+    if (!stockStatus) return "transparent";
+    const lower = stockStatus.toLowerCase();
+
+    if (lower.includes("out of stock")) return "#4b1113";
+    if (lower.includes("on order")) return "#1a1a1d";
+    if (lower.match(/\b[1-4]\s*in stock\b/)) return "#4b2a12";
+    if (lower.match(/\b[5-8]\s*in stock\b/)) return "#3b3a16";
+    if (lower.includes("8+ in stock") || lower.includes("in stock")) return "#123524";
+
+    return "transparent";
+}
+
+function isAvailableStock(stockText) {
+    if (!stockText) return false;
+    const lower = stockText.toLowerCase();
+
+    if (lower.includes("out of stock")) return false;
+    if (lower.includes("on order")) return false;
+    if (lower.includes("no status")) return false;
+    if (lower.includes("no stock")) return false;
+
+    if (lower.includes("in stock")) return true;
+    if (/\d+/.test(lower)) return true;
+
+    return false;
+}
+
+/* =========================
+   Product parsers
+   ========================= */
+
+function parseTempetyresHtmlProducts(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const items = doc.querySelectorAll(".product-container");
+
+    return Array.from(items).map((item) => {
+        const make = item.querySelector(".brand-name b")?.textContent.trim() || "No make";
+        const size = item.querySelector(".sub-heading-ty-2")?.textContent.trim() || "";
+        const pattern = item.querySelector(".sub-heading-ty-3")?.textContent.trim() || "";
+        const model = `${size} ${pattern}`.trim() || "No model";
+        const rawPrice = item.querySelector(".sale-price span")?.textContent.trim() || "0";
+        const price = parseFloat(rawPrice.replace(/[^\d.]/g, "")) || 0;
+        const stock = item.querySelector(".stocklevel-small .stock-label")?.textContent.trim() || "On Order";
+        const linkEl = item.querySelector(".image-container a");
+        const link = linkEl ? normalizeAbsoluteUrl(linkEl.getAttribute("href")) : "#";
+
+        const hiddenSku = item.querySelector("input[name='tyresku']")?.value?.trim() || "";
+        const urlSku = extractSkuFromProductUrl(link);
+        const sku = hiddenSku || urlSku || "No SKU";
+
+        return {
+            make,
+            brand: make,
+            model,
+            pattern,
+            price,
+            stock,
+            sku,
+            link,
+            source: "html",
+        };
+    });
+}
+
+function getNearestProductLinkFromJina(lines, brandIndex) {
+    for (let i = brandIndex; i >= Math.max(0, brandIndex - 5); i--) {
+        const line = lines[i] || "";
+        const match = line.match(/\]\((https?:\/\/[^)\s"]*tyreproducts\?[^)\s"]*)/i);
+        if (match) return normalizeAbsoluteUrl(match[1]);
+    }
+    return "#";
+}
+
+function parseJinaMarkdownProducts(text) {
+    let raw = unwrapPreResponse(text);
+    raw = decodeHtmlEntities(raw);
+
+    const content = raw.includes("Markdown Content:")
+        ? raw.split("Markdown Content:").slice(1).join("Markdown Content:")
+        : raw;
+
+    const lines = content
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+    const products = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const brandMatch = lines[i].match(/^\[\*\*(.+?)\*\*\]\(/);
+        if (!brandMatch) continue;
+
+        const make = brandMatch[1].trim();
+        if (!make || make.length > 40) continue;
+
+        let j = i + 1;
+        while (j < lines.length && /^(SALE|\$\d+\s*EA|SOLD|OUT)$/i.test(lines[j])) j++;
+
+        const sizeLine = lines[j] || "";
+        if (!/(LT)?\d{3}\/?\d{2}R\d{2}/i.test(sizeLine)) continue;
+
+        const pattern = lines[j + 1] || "No pattern";
+
+        let stock = "No stock";
+        let priceText = "";
+
+        for (let k = j + 2; k < Math.min(lines.length, j + 12); k++) {
+            const line = lines[k];
+
+            if (/^(\d+\+?\s+IN STOCK(?:\s+NOW)?|ON ORDER|OUT OF STOCK|\d+\s+IN STOCK)$/i.test(line)) {
+                stock = line.replace(/\s+NOW$/i, "").trim();
+                continue;
+            }
+
+            if (/^\$\s*(\d+(?:\.\d+)?|TBC)$/i.test(line)) {
+                priceText = line;
+                break;
+            }
+        }
+
+        const price = priceText.toUpperCase().includes("TBC")
+            ? 0
+            : parseFloat(priceText.replace(/[^\d.]/g, "")) || 0;
+
+        const link = getNearestProductLinkFromJina(lines, i);
+        const sku = extractSkuFromProductUrl(link) || "JINA-N/A";
+        const model = `${sizeLine} ${pattern}`.trim();
+
+        products.push({
+            make,
+            brand: make,
+            model,
+            pattern,
+            price,
+            stock,
+            sku,
+            link,
+            source: "jina",
+        });
+    }
+
+    return products;
+}
+
+function buildTempeTyreSearchUrl(size) {
+    const cleanSize = String(size || "").trim();
+
+    if (!cleanSize || ![5, 7].includes(cleanSize.length)) {
+        return "";
+    }
+
+    const width = cleanSize.slice(0, 3);
+    const diameter = cleanSize.slice(-2);
+    const profile = cleanSize.length === 7
+        ? cleanSize.slice(3, 5)
+        : "Not%20Specified";
+
+    return `https://www.tempetyres.com.au/tyres?TyreWidth=${width}&TyreProfile=${profile}&TyreDiameter=${diameter}`;
+}
+
+function getTempeSearchUrlsFromQueries(queries) {
+    return [...new Set(
+        queries
+            .map(buildTempeTyreSearchUrl)
+            .filter(Boolean)
+    )];
+}
+
+function showTempeLinkCopiedToast(count) {
+    const toast = document.createElement("div");
+    toast.textContent = count === 1
+        ? "Tempe link copied"
+        : `${count} Tempe links copied`;
+    toast.style.position = "fixed";
+    toast.style.bottom = "20px";
+    toast.style.right = "20px";
+    toast.style.padding = "8px 12px";
+    toast.style.background = "#16a34a";
+    toast.style.color = "white";
+    toast.style.borderRadius = "6px";
+    toast.style.fontSize = "14px";
+    toast.style.opacity = "0";
+    toast.style.transition = "opacity 0.3s ease";
+    toast.style.zIndex = "9999";
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.style.opacity = "1";
+    });
+
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 300);
+    }, 800);
+}
+
+function legacyCopyText(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    textarea.style.opacity = "0";
+
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    let copied = false;
+
+    try {
+        copied = document.execCommand("copy");
+    } catch (error) {
+        console.error("Legacy clipboard copy failed", error);
+    }
+
+    textarea.remove();
+    return copied;
+}
+
+function copyTempeSearchLinksImmediate(queries) {
+    const urls = getTempeSearchUrlsFromQueries(queries);
+    if (!urls.length) return false;
+
+    const text = urls.join("\n");
+
+    // execCommand is intentionally tried first here because it runs
+    // synchronously inside the user's Enter/click gesture.
+    if (legacyCopyText(text)) {
+        showTempeLinkCopiedToast(urls.length);
+        return true;
+    }
+
+    // Modern clipboard API as a fallback.
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text)
+            .then(() => showTempeLinkCopiedToast(urls.length))
+            .catch((error) => console.error("Could not copy Tempe search link", error));
+
+        return true;
+    }
+
+    return false;
+}
+
+function getCurrentSizeQueries() {
+    return document.getElementById("skuInput")
+        .value
+        .trim()
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((query) => [5, 7].includes(query.length));
+}
+
+function copyCurrentTempeSearchLinksImmediate() {
+    return copyTempeSearchLinksImmediate(getCurrentSizeQueries());
+}
+
+function extractProductAnalytics(html) {
+    const raw = String(html || "");
+
+    // Look specifically inside dataLayer.push({...}) objects describing a
+    // product page. Tempe exposes both the real product identifier and, for
+    // some products such as Bridgestone, the useful hidden price here.
+    const pushes = raw.matchAll(/dataLayer\.push\(\s*\{([\s\S]*?)\}\s*\);/gi);
+
+    for (const match of pushes) {
+        const block = match[1] || "";
+
+        if (!/['"]ecomm_pagetype['"]\s*:\s*['"]product['"]/i.test(block)) {
+            continue;
+        }
+
+        const valueMatch = block.match(
+            /['"]ecomm_totalvalue['"]\s*:\s*['"]([\d,.]+)['"]/i
+        );
+
+        const productIdMatch = block.match(
+            /['"]ecomm_prodid['"]\s*:\s*\[\s*['"]([^'"]+)['"]\s*\]/i
+        );
+
+        const hiddenPrice = valueMatch
+            ? Number.parseFloat(valueMatch[1].replace(/,/g, ""))
+            : null;
+
+        const sku = productIdMatch
+            ? String(productIdMatch[1] || "").trim().toUpperCase()
+            : "";
+
+        return {
+            hiddenPrice: Number.isFinite(hiddenPrice) ? hiddenPrice : null,
+            sku,
+        };
+    }
+
+    return {
+        hiddenPrice: null,
+        sku: "",
+    };
+}
+
+async function mapWithSmallConcurrency(items, concurrency, worker) {
+    const safeConcurrency = Math.max(
+        1,
+        Math.min(concurrency, items.length || 1)
+    );
+
     const results = new Array(items.length);
     let index = 0;
 
@@ -435,411 +598,481 @@ async function mapWithConcurrency(items, concurrency, worker) {
         }
     }
 
-    await Promise.all(Array.from({ length: safeConcurrency }, runWorker));
+    await Promise.all(
+        Array.from({ length: safeConcurrency }, () => runWorker())
+    );
+
     return results;
 }
 
-/* =========================
-   PRICE LOOKUP
-   ========================= */
+async function enrichProductDetails(products) {
+    const jobs = products
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => {
+            const make = String(item?.make || item?.brand || "")
+                .trim()
+                .toLowerCase();
 
-async function getPriceForSku(sku, parser) {
-    const now = Date.now();
-    const cached = rankedPriceCache.get(sku);
+            const needsBridgestonePrice = make === "bridgestone";
+            const needsSku =
+                !item?.sku ||
+                item.sku === "No SKU" ||
+                item.sku === "No SKU available" ||
+                item.sku === "JINA-N/A";
 
-    if (cached && now - cached.cachedAt < PRICE_CACHE_TTL_MS) {
-        return cached.price;
+            return (
+                item?.link &&
+                item.link !== "#" &&
+                (needsBridgestonePrice || needsSku)
+            );
+        });
+
+    if (!jobs.length) {
+        return products;
     }
 
-    const pending = rankedPricePromiseCache.get(sku);
-    if (pending) {
-        return pending;
-    }
+    await mapWithSmallConcurrency(
+        jobs,
+        4,
+        async ({ item, index }) => {
+            try {
+                const productHtml = await fetchHtmlWithFallback(item.link);
+                const analytics = extractProductAnalytics(productHtml);
 
-    const pricePromise = (async () => {
-        const searchUrl = `https://www.tempetyres.com.au/search?q=${encodeURIComponent(sku)}`;
-        let price = 0;
+                const make = String(item?.make || item?.brand || "")
+                    .trim()
+                    .toLowerCase();
 
-        try {
-            const html = await fetchProxyText(searchUrl);
-            const documentFromSearch = parser.parseFromString(html, "text/html");
+                const updated = { ...item };
 
-            let priceText = documentFromSearch.querySelector(".sale-price span")?.textContent.trim();
+                // Recover SKU from ecomm_prodid whenever the listing page did
+                // not expose one. If analytics does not contain it, keep the
+                // URL-derived SKU as the next fallback.
+                if (
+                    !updated.sku ||
+                    updated.sku === "No SKU" ||
+                    updated.sku === "No SKU available" ||
+                    updated.sku === "JINA-N/A"
+                ) {
+                    const urlSku = extractSkuFromProductUrl(updated.link);
+                    updated.sku =
+                        analytics.sku ||
+                        urlSku ||
+                        "SKU unavailable";
+                }
 
-            if (!priceText) {
-                const wholesalePriceText = documentFromSearch.querySelector(".wh-price")?.textContent;
-                const wholesaleMatch = wholesalePriceText?.match(/\$([\d.]+)/);
-                if (wholesaleMatch) priceText = wholesaleMatch[1];
-            }
+                // For Bridgestone, always preserve the public/listing price and
+                // override the working price with ecomm_totalvalue when found.
+                if (
+                    make === "bridgestone" &&
+                    Number.isFinite(analytics.hiddenPrice)
+                ) {
+                    updated.originalPrice = Number(item.price || 0);
+                    updated.price = analytics.hiddenPrice;
+                    updated.bridgestoneHiddenPrice = true;
+                }
 
-            if (
-                priceText &&
-                !priceText.toLowerCase().includes("call") &&
-                Number.isFinite(Number.parseFloat(priceText))
-            ) {
-                price = Number.parseFloat(priceText);
-            } else {
-                const productLink = documentFromSearch.querySelector(".product-container .image-container a");
+                products[index] = updated;
+            } catch (error) {
+                console.warn(
+                    `Could not enrich product details for ${item.sku || item.link}:`,
+                    error
+                );
 
-                if (productLink) {
-                    const productUrl = `https://www.tempetyres.com.au${productLink.getAttribute("href")}`;
-                    const productHtml = await fetchProxyText(productUrl);
-                    const productDocument = parser.parseFromString(productHtml, "text/html");
-
-                    const wheelPriceText = productDocument.querySelector("#price2")?.textContent.trim();
-                    const wheelPrice = Number.parseFloat(wheelPriceText?.replace("$", ""));
-
-                    if (Number.isFinite(wheelPrice)) {
-                        price = wheelPrice;
-                    }
-
-                    if (price === 0) {
-                        const tyrePriceMatch = productHtml.match(/'ecomm_totalvalue':\s*'(\d+)'/);
-                        if (tyrePriceMatch) price = Number.parseFloat(tyrePriceMatch[1]);
+                // Even if the product-page request fails, use a URL-derived SKU
+                // rather than leaving "No SKU" on screen when possible.
+                if (
+                    !item.sku ||
+                    item.sku === "No SKU" ||
+                    item.sku === "No SKU available" ||
+                    item.sku === "JINA-N/A"
+                ) {
+                    const urlSku = extractSkuFromProductUrl(item.link);
+                    if (urlSku) {
+                        products[index] = {
+                            ...item,
+                            sku: urlSku,
+                        };
                     }
                 }
             }
-        } catch (error) {
-            console.error(`Error fetching price for SKU ${sku}:`, error);
         }
+    );
 
-        rankedPriceCache.set(sku, { price, cachedAt: Date.now() });
-        return price;
-    })();
+    return products;
+}
 
-    rankedPricePromiseCache.set(sku, pricePromise);
+async function fetchTyreProductsBySize(size) {
+    if (!size || ![5, 7].includes(size.length)) {
+        return {
+            products: [],
+            manualUrl: "",
+            error: "Invalid size",
+        };
+    }
+
+    const targetUrl = buildTempeTyreSearchUrl(size);
 
     try {
-        return await pricePromise;
-    } finally {
-        rankedPricePromiseCache.delete(sku);
+        const result = await fetchTextWithFallback(targetUrl);
+        const products = result.isJina
+            ? parseJinaMarkdownProducts(result.text)
+            : parseTempetyresHtmlProducts(result.text);
+
+        const finalProducts = products.length
+            ? products
+            : parseJinaMarkdownProducts(result.text);
+
+        // Bridgestone public/listing prices can be hidden (0) or intentionally
+        // different from the product analytics value. For Bridgestone only,
+        // load each product page and override with ecomm_totalvalue.
+        await enrichProductDetails(finalProducts);
+
+        return {
+            products: finalProducts,
+            manualUrl: targetUrl,
+            error: finalProducts.length ? "" : "No products parsed",
+        };
+    } catch (err) {
+        console.error(`Failed to fetch tyre size ${size}:`, err);
+        return {
+            products: [],
+            manualUrl: targetUrl,
+            error: err.message || "Failed to fetch",
+        };
     }
 }
 
-/* =========================
-   GRADE / PROGRESS
-   ========================= */
+function renderManualFallbackRow(query, manualUrl, message = "Could not load results automatically") {
+    return `<tr>
+        <td colspan="5">
+            ${escapeHtml(message)} for <strong>${escapeHtml(query)}</strong>.<br>
+            Manual link: <a href="${manualUrl}" target="_blank" style="color:#93c5fd;">Open Tempe Tyres search</a>
+        </td>
+    </tr>`;
+}
 
-function getGradeInfo(total) {
-    if (total >= 90000) return { label: "Sit down", className: "grade-sitdown" };
-    if (total >= 70000) return { label: "Level 2", className: "grade-level2" };
-    if (total >= 60000) return { label: "Level 1", className: "grade-level1" };
-    return { label: "Keep going", className: "grade-keepgoing" };
+function renderFAltProductRow(item) {
+    const make = item.make || item.brand || "No make";
+    const model = item.model || item.pattern || "No model";
+    const price = Number(item.price || 0);
+    const originalPrice = Number(item.originalPrice ?? price);
+    const stock = item.stock || "No stock";
+    const sku = item.sku || "SKU unavailable";
+    const link = item.link || "#";
+
+    const safeStockAttr = escapeHtml(stock);
+    const safeSku = escapeJsSingle(sku);
+    const safeMake = escapeJsSingle(make);
+    const safeModel = escapeJsSingle(model);
+    const safeLink = escapeJsSingle(link);
+
+    const skuDisplay = sku === "JINA-N/A"
+        ? `<span title="Jina result does not expose the exact hidden SKU">JINA-N/A</span>`
+        : escapeHtml(sku);
+
+    return `<tr 
+        style="background:${getStockColor(stock)};"
+        data-stock="${safeStockAttr}"
+    >
+        <td>${escapeHtml(make)}</td>
+
+        <td>
+            <a href="${link}" target="_blank" style="color:#93c5fd; text-decoration:none;">
+                ${escapeHtml(model)}
+            </a>
+            <span style="opacity:0.8; font-size:0.9em;"> (${escapeHtml(stock)})</span>
+        </td>
+
+        <td>
+            ${item.bridgestoneHiddenPrice
+                ? `<div style="text-decoration:line-through; opacity:0.55;">$${originalPrice.toFixed(2)}</div>
+                   <div style="font-weight:700;">$${price.toFixed(2)}</div>`
+                : `$${price.toFixed(2)}`}
+        </td>
+
+        <td onclick="copySKU('${safeSku}')" style="cursor:pointer; color:#60a5fa;">
+            ${skuDisplay}
+        </td>
+
+        <td>
+            <button
+                type="button"
+                onclick="selectTyreForFitment({ sku: '${safeSku}', make: '${safeMake}', model: '${safeModel}', price: ${price.toFixed(2)}, stock: '${escapeJsSingle(stock)}', link: '${safeLink}' });"
+            >
+                Add to Fitment Planner
+            </button>
+        </td>
+    </tr>`;
 }
 
 /* =========================
-   AUTOMATIC WEEKLY RANKING
+   TYRES TINDER
    ========================= */
 
-function getSalesWeekDates(startDate, endDate) {
-    const dates = [];
-    const cursor = new Date(startDate);
+let savedTinderResults = {};
+let activeTinderResults = {};
 
-    while (cursor <= endDate) {
-        dates.push(new Date(cursor));
-        cursor.setDate(cursor.getDate() + 1);
-    }
-
-    return dates;
-}
-
-function createSalesBucket() {
+function cloneTinderResults(data) {
     return Object.fromEntries(
-        PROJECT_C_INITIALS.map((initials) => [
-            initials,
+        Object.entries(data || {}).map(([brand, sets]) => [
+            brand,
             {
-                retail: new Map(),
-                wholesale: new Map(),
+                front: [...(sets.front || [])],
+                rear: [...(sets.rear || [])],
             },
         ])
     );
 }
 
-function addSkuQuantity(bucket, initials, type, sku, quantity) {
-    if (!bucket[initials] || !sku || !Number.isFinite(quantity)) return;
+function tinderItemMatches(item, keyword) {
+    if (!item) return false;
 
-    const skuMap = bucket[initials][type];
-    skuMap.set(sku, (skuMap.get(sku) || 0) + quantity);
+    return [
+        item.brand,
+        item.pattern,
+        item.stock,
+        item.sku,
+        item.price,
+    ].some((value) => String(value || "").toLowerCase().includes(keyword));
 }
 
-async function loadWeeklyRanking() {
-    const resultsBody = document.querySelector("#resultsTable tbody");
-    const grandTotalElement = document.getElementById("grandTotal");
-    const itemTotalElement = document.getElementById("itemTotal");
+function applyTinderTextFilter(keyword) {
+    const normalizedKeyword = String(keyword || "").toLowerCase().trim();
+    const baseResults = Object.keys(activeTinderResults).length
+        ? activeTinderResults
+        : savedTinderResults;
 
-    if (!resultsBody || !grandTotalElement || !itemTotalElement) return;
+    if (!normalizedKeyword) {
+        renderTinderResults(cloneTinderResults(baseResults));
+        return;
+    }
 
-    const loadStartedAt = performance.now();
+    const filtered = {};
 
-    const { startDate, endDate } = getCurrentSalesPeriod();
-    const startDateKey = formatDateKey(startDate);
-    const endDateKey = formatDateKey(endDate);
+    for (const [brand, sets] of Object.entries(baseResults)) {
+        const brandMatches = brand.toLowerCase().includes(normalizedKeyword);
 
-    setSalesPeriodLabel(startDate, endDate);
-    resultsBody.innerHTML = "";
-    grandTotalElement.textContent = "$0.00";
-    itemTotalElement.textContent = "0";
-    setLoadingState(true, "Loading weekly retail and wholesale data…");
+        const matchingFront = brandMatches
+            ? [...sets.front]
+            : sets.front.filter((item) => tinderItemMatches(item, normalizedKeyword));
 
-    const urlMap = {
-        retail: "https://my.tempetyres.com.au/retailpicking/history/",
-        wholesale: "https://my.tempetyres.com.au/warehousepicking/sydney/history/"
-    };
+        const matchingRear = brandMatches
+            ? [...sets.rear]
+            : sets.rear.filter((item) => tinderItemMatches(item, normalizedKeyword));
 
-    const parser = new DOMParser();
-    const salesBucket = createSalesBucket();
-    const intranetConcurrency = 4;
-    const priceConcurrency = 4;
-    const validInitials = new Set(PROJECT_C_INITIALS);
-
-    /*
-     * RETAIL:
-     * Fetch one exact-date page for each day from Friday through today.
-     * The intranet does the date filtering before returning the HTML.
-     */
-    const loadRetailByExactDate = async () => {
-        const salesDates = getSalesWeekDates(startDate, endDate);
-
-        await mapWithConcurrency(
-            salesDates,
-            intranetConcurrency,
-            async (date) => {
-                const day = date.getDate();
-                const month = date.getMonth() + 1;
-                const year = date.getFullYear();
-
-                const retailUrl =
-                    `${urlMap.retail}?day=${day}&month=${month}&year=${year}&q=&searchin=ALL`;
-
-                try {
-                    const html = await fetchProxyText(retailUrl);
-                    const doc = parser.parseFromString(html, "text/html");
-                    const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
-
-                    for (const row of rows) {
-                        const columns = row.querySelectorAll("td");
-                        if (columns.length < 7) continue;
-
-                        const rowInitials = columns[3].querySelector("a")?.textContent.trim();
-                        const sku = columns[1].querySelector("small")?.textContent.trim();
-                        const quantity = Number.parseInt(columns[5].textContent.trim(), 10);
-
-                        if (
-                            !validInitials.has(rowInitials) ||
-                            !sku ||
-                            !Number.isFinite(quantity)
-                        ) {
-                            continue;
-                        }
-
-                        addSkuQuantity(
-                            salesBucket,
-                            rowInitials,
-                            "retail",
-                            sku,
-                            quantity
-                        );
-                    }
-                } catch (error) {
-                    console.error(
-                        `Error loading retail for ${year}-${month}-${day}:`,
-                        error
-                    );
-                }
-            }
-        );
-    };
-
-    /*
-     * WHOLESALE:
-     * Keep the safer existing per-person search because wholesale date pages
-     * can contain too many records and may be truncated by the intranet.
-     */
-    const loadWholesaleByPerson = async () => {
-        const baseUrl = urlMap.wholesale;
-
-        await mapWithConcurrency(
-            PROJECT_C_INITIALS,
-            intranetConcurrency,
-            async (initials) => {
-                try {
-                    const intranetUrl =
-                        `${baseUrl}?day=0&month=0&year=0&q=${encodeURIComponent(initials)}&searchin=EnteredBy`;
-
-                    const html = await fetchProxyText(intranetUrl);
-                    const doc = parser.parseFromString(html, "text/html");
-                    const rows = doc.querySelectorAll(".col-md-12 table tbody tr");
-
-                    for (const row of rows) {
-                        const columns = row.querySelectorAll("td");
-                        if (columns.length < 7) continue;
-
-                        const rawDateText = columns[1].querySelector("b a")?.textContent.trim();
-                        const rowDateKey = toDateKey(rawDateText);
-
-                        if (
-                            !rowDateKey ||
-                            rowDateKey < startDateKey ||
-                            rowDateKey > endDateKey
-                        ) {
-                            continue;
-                        }
-
-                        const rowInitials = columns[3].querySelector("a")?.textContent.trim();
-                        const sku = columns[1].querySelector("small")?.textContent.trim();
-                        const quantity = Number.parseInt(columns[5].textContent.trim(), 10);
-
-                        if (
-                            rowInitials !== initials ||
-                            !sku ||
-                            !Number.isFinite(quantity)
-                        ) {
-                            continue;
-                        }
-
-                        addSkuQuantity(
-                            salesBucket,
-                            initials,
-                            "wholesale",
-                            sku,
-                            quantity
-                        );
-                    }
-                } catch (error) {
-                    console.error(`Error processing wholesale for ${initials}:`, error);
-                }
-            }
-        );
-    };
-
-    try {
-        /*
-         * Retail and wholesale now load at the same time instead of one after
-         * the other.
-         */
-        await Promise.all([
-            loadRetailByExactDate(),
-            loadWholesaleByPerson(),
-        ]);
-
-        const intranetFinishedAt = performance.now();
-
-        /*
-         * Build one unique SKU list across every salesperson and both sales
-         * types. A SKU is priced only once.
-         */
-        const uniqueSkus = new Set();
-
-        for (const data of Object.values(salesBucket)) {
-            for (const sku of data.retail.keys()) uniqueSkus.add(sku);
-            for (const sku of data.wholesale.keys()) uniqueSkus.add(sku);
+        if (matchingFront.length || matchingRear.length) {
+            filtered[brand] = {
+                front: matchingFront,
+                rear: matchingRear,
+            };
         }
+    }
 
-        setLoadingState(
-            true,
-            `Pricing ${uniqueSkus.size} unique SKU${uniqueSkus.size === 1 ? "" : "s"}…`
-        );
+    renderTinderResults(filtered);
+}
 
-        const skuList = Array.from(uniqueSkus);
-        const priceEntries = await mapWithConcurrency(
-            skuList,
-            priceConcurrency,
-            async (sku) => [sku, await getPriceForSku(sku, parser)]
-        );
-        const priceBySku = new Map(priceEntries);
+async function Tinder() {
+    const skuInput = document.getElementById("skuInput").value.trim();
+    const skuInput2 = document.getElementById("skuInput2").value.trim();
+    const resultsTable = document.querySelector("#resultsTable tbody");
+    resultsTable.innerHTML = "";
 
-        const pricingFinishedAt = performance.now();
+    const fetchTyreDetails = async (size) => {
+        if (!size || size.length !== 7) return [];
 
-        const rowsData = PROJECT_C_INITIALS
-            .map((initials) => {
-                const data = salesBucket[initials];
+        const result = await fetchTyreProductsBySize(size);
+        return result.products.map((item) => ({
+            brand: item.brand || item.make || "No brand available",
+            pattern: item.pattern || item.model || "No pattern available",
+            price: item.price ? item.price.toFixed(2) : "0.00",
+            stock: item.stock || "On Order",
+            sku: item.sku || "No SKU available",
+            link: item.link || result.manualUrl || "#",
+        }));
+    };
 
-                let retailTotal = 0;
-                let wholesaleTotal = 0;
-                let qty = 0;
+    const [front, rear] = await Promise.all([
+        fetchTyreDetails(skuInput),
+        fetchTyreDetails(skuInput2),
+    ]);
 
-                for (const [sku, quantity] of data.retail.entries()) {
-                    retailTotal += (priceBySku.get(sku) || 0) * quantity;
-                    qty += quantity;
-                }
+    const grouped = {};
+    savedTinderResults = {};
 
-                for (const [sku, quantity] of data.wholesale.entries()) {
-                    wholesaleTotal += (priceBySku.get(sku) || 0) * quantity;
-                    qty += quantity;
-                }
+    [...front, ...rear].forEach((item) => {
+        grouped[item.brand] = grouped[item.brand] || { front: [], rear: [] };
+        (front.includes(item) ? grouped[item.brand].front : grouped[item.brand].rear).push(item);
 
-                if (qty === 0) return null;
+        savedTinderResults[item.brand] = savedTinderResults[item.brand] || { front: [], rear: [] };
+        (front.includes(item) ? savedTinderResults[item.brand].front : savedTinderResults[item.brand].rear).push(item);
+    });
 
-                const combinedTotal = retailTotal + wholesaleTotal;
-                const grade = getGradeInfo(combinedTotal);
-                const percent = Math.max(
-                    0,
-                    Math.min(100, Math.round((combinedTotal / WEEKLY_TARGET) * 100))
-                );
+    activeTinderResults = cloneTinderResults(savedTinderResults);
+    renderTinderResults(cloneTinderResults(activeTinderResults));
+}
 
-                return {
-                    initials,
-                    retailTotal,
-                    wholesaleTotal,
-                    combinedTotal,
-                    qty,
-                    gradeLabel: grade.label,
-                    gradeClass: grade.className,
-                    percent
-                };
-            })
-            .filter(Boolean)
-            .sort((a, b) => b.combinedTotal - a.combinedTotal);
+function renderTinderResults(data) {
+    const resultsTable = document.querySelector("#resultsTable tbody");
+    resultsTable.innerHTML = "";
 
-        if (rowsData.length === 0) {
-            showEmptyState("No ranking data was found for the current sales week.");
-            return;
-        }
+    const sorted = Object.keys(data).sort();
+    sorted.forEach((brand) => {
+        const { front, rear } = data[brand];
+        front.sort((a, b) => a.pattern.localeCompare(b.pattern));
+        rear.sort((a, b) => a.pattern.localeCompare(b.pattern));
 
-        resultsBody.innerHTML = rowsData.map((data, index) => `
-            <tr>
-${renderRankIdentityCell(data, index)}
-                <td>$${data.retailTotal.toFixed(2)}</td>
-                <td>$${data.wholesaleTotal.toFixed(2)}</td>
-                <td>$${data.combinedTotal.toFixed(2)}</td>
-                <td>${data.qty}</td>
-                <td>
-                    <div class="progress-wrapper">
-                        <div class="progress-label">
-                            ${data.gradeLabel} – $${data.combinedTotal.toFixed(0)} / ${WEEKLY_TARGET.toLocaleString()}
-                        </div>
-                        <div class="progress-bar">
-                            <div
-                                class="progress-fill ${data.gradeClass}"
-                                style="width: ${data.percent}%;"
-                            ></div>
-                        </div>
-                    </div>
+        const rowCount = Math.max(front.length, rear.length);
+        const safeBrand = escapeHtml(brand || "");
+
+        for (let i = 0; i < rowCount; i++) {
+            const f = front[i] || {}, r = rear[i] || {};
+
+            const safeFrontSku = escapeJsSingle(f.sku || "");
+            const safeRearSku = escapeJsSingle(r.sku || "");
+
+            const row = `<tr data-brand="${safeBrand.toLowerCase()}">
+                ${i === 0 ? `<td rowspan="${rowCount}">${safeBrand}</td>` : ""}
+                <td style="background:${getStockColor(f.stock)};" data-stock="${escapeHtml(f.stock || "")}">
+                    ${f.pattern ? `<a href="${f.link}" target="_blank">${escapeHtml(f.pattern)}</a>` : "No data"}${f.price ? ` - $${escapeHtml(f.price)}` : ""} (${escapeHtml(f.stock || "No stock")})</td>
+                <td style="background:${getStockColor(r.stock)};" data-stock="${escapeHtml(r.stock || "")}">
+                    ${r.pattern ? `<a href="${r.link}" target="_blank">${escapeHtml(r.pattern)}</a>` : "No data"}${r.price ? ` - $${escapeHtml(r.price)}` : ""} (${escapeHtml(r.stock || "No stock")})</td>
+
+                <td onclick="copySKU('${safeFrontSku}')" style="cursor:pointer; color:#60a5fa;">
+                    ${escapeHtml(f.sku || "No SKU")}
                 </td>
-            </tr>
-        `).join("");
 
-        const grandTotal = rowsData.reduce((sum, data) => sum + data.combinedTotal, 0);
-        const itemTotal = rowsData.reduce((sum, data) => sum + data.qty, 0);
+                <td onclick="copySKU('${safeRearSku}')" style="cursor:pointer; color:#60a5fa;">
+                    ${escapeHtml(r.sku || "No SKU")}
+                </td>
+            </tr>`;
+            resultsTable.innerHTML += row;
+        }
+    });
 
-        grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
-        itemTotalElement.textContent = String(itemTotal);
-
-        console.log(
-            `Project C timing — intranet: ${Math.round(intranetFinishedAt - loadStartedAt)}ms, ` +
-            `pricing: ${Math.round(pricingFinishedAt - intranetFinishedAt)}ms, ` +
-            `total: ${Math.round(performance.now() - loadStartedAt)}ms, ` +
-            `unique SKUs: ${uniqueSkus.size}`
-        );
-    } catch (error) {
-        console.error("Error loading Project C ranking:", error);
-        showEmptyState("The ranking could not be loaded. Check Tom does it all and refresh the page.");
-    } finally {
-        setLoadingState(false);
+    if (sorted.length === 0) {
+        resultsTable.innerHTML = `<tr><td colspan="5">No matching tyres found.</td></tr>`;
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    injectProjectCSkinStyles();
-    loadWeeklyRanking();
-});
+function removeOutOfStockTinder() {
+    const filtered = {};
+
+    for (const [brand, sets] of Object.entries(savedTinderResults)) {
+        const goodFront = sets.front.filter((item) => isAvailableStock(item.stock));
+        const goodRear = sets.rear.filter((item) => isAvailableStock(item.stock));
+
+        if (goodFront.length && goodRear.length) {
+            filtered[brand] = {
+                front: goodFront,
+                rear: goodRear,
+            };
+        }
+    }
+
+    activeTinderResults = cloneTinderResults(filtered);
+
+    const currentKeyword = document.getElementById("searchBar")?.value || "";
+    applyTinderTextFilter(currentKeyword);
+}
+
+/* =========================
+   F ALT TAB
+   ========================= */
+
+async function checkPrices({ copyLink = true } = {}) {
+    const skuInput = document.getElementById("skuInput").value.trim().split("\n");
+    const resultsTable = document.querySelector("#resultsTable tbody");
+
+    // Search button clicks still copy automatically.
+    // Enter-key searches already copied directly inside handleSkuInputEnter().
+    if (copyLink) {
+        copyCurrentTempeSearchLinksImmediate();
+    }
+
+    resultsTable.innerHTML = `<tr><td colspan="5">Searching...</td></tr>`;
+
+    const rows = await Promise.all(skuInput.map(async (line) => {
+        const query = line.trim();
+        if (!query) return "";
+
+        if (![5, 7].includes(query.length)) {
+            return `<tr><td colspan="5">Invalid input: ${escapeHtml(query)}</td></tr>`;
+        }
+
+        const result = await fetchTyreProductsBySize(query);
+
+        if (!result.products.length) {
+            return renderManualFallbackRow(
+                query,
+                result.manualUrl,
+                "Could not load results through Chrome Fetch Bridge"
+            );
+        }
+
+        return result.products.map(renderFAltProductRow).join("\n");
+    }));
+
+    const rendered = rows.flat().join("\n").trim();
+    resultsTable.innerHTML = rendered || `<tr><td colspan="5">No results returned.</td></tr>`;
+    sortTableByPrice();
+}
+
+function sortTableByPrice() {
+    const tbody = document.querySelector("#resultsTable tbody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+
+    rows.sort((a, b) => {
+        const aPrice = parseFloat((a.cells[2]?.textContent || "").replace("$", "")) || 0;
+        const bPrice = parseFloat((b.cells[2]?.textContent || "").replace("$", "")) || 0;
+        return aPrice - bPrice;
+    });
+
+    tbody.innerHTML = "";
+    rows.forEach((r) => tbody.appendChild(r));
+}
+
+/* =========================
+   SHARED FILTERS
+   ========================= */
+
+function removeOutOfStock() {
+    const rows = document.querySelectorAll("#resultsTable tbody tr");
+
+    rows.forEach((row) => {
+        const stock = row.dataset.stock || "";
+        row.style.display = isAvailableStock(stock) ? "" : "none";
+    });
+}
+
+function filterTable() {
+    const searchBar = document.getElementById("searchBar");
+    const keyword = searchBar?.value.toLowerCase().trim() || "";
+
+    // Tyres Tinder uses grouped rows with rowspans. Re-rendering the matching
+    // data keeps every brand cell and rowspan valid after searches like "runflat".
+    if (
+        document.body.classList.contains("tinder-page") &&
+        Object.keys(savedTinderResults).length
+    ) {
+        applyTinderTextFilter(keyword);
+        return;
+    }
+
+    // Standard row filtering for F Alt Tab.
+    const rows = document.querySelectorAll("#resultsTable tbody tr");
+
+    rows.forEach((row) => {
+        if (!keyword) {
+            row.style.display = "";
+            return;
+        }
+
+        const brand = (row.dataset.brand || "").toLowerCase();
+        const matchInCells = [...row.cells].some((cell) =>
+            cell.textContent.toLowerCase().includes(keyword)
+        );
+
+        row.style.display = matchInCells || brand.includes(keyword) ? "" : "none";
+    });
+}
