@@ -547,6 +547,182 @@ function getGradeInfo(total) {
    AUTOMATIC WEEKLY RANKING
    ========================= */
 
+const PROJECT_C_LAST_WEEK_CODE = "kontol";
+let projectCLastWeekUnlocked = false;
+let projectCSelectedSalesWeek = "current";
+let projectCWeeklyLoadId = 0;
+
+function setProjectCSalesWeekLabel(startDate, endDate, salesWeek = "current") {
+    const rangeElement = document.getElementById("rangeSummary");
+    if (!rangeElement) return;
+
+    const label = projectCLastWeekUnlocked
+        ? `${salesWeek === "previous" ? "Last week" : "This week"} · `
+        : "";
+
+    rangeElement.textContent =
+        `${label}${formatDisplayDate(startDate)} → ${formatDisplayDate(endDate)}`;
+}
+
+function updateProjectCWeekControls() {
+    const controls = document.getElementById("projectCWeekControls");
+    if (!controls) return;
+
+    for (const button of controls.querySelectorAll("[data-sales-week]")) {
+        button.setAttribute(
+            "aria-pressed",
+            String(button.dataset.salesWeek === projectCSelectedSalesWeek)
+        );
+    }
+}
+
+function revealLastWeekSales() {
+    const table = document.getElementById("resultsTable");
+    if (!table?.parentElement) return;
+
+    projectCLastWeekUnlocked = true;
+
+    if (!document.getElementById("projectCWeekControlsStyles")) {
+        const style = document.createElement("style");
+        style.id = "projectCWeekControlsStyles";
+
+        style.textContent = `
+            #projectCWeekControls {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin: 0 0 16px;
+                padding: 12px 14px;
+                border: 1px solid rgba(128, 154, 181, 0.35);
+                border-radius: 12px;
+                color: inherit;
+            }
+
+            #projectCWeekControls button {
+                cursor: pointer;
+                font: inherit;
+                font-weight: 600;
+                color: inherit;
+                background: transparent;
+                border: 1px solid rgba(128, 154, 181, 0.5);
+                border-radius: 8px;
+                padding: 8px 12px;
+            }
+
+            #projectCWeekControls button[aria-pressed="true"] {
+                background: #185eaa;
+                border-color: #185eaa;
+                color: #fff;
+            }
+
+            #projectCWeekControls button:focus-visible {
+                outline: 2px solid #589de6;
+                outline-offset: 3px;
+            }
+
+            #projectCWeekControls [data-hide-last-week] {
+                margin-left: auto;
+            }
+        `;
+
+        document.head.appendChild(style);
+    }
+
+    if (!document.getElementById("projectCWeekControls")) {
+        const controls = document.createElement("div");
+        controls.id = "projectCWeekControls";
+        controls.setAttribute("role", "group");
+        controls.setAttribute("aria-label", "Sales week");
+
+        controls.innerHTML = `
+            <strong>Sales week</strong>
+            <button type="button" data-sales-week="current">
+                This week
+            </button>
+            <button type="button" data-sales-week="previous">
+                Last week · Fri–Thu
+            </button>
+            <button type="button" data-hide-last-week>
+                Hide last week
+            </button>
+        `;
+
+        for (const button of controls.querySelectorAll("[data-sales-week]")) {
+            button.addEventListener("click", () => {
+                if (button.dataset.salesWeek !== projectCSelectedSalesWeek) {
+                    void loadWeeklyRanking(button.dataset.salesWeek);
+                }
+            });
+        }
+
+        controls.querySelector("[data-hide-last-week]").addEventListener("click", () => {
+            projectCLastWeekUnlocked = false;
+            controls.remove();
+            void loadWeeklyRanking("current");
+        });
+
+        table.parentElement.insertBefore(controls, table);
+    }
+
+    updateProjectCWeekControls();
+
+    if (projectCSelectedSalesWeek !== "previous") {
+        void loadWeeklyRanking("previous");
+    }
+}
+
+function installProjectCLastWeekShortcut() {
+    let typedCode = "";
+
+    // Detect typing anywhere on the page, including inside inputs.
+    // Normal typing and browser shortcuts are not intercepted.
+    window.addEventListener("keydown", (event) => {
+        if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) {
+            typedCode = "";
+            return;
+        }
+
+        if (event.repeat || event.key === "Shift") return;
+
+        if (event.key === "Backspace") {
+            typedCode = typedCode.slice(0, -1);
+            return;
+        }
+
+        if (typeof event.key !== "string" || event.key.length !== 1) {
+            typedCode = "";
+            return;
+        }
+
+        typedCode = (typedCode + event.key.toLowerCase())
+            .slice(-PROJECT_C_LAST_WEEK_CODE.length);
+
+        if (typedCode === PROJECT_C_LAST_WEEK_CODE) {
+            typedCode = "";
+            revealLastWeekSales();
+        }
+    }, true);
+
+    window.addEventListener("blur", () => {
+        typedCode = "";
+    });
+}
+
+function getPreviousSalesPeriod() {
+    const { startDate: currentWeekStart } = getCurrentSalesPeriod();
+
+    const startDate = new Date(currentWeekStart);
+    const endDate = new Date(currentWeekStart);
+
+    // Previous Friday through previous Thursday, inclusive.
+    // Calendar arithmetic handles month, year and daylight-saving changes.
+    startDate.setDate(startDate.getDate() - 7);
+    endDate.setDate(endDate.getDate() - 1);
+
+    return { startDate, endDate };
+}
+
 function getSalesWeekDates(startDate, endDate) {
     const dates = [];
     const cursor = new Date(startDate);
@@ -578,24 +754,43 @@ function addSkuQuantity(bucket, initials, type, sku, quantity) {
     skuMap.set(sku, (skuMap.get(sku) || 0) + quantity);
 }
 
-async function loadWeeklyRanking() {
+async function loadWeeklyRanking(salesWeek = projectCSelectedSalesWeek) {
+    if (salesWeek !== "current" && salesWeek !== "previous") return;
+    if (salesWeek === "previous" && !projectCLastWeekUnlocked) return;
+
     const resultsBody = document.querySelector("#resultsTable tbody");
     const grandTotalElement = document.getElementById("grandTotal");
     const itemTotalElement = document.getElementById("itemTotal");
 
     if (!resultsBody || !grandTotalElement || !itemTotalElement) return;
 
+    const loadId = ++projectCWeeklyLoadId;
+    const isActiveLoad = () => loadId === projectCWeeklyLoadId;
+
+    projectCSelectedSalesWeek = salesWeek;
+    updateProjectCWeekControls();
+
     const loadStartedAt = performance.now();
 
-    const { startDate, endDate } = getCurrentSalesPeriod();
+    const { startDate, endDate } = salesWeek === "previous"
+        ? getPreviousSalesPeriod()
+        : getCurrentSalesPeriod();
+
     const startDateKey = formatDateKey(startDate);
     const endDateKey = formatDateKey(endDate);
 
-    setSalesPeriodLabel(startDate, endDate);
+    setProjectCSalesWeekLabel(startDate, endDate, salesWeek);
+
     resultsBody.innerHTML = "";
     grandTotalElement.textContent = "$0.00";
     itemTotalElement.textContent = "0";
-    setLoadingState(true, "Loading weekly retail and wholesale data…");
+
+    setLoadingState(
+        true,
+        salesWeek === "previous"
+            ? "Loading last week's retail and wholesale data…"
+            : "Loading weekly retail and wholesale data…"
+    );
 
     const urlMap = {
         retail: "https://my.tempetyres.com.au/retailpicking/history/",
@@ -607,11 +802,11 @@ async function loadWeeklyRanking() {
     const intranetConcurrency = 4;
     const priceConcurrency = 4;
     const validInitials = new Set(PROJECT_C_INITIALS);
+    const failedHistoryRequests = [];
 
     /*
      * RETAIL:
-     * Fetch one exact-date page for each day from Friday through today.
-     * The intranet does the date filtering before returning the HTML.
+     * Fetch one exact-date page for each day in the selected period.
      */
     const loadRetailByExactDate = async () => {
         const salesDates = getSalesWeekDates(startDate, endDate);
@@ -636,9 +831,14 @@ async function loadWeeklyRanking() {
                         const columns = row.querySelectorAll("td");
                         if (columns.length < 7) continue;
 
-                        const rowInitials = columns[3].querySelector("a")?.textContent.trim();
-                        const sku = columns[1].querySelector("small")?.textContent.trim();
-                        const quantity = Number.parseInt(columns[5].textContent.trim(), 10);
+                        const rowInitials =
+                            columns[3].querySelector("a")?.textContent.trim();
+
+                        const sku =
+                            columns[1].querySelector("small")?.textContent.trim();
+
+                        const quantity =
+                            Number.parseInt(columns[5].textContent.trim(), 10);
 
                         if (
                             !validInitials.has(rowInitials) ||
@@ -657,6 +857,8 @@ async function loadWeeklyRanking() {
                         );
                     }
                 } catch (error) {
+                    failedHistoryRequests.push(error);
+
                     console.error(
                         `Error loading retail for ${year}-${month}-${day}:`,
                         error
@@ -668,19 +870,31 @@ async function loadWeeklyRanking() {
 
     /*
      * WHOLESALE:
-     * Keep the safer existing per-person search because wholesale date pages
-     * can contain too many records and may be truncated by the intranet.
+     * This week uses the existing per-person search.
+     * Last week requests each person for each exact date to reduce
+     * the risk of newer records crowding out the older week.
      */
     const loadWholesaleByPerson = async () => {
         const baseUrl = urlMap.wholesale;
 
+        const dates = salesWeek === "previous"
+            ? getSalesWeekDates(startDate, endDate)
+            : [null];
+
+        const queries = dates.flatMap((date) =>
+            PROJECT_C_INITIALS.map((initials) => ({ initials, date }))
+        );
+
         await mapWithConcurrency(
-            PROJECT_C_INITIALS,
+            queries,
             intranetConcurrency,
-            async (initials) => {
+            async ({ initials, date }) => {
                 try {
                     const intranetUrl =
-                        `${baseUrl}?day=0&month=0&year=0&q=${encodeURIComponent(initials)}&searchin=EnteredBy`;
+                        `${baseUrl}?day=${date ? date.getDate() : 0}` +
+                        `&month=${date ? date.getMonth() + 1 : 0}` +
+                        `&year=${date ? date.getFullYear() : 0}` +
+                        `&q=${encodeURIComponent(initials)}&searchin=EnteredBy`;
 
                     const html = await fetchProxyText(intranetUrl);
                     const doc = parser.parseFromString(html, "text/html");
@@ -690,20 +904,28 @@ async function loadWeeklyRanking() {
                         const columns = row.querySelectorAll("td");
                         if (columns.length < 7) continue;
 
-                        const rawDateText = columns[1].querySelector("b a")?.textContent.trim();
+                        const rawDateText =
+                            columns[1].querySelector("b a")?.textContent.trim();
+
                         const rowDateKey = toDateKey(rawDateText);
 
                         if (
                             !rowDateKey ||
                             rowDateKey < startDateKey ||
-                            rowDateKey > endDateKey
+                            rowDateKey > endDateKey ||
+                            (date && rowDateKey !== formatDateKey(date))
                         ) {
                             continue;
                         }
 
-                        const rowInitials = columns[3].querySelector("a")?.textContent.trim();
-                        const sku = columns[1].querySelector("small")?.textContent.trim();
-                        const quantity = Number.parseInt(columns[5].textContent.trim(), 10);
+                        const rowInitials =
+                            columns[3].querySelector("a")?.textContent.trim();
+
+                        const sku =
+                            columns[1].querySelector("small")?.textContent.trim();
+
+                        const quantity =
+                            Number.parseInt(columns[5].textContent.trim(), 10);
 
                         if (
                             rowInitials !== initials ||
@@ -722,6 +944,7 @@ async function loadWeeklyRanking() {
                         );
                     }
                 } catch (error) {
+                    failedHistoryRequests.push(error);
                     console.error(`Error processing wholesale for ${initials}:`, error);
                 }
             }
@@ -729,21 +952,23 @@ async function loadWeeklyRanking() {
     };
 
     try {
-        /*
-         * Retail and wholesale now load at the same time instead of one after
-         * the other.
-         */
         await Promise.all([
             loadRetailByExactDate(),
             loadWholesaleByPerson(),
         ]);
 
+        // A slower request for another week must not overwrite this view.
+        if (!isActiveLoad()) return;
+
+        if (failedHistoryRequests.length > 0) {
+            throw new Error(
+                `${failedHistoryRequests.length} sales history request(s) failed.`
+            );
+        }
+
         const intranetFinishedAt = performance.now();
 
-        /*
-         * Build one unique SKU list across every salesperson and both sales
-         * types. A SKU is priced only once.
-         */
+        // Price each unique SKU once across all people and both sales types.
         const uniqueSkus = new Set();
 
         for (const data of Object.values(salesBucket)) {
@@ -757,12 +982,16 @@ async function loadWeeklyRanking() {
         );
 
         const skuList = Array.from(uniqueSkus);
+
         const priceEntries = await mapWithConcurrency(
             skuList,
             priceConcurrency,
             async (sku) => [sku, await getPriceForSku(sku, parser)]
         );
+
         const priceBySku = new Map(priceEntries);
+
+        if (!isActiveLoad()) return;
 
         const pricingFinishedAt = performance.now();
 
@@ -788,9 +1017,13 @@ async function loadWeeklyRanking() {
 
                 const combinedTotal = retailTotal + wholesaleTotal;
                 const grade = getGradeInfo(combinedTotal);
+
                 const percent = Math.max(
                     0,
-                    Math.min(100, Math.round((combinedTotal / WEEKLY_TARGET) * 100))
+                    Math.min(
+                        100,
+                        Math.round((combinedTotal / WEEKLY_TARGET) * 100)
+                    )
                 );
 
                 return {
@@ -808,7 +1041,11 @@ async function loadWeeklyRanking() {
             .sort((a, b) => b.combinedTotal - a.combinedTotal);
 
         if (rowsData.length === 0) {
-            showEmptyState("No ranking data was found for the current sales week.");
+            showEmptyState(
+                salesWeek === "previous"
+                    ? "No ranking data was found for last sales week (Friday–Thursday)."
+                    : "No ranking data was found for the current sales week."
+            );
             return;
         }
 
@@ -835,8 +1072,15 @@ async function loadWeeklyRanking() {
             </tr>
         `).join("");
 
-        const grandTotal = rowsData.reduce((sum, data) => sum + data.combinedTotal, 0);
-        const itemTotal = rowsData.reduce((sum, data) => sum + data.qty, 0);
+        const grandTotal = rowsData.reduce(
+            (sum, data) => sum + data.combinedTotal,
+            0
+        );
+
+        const itemTotal = rowsData.reduce(
+            (sum, data) => sum + data.qty,
+            0
+        );
 
         grandTotalElement.textContent = `$${grandTotal.toFixed(2)}`;
         itemTotalElement.textContent = String(itemTotal);
@@ -848,14 +1092,22 @@ async function loadWeeklyRanking() {
             `unique SKUs: ${uniqueSkus.size}`
         );
     } catch (error) {
+        if (!isActiveLoad()) return;
+
         console.error("Error loading Project C ranking:", error);
-        showEmptyState("The ranking could not be loaded. Check Tom does it all and refresh the page.");
+        grandTotalElement.textContent = "—";
+        itemTotalElement.textContent = "—";
+
+        showEmptyState(
+            "The ranking could not be loaded. Check Tom does it all and refresh the page."
+        );
     } finally {
-        setLoadingState(false);
+        if (isActiveLoad()) setLoadingState(false);
     }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
     injectProjectCGodSkinStyles();
+    installProjectCLastWeekShortcut();
     loadWeeklyRanking();
 });
