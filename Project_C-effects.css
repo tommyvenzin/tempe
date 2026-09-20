@@ -1,0 +1,160 @@
+/* Add-on styles only. Keep the existing allaround.css beside this file. */
+body.project-c-page[data-project-c-theme] {
+    isolation: isolate;
+    padding-bottom: 195px;
+}
+.project-c-table-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.project-c-refresh, .project-c-motion-button {
+    appearance: none;
+    cursor: pointer;
+    font: 500 12px/1.4 system-ui, sans-serif;
+    color: #d7e4ef;
+    border: 1px solid #496073;
+    background: #10202edb;
+    border-radius: 7px;
+    padding: 7px 11px;
+}
+.project-c-refresh:hover, .project-c-motion-button:hover { background: #22394e; border-color: #8dc5e6; }
+.project-c-refresh:focus-visible, .project-c-motion-button:focus-visible { outline: 2px solid #b0eaff; outline-offset: 4px; }
+#projectCEffects { pointer-events: none; }
+#projectCEffects [hidden] { display: none !important; }
+.project-c-donkey {
+    position: fixed;
+    z-index: 40;
+    right: max(22px, env(safe-area-inset-right));
+    bottom: 45px;
+    display: flex;
+    align-items: center;
+    width: min(440px, calc(100vw - 32px));
+    gap: 4px;
+    opacity: 0;
+    transform: translateY(35px);
+    animation: projectCDonkeyVisit 3s ease-in-out 3s infinite;
+    will-change: transform, opacity;
+}
+.project-c-donkey-bubble {
+    position: relative;
+    padding: 17px 20px;
+    border: 1px solid #c8d7eb;
+    border-radius: 20px 20px 4px 20px;
+    background: #f3f7fc;
+    color: #1a2840;
+    box-shadow: 0 8px 30px #0005;
+    flex: 1 1 260px;
+}
+.project-c-donkey-label { display: block; font: 750 9px/1.5 system-ui, sans-serif; letter-spacing: .18em; color: #667b94; margin-bottom: 7px; }
+.project-c-donkey-bubble p { margin: 0; font: 600 14px/1.55 system-ui, sans-serif; }
+.project-c-donkey-art { width: 153px; flex: 0 0 153px; height: 148px; overflow: visible; }
+.project-c-donkey-head { transform-box: fill-box; transform-origin: 65% 85%; animation: projectCDonkeyNod 1.5s ease-in-out infinite; }
+.project-c-donkey-tail { transform-box: fill-box; transform-origin: 0 90%; animation: projectCDonkeyTail .8s ease-in-out infinite alternate; }
+.project-c-donkey-leg { transform-box: fill-box; transform-origin: 50% 0; animation: projectCDonkeyStep .6s ease-in-out infinite alternate; }
+.project-c-donkey-leg-back { animation-delay: -.6s; }
+.project-c-donkey-leg-near { animation-delay: -.3s; }
+.project-c-effects-controls {
+    position: fixed;
+    right: max(22px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    z-index: 41;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.project-c-motion-button { pointer-events: auto; font-size: 10px; padding: 5px 9px; color: #aebfd0; }
+.project-c-winter-caption { color: #bbdce9; font: 600 10px/1.4 system-ui, sans-serif; letter-spacing: .23em; text-shadow: 0 1px 8px #000; }
+.project-c-winter-caption span { display: block; font-size: 8px; letter-spacing: .14em; opacity: .64; margin-top: 4px; }
+/* The scene sits behind the dashboard; all controls and table cells stay clickable. */
+body.project-c-page[data-project-c-theme="winter"] { background: #050b13; color: #d8eaf5; }
+.project-c-winter {
+    position: fixed;
+    z-index: -1;
+    inset: 0;
+    overflow: hidden;
+    contain: strict;
+    background: radial-gradient(ellipse at 75% 40%, #213f5655, transparent 60%), linear-gradient(140deg, #060d17, #101f2e 60%, #03080f);
+}
+.project-c-winter-halo {
+    position: absolute;
+    width: 90vw;
+    height: 90vh;
+    right: -20vw;
+    top: -20vh;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, #669cb623, #629db309 45%, transparent 65%);
+    animation: projectCHalo 12s ease-in-out infinite alternate;
+}
+.project-c-throne { position: absolute; right: -3vw; bottom: -12vh; height: 112vh; width: auto; max-width: 95vw; opacity: .85; }
+.project-c-king-eyes { animation: projectCKingEyes 4s ease-in-out infinite alternate; }
+.project-c-fog {
+    position: absolute;
+    left: -35%;
+    bottom: -8%;
+    width: 170%;
+    height: 50%;
+    background: radial-gradient(ellipse at 25% 80%, #c5e8ff16, transparent 50%), radial-gradient(ellipse at 75% 60%, #8dd5ff12, transparent 43%);
+    animation: projectCFog 24s ease-in-out infinite alternate;
+    will-change: transform;
+}
+.project-c-fog-back { bottom: 16%; height: 35%; opacity: .45; animation-duration: 34s; animation-delay: -12s; }
+.project-c-fog-front { animation-delay: -6s; }
+.project-c-snow { position: absolute; inset: 0; }
+.project-c-snow i {
+    position: absolute;
+    left: var(--x);
+    top: -12px;
+    width: var(--size);
+    height: var(--size);
+    border-radius: 50%;
+    background: #dcf3ff;
+    opacity: var(--alpha);
+    animation: projectCSnow var(--duration) linear var(--delay) infinite;
+}
+.project-c-winter-vignette { position: absolute; inset: 0; background: linear-gradient(90deg, #02081185, transparent 58%), radial-gradient(ellipse, transparent 40%, #01050b80); }
+body[data-project-c-theme="winter"] :is(.dashboard-card, .metric-card, .notice-card) {
+    background: #091625c9;
+    border-color: #6995b344;
+    box-shadow: 0 18px 50px #0003, inset 0 1px 0 #bbdefb0a;
+}
+body[data-project-c-theme="winter"] .project-hero h1 { color: #e2f4ff; text-shadow: 0 0 32px #86d9ff25; }
+body[data-project-c-theme="winter"] .project-table-container { background-color: #08132155; }
+body[data-project-c-theme="winter"] #resultsTable { color: #d8eaf5; }
+body[data-project-c-theme="winter"] #resultsTable thead { background: #0d2033dd; }
+body[data-project-c-theme="winter"] #resultsTable td { border-color: #63849a26; }
+/* Pause means a still scene, including in tabs that are not visible. */
+body.project-c-effects-paused #projectCEffects *,
+body.project-c-effects-paused .god-skin::before,
+body.project-c-effects-paused .god-wave-streak { animation-play-state: paused !important; }
+#projectCEffects.project-c-still .project-c-donkey { animation: none; opacity: 1; transform: none; }
+@keyframes projectCDonkeyVisit {
+    0%, 100% { opacity: 0; transform: translateY(35px); }
+    8%, 88% { opacity: 1; transform: translateY(0); }
+    97% { opacity: 0; transform: translateY(35px); }
+}
+@keyframes projectCDonkeyNod { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+@keyframes projectCDonkeyTail { to { transform: rotate(15deg); } }
+@keyframes projectCDonkeyStep { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+@keyframes projectCSnow { to { transform: translate3d(var(--drift), calc(100vh + 24px), 0); } }
+@keyframes projectCFog { from { transform: translate3d(-4%, 0, 0); } to { transform: translate3d(4%, -4%, 0); } }
+@keyframes projectCHalo { from { opacity: .5; transform: scale(.96); } to { opacity: 1; transform: scale(1.04); } }
+@keyframes projectCKingEyes { from { opacity: .5; } to { opacity: 1; } }
+@media (max-width: 600px) {
+    .project-c-donkey { right: 16px; bottom: 50px; }
+    .project-c-donkey-art { width: 105px; flex-basis: 105px; height: 115px; }
+    .project-c-donkey-bubble { padding: 12px 14px; }
+    .project-c-donkey-bubble p { font-size: 12px; }
+    .project-c-throne { right: -32vw; height: 90vh; max-width: none; bottom: -5vh; opacity: .68; }
+    .project-c-effects-controls { right: 16px; gap: 10px; }
+    .project-c-table-actions { justify-content: flex-start; }
+    .project-c-snow i:nth-child(n+16) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #projectCEffects .project-c-donkey { animation: none; opacity: 1; transform: none; }
+    #projectCEffects * { animation: none !important; }
+    #projectCEffects .project-c-motion-button { display: none; }
+    .god-skin::before, .god-wave-streak { animation: none !important; }
+}
