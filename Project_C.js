@@ -1289,7 +1289,7 @@ function installProjectCEffects() {
         <aside class="project-c-donkey" aria-label="Donkey says: look ! it's a Jahash ! does it looks like your mirror? I bet it does !">
             <div class="project-c-donkey-bubble" aria-hidden="true">
                 <span class="project-c-donkey-label">MIRROR CHECK</span>
-                <p>look ! it's a Jahash ! does it looks like your mirror? I bet it does !</p>
+                <p>Look! It’s your long-lost twin, the Jahash! Wishing you both the best.</p>
             </div>
             <svg class="project-c-donkey-art" viewBox="0 0 210 190" fill="none" aria-hidden="true" focusable="false">
                 <ellipse cx="107" cy="174" rx="72" ry="7" fill="#02080f" opacity=".24"/>
