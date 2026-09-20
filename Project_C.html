@@ -6,6 +6,7 @@
     <meta name="color-scheme" content="dark">
     <title>Project C Dashboard</title>
     <link rel="stylesheet" href="allaround.css">
+    <link rel="stylesheet" href="Project_C-effects.css?v=20260921">
 </head>
 
 <body class="project-c-page">
@@ -76,7 +77,13 @@
                     <span class="section-kicker">Weekly ranking</span>
                     <h2 id="resultsHeading">Performance table</h2>
                 </div>
-                <span class="privacy-pill">Initials hidden on screen</span>
+                <div class="project-c-table-actions">
+                    <span class="privacy-pill">Initials hidden on screen</span>
+                    <button type="button" id="projectCRefreshPrices" class="project-c-refresh"
+                        title="Fetch fresh website prices. Recent prices are otherwise reused for up to 30 minutes in this tab.">
+                        Refresh prices
+                    </button>
+                </div>
             </div>
 
             <div class="table-container project-table-container">
@@ -97,6 +104,6 @@
         </section>
     </main>
 
-    <script src="Project_C.js" defer></script>
+    <script src="Project_C.js?v=20260921" defer></script>
 </body>
 </html>
