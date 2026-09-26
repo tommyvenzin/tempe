@@ -6,6 +6,10 @@
     <title>Tempe Orders Helper</title>
     <link rel="stylesheet" href="./allaround.css">
     <style>
+        body { background:#0b1120; color:#e2e8f0; font-family:Arial,sans-serif; margin:24px; }
+        button { cursor:pointer; } button:disabled { opacity:.45; cursor:default; }
+        .transfer-help { color:#cbd5e1; font-size:14px; margin:0 0 16px; }
+        .transfer-help strong { color:#86efac; }
         .page-wrap {
             display: grid;
             grid-template-columns: 420px 1fr;
@@ -208,8 +212,10 @@
         <button class="main-btn" id="refreshBtn">Refresh Orders</button>
         <button class="main-btn secondary" id="toggleDayBtn">Tomorrow Orders</button>
         <button class="main-btn secondary" id="copyAllBtn">Copy All</button>
+        <button class="main-btn" id="sendCostarBtn" disabled>Send to COSTAR</button>
     </div>
 
+    <p class="transfer-help">Open Start-COSTAR-Autofill.cmd in this Remote Desktop session. Select an order, click <strong>Send to COSTAR</strong>, then choose <strong>Fill empty Repair Order</strong> in the helper.</p>
     <div class="status-line" id="statusLine">Ready.</div>
 
     <div class="page-wrap">
@@ -230,11 +236,82 @@
     </div>
 
     <script>
+/* Pure order validation shared by the HTML export and its tests. */
+(function (scope) {
+    'use strict';
+    const PREFIX = 'TEMPE_COSTAR_ORDER_V1\n';
+    function text(value) { return String(value == null ? '' : value).replace(/\s+/g, ' ').trim(); }
+    function money(value) {
+        const v = text(value).replace(/^(?:AUD\s*)?\$\s*/i, '').replace(/,/g, '');
+        if (!/^\d+(?:\.\d{1,2})?$/.test(v)) throw new Error('Missing or invalid price: ' + value);
+        const cents = Math.round(Number(v) * 100);
+        if (!Number.isSafeInteger(cents) || cents > 100000000) throw new Error('Price is outside the supported range.');
+        return cents;
+    }
+    function classify(sku, description) {
+        const sourceSku = text(sku).toUpperCase();
+        const product = text(description).toUpperCase();
+        const service = /\bALIGNMENT\b|\bSERVICES?\s*:/.test(product) || /^SERVICES?$/.test(sourceSku);
+        if (!service) {
+            if (!/^[A-Z0-9][A-Z0-9._-]{0,39}$/.test(sourceSku) || /^(?:M|DET|WA|WAFR)$/.test(sourceSku))
+                return { kind: 'unmapped', costarCode: '', sourceSku, product };
+            return { kind: 'product', costarCode: sourceSku, sourceSku, product };
+        }
+        let label = product.replace(/^SERVICES?\s*:\s*/, '').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (/^(?:FRONT (?:WHEEL )?ALIGNMENT|(?:WHEEL )?ALIGNMENT FRONT(?: ONLY)?)$/.test(label))
+            return { kind: 'service', costarCode: 'WA', sourceSku, product };
+        if (/^(?:FRONT (?:&|AND) REAR (?:WHEEL )?ALIGNMENT|(?:WHEEL )?ALIGNMENT FRONT (?:&|AND) REAR)$/.test(label))
+            return { kind: 'service', costarCode: 'WAFR', sourceSku, product };
+        return { kind: 'unmapped', costarCode: '', sourceSku, product };
+    }
+    function pickup(raw) {
+        const m = text(raw).match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s+(\d{1,2})\s+([A-Za-z]{3})\s+(20\d{2})\s+(\d{1,2}):(\d{2})(?:\s*([ap]m))?$/i);
+        if (!m) throw new Error('Pickup date/time needs checking: ' + raw);
+        const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+        const month = months.indexOf(m[3].toLowerCase());
+        const date = new Date(Date.UTC(Number(m[4]), month, Number(m[2])));
+        let hour = Number(m[5]); const minute = Number(m[6]);
+        if (m[7]) { if (hour < 1 || hour > 12) throw new Error('Invalid pickup hour.'); hour = hour % 12 + (/pm/i.test(m[7]) ? 12 : 0); }
+        const weekdays = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+        if (month < 0 || date.getUTCMonth() !== month || date.getUTCDate() !== Number(m[2]) || hour > 23 || minute > 59 || weekdays[date.getUTCDay()].slice(0,3) !== m[1].toUpperCase())
+            throw new Error('Invalid pickup date/time.');
+        return { date: date.toISOString().slice(0,10), time: String(hour).padStart(2,'0') + ':' + m[6], day: weekdays[date.getUTCDay()] };
+    }
+    function makeOrder(data, now) {
+        if (!data || !/^TTW\d+$/i.test(text(data.orderId))) throw new Error('Select a fully loaded order first.');
+        const lines = (data.products || []).map(item => {
+            const mapped = classify(item.sourceSku || item.sku, item.product);
+            if (mapped.kind === 'unmapped') throw new Error('Service/product needs a COSTAR mapping: ' + item.product);
+            if (!/^\d+$/.test(String(item.qty)) || Number(item.qty) < 1 || Number(item.qty) > 100) throw new Error('Check the quantity for ' + item.product);
+            const priceCents = money(item.unitPrice), lineCents = money(item.lineTotal);
+            if (priceCents <= 0 || priceCents * Number(item.qty) !== lineCents) throw new Error('Price/quantity does not match the line total for ' + item.product);
+            return { kind: mapped.kind, sourceSku: mapped.sourceSku, code: mapped.costarCode, description: mapped.product, quantity: Number(item.qty), unitCents: priceCents, totalCents: lineCents };
+        });
+        if (!lines.length || lines.length > 12) throw new Error('This first version supports 1–12 priced lines.');
+        const totalCents = money(data.amountText);
+        if (lines.reduce((sum, item) => sum + item.totalCents, 0) !== totalCents) throw new Error('The item totals differ from the online order total. Check for discounts, freight or missing lines before sending.');
+        const slot = pickup(data.pickupPreview);
+        const customer = {};
+        for (const key of ['name','streetAddress','suburb','postcode','phone','email']) customer[key] = text(data[key]);
+        if (!customer.name || !customer.phone) throw new Error('Customer name and phone are required.');
+        const rego = text(data.rego).toUpperCase();
+        return { schema: 1, createdUtc: new Date(now || Date.now()).toISOString(), orderId: text(data.orderId).toUpperCase(), customer,
+            vehicle: text(data.vehicleInfo), rego, pickupDate: slot.date, pickupTime: slot.time,
+            comment: (rego ? rego + ' - ' : '') + slot.day + ' - ONLINE ' + slot.time, totalCents, lines };
+    }
+    const api = { PREFIX, text, money, classify, pickup, makeOrder };
+    scope.TempeCostar = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof window === 'undefined' ? globalThis : window);
+
+
         const ORDERS_URL = "https://www.tempetyres.com.au/orders?action=showall";
         const BASE_URL = "https://www.tempetyres.com.au/";
         const EXTENSION_BRIDGE_TIMEOUT_MS = 20000;
 
         let selectedOrderData = null;
+        let detailRequest = 0;
+        let listRequest = 0;
         let currentSelectedOrderId = null;
         let filteredOrdersCache = [];
         let dayMode = "today";
@@ -509,36 +586,15 @@
         }
 
         function extractProductRows(doc) {
-            const rows = Array.from(doc.querySelectorAll("tr"));
-
-            const productRows = rows
-                .map(row => {
-                    const cells = row.querySelectorAll("td");
-                    if (cells.length !== 4) return null;
-
-                    const first = cells[0]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const qty = cells[1]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const unitPrice = cells[2]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const lineTotal = cells[3]?.textContent.replace(/\s+/g, " ").trim() || "";
-
-                    if (!/^[A-Z0-9]+\s*:/.test(first)) return null;
-                    if (!/^\d+$/.test(qty)) return null;
-                    if (!/^\$/.test(unitPrice)) return null;
-                    if (!/^\$/.test(lineTotal)) return null;
-
-                    const skuMatch = first.match(/^([A-Z0-9]+)\s*:\s*(.+)$/i);
-
-                    return {
-                        sku: skuMatch ? skuMatch[1].trim() : "",
-                        qty,
-                        product: skuMatch ? skuMatch[2].trim() : first,
-                        unitPrice,
-                        lineTotal
-                    };
-                })
-                .filter(Boolean);
-
-            return productRows;
+            return Array.from(doc.querySelectorAll("tr")).map(row => {
+                const cells = Array.from(row.children).filter(el => el.tagName === "TD");
+                if (cells.length !== 4) return null;
+                const [first, qty, unitPrice, lineTotal] = cells.map(el => el.textContent.replace(/\s+/g, " ").trim());
+                if (!/^\d+$/.test(qty) || !/^\$/.test(unitPrice) || !/^\$/.test(lineTotal)) return null;
+                const m = first.match(/^([A-Z0-9._-]+)\s*:\s*(.+)$/i);
+                const mapped = TempeCostar.classify(m ? m[1] : "", m ? m[2] : first);
+                return { ...mapped, sku: mapped.costarCode, qty, unitPrice, lineTotal };
+            }).filter(Boolean);
         }
 
         async function fetchStockBySku(sku) {
@@ -565,7 +621,7 @@
         async function enrichProductsWithStock(productRows) {
             const enriched = await Promise.all(
                 productRows.map(async (item) => {
-                    const stock = await fetchStockBySku(item.sku);
+                    const stock = item.kind === "product" ? await fetchStockBySku(item.sku) : "";
                     return {
                         ...item,
                         stock: uppercaseSafe(stock)
@@ -669,6 +725,7 @@
 
         function renderDetails(data) {
             selectedOrderData = data;
+            document.getElementById("sendCostarBtn").disabled = false;
 
             const staticFields = `
                 ${renderClickableField("TTW LINK", data.orderLink, data.orderLink, "TTW link copied", true)}
@@ -681,15 +738,18 @@
                 ${renderClickableField("VEHICLE INFORMATION", data.vehicleInfo, data.vehicleInfo, "Vehicle information copied")}
                 ${renderClickableField("REGO", data.rego, data.rego, "Rego copied")}
                 ${renderClickableField("ORDER ID", data.orderId, data.orderId, "Order ID copied")}
+                ${renderClickableField("PICKUP", data.pickupPreview, data.pickupPreview, "Pickup copied")}
+                ${renderClickableField("TOTAL", data.amountText, data.amountText, "Total copied")}
             `;
 
             const productFields = (data.products || []).map((item, index) => {
-                const productLabel = `${item.product} (${item.stock})`;
-                const stockClass = getProductStockClass(item.stock);
+                const productLabel = item.product + (item.stock ? ` (${item.stock})` : "");
+                const stockClass = item.kind === "product" ? getProductStockClass(item.stock) : "";
 
                 return `
                     ${renderClickableField(`SKU ${index + 1}`, item.sku, item.sku, `SKU ${index + 1} copied`)}
                     ${renderClickableField(`QTY ${index + 1}`, item.qty, item.qty, `Quantity ${index + 1} copied`)}
+                    ${renderClickableField(`PRICE ${index + 1}`, item.unitPrice, item.unitPrice, `Price ${index + 1} copied`)}
                     ${renderClickableField(`PRODUCT ${index + 1}`, productLabel, productLabel, `Product ${index + 1} copied`, false, stockClass)}
                 `;
             }).join("");
@@ -743,11 +803,16 @@
         }
 
         async function loadFilteredOrders() {
+            const request = ++listRequest;
+            ++detailRequest;
+            selectedOrderData = null;
+            document.getElementById("sendCostarBtn").disabled = true;
             const statusLine = document.getElementById("statusLine");
             statusLine.textContent = "Loading orders...";
 
             try {
                 const html = await fetchHtml(ORDERS_URL);
+                if (request !== listRequest) return;
                 const doc = parseHtml(html);
                 const rows = Array.from(doc.querySelectorAll("#table_data tbody tr"));
 
@@ -800,6 +865,7 @@
 
             } catch (err) {
                 console.error(err);
+                if (request !== listRequest) return;
                 statusLine.textContent = `Failed to load orders: ${err.message}`;
                 document.getElementById("orderList").innerHTML =
                     `<div class="empty-state">Could not load orders.</div>`;
@@ -807,11 +873,16 @@
         }
 
         async function loadOrderDetails(order) {
+            const request = ++detailRequest;
+            selectedOrderData = null;
+            document.getElementById("sendCostarBtn").disabled = true;
+            document.getElementById("detailsWrap").textContent = "Loading selected order…";
             const statusLine = document.getElementById("statusLine");
             statusLine.textContent = `Loading ${order.orderId}...`;
 
             try {
                 const html = await fetchHtml(order.orderLink);
+                if (request !== detailRequest) return;
                 const doc = parseHtml(html);
 
                 const orderId = uppercaseSafe(extractLabeledValue(doc, "Order ID:") || order.orderId);
@@ -825,9 +896,12 @@
                 const vehicle = extractVehicleInfo(doc);
                 const productRows = extractProductRows(doc);
                 const productsWithStock = await enrichProductsWithStock(productRows);
+                if (request !== detailRequest) return;
 
                 const data = {
                     orderLink: order.orderLink,
+                    amountText: order.amountText,
+                    pickupPreview: order.pickupPreview,
                     orderId,
                     name: customerName,
                     streetAddress: uppercaseSafe(addressParts.streetAddress),
@@ -838,6 +912,7 @@
                     vehicleInfo: uppercaseSafe(vehicle.vehicleInfo),
                     rego: uppercaseSafe(vehicle.rego),
                     products: productsWithStock.map(item => ({
+                        ...item,
                         sku: uppercaseSafe(item.sku),
                         qty: item.qty,
                         product: uppercaseSafe(item.product),
@@ -850,11 +925,23 @@
 
             } catch (err) {
                 console.error(err);
+                if (request !== detailRequest) return;
                 statusLine.textContent = `Failed to load ${order.orderId}: ${err.message}`;
                 document.getElementById("detailsWrap").innerHTML =
                     `<div class="empty-state">Could not load order details.</div>`;
             }
         }
+
+
+        document.getElementById("sendCostarBtn").addEventListener("click", async () => {
+            try {
+                if (!selectedOrderData || selectedOrderData.orderId !== currentSelectedOrderId) throw new Error("Select a fully loaded order first.");
+                const order = TempeCostar.makeOrder(selectedOrderData);
+                await navigator.clipboard.writeText(TempeCostar.PREFIX + JSON.stringify(order));
+                flashCopied(order.orderId + " sent. Choose Fill empty Repair Order in the Windows helper.");
+                document.getElementById("statusLine").textContent = order.orderId + " copied for COSTAR — open the Windows helper to fill it.";
+            } catch (err) { alert("Order was not sent: " + err.message); }
+        });
 
         document.getElementById("refreshBtn").addEventListener("click", loadFilteredOrders);
 
@@ -884,7 +971,8 @@
 
             if (!selected) return;
             if (!selected.value) {
-                flashCopied("Nothing to copy for this field");
+                event.preventDefault();
+                copyText("", "No value supplied — clipboard cleared");
                 return;
             }
 
