@@ -10,6 +10,17 @@
         button { cursor:pointer; } button:disabled { opacity:.45; cursor:default; }
         .transfer-help { color:#cbd5e1; font-size:14px; margin:0 0 16px; }
         .transfer-help strong { color:#86efac; }
+        .search-form { margin: 0 0 18px; }
+        .search-form label { display: block; font-weight: 700; margin-bottom: 8px; }
+        .search-controls { display: flex; gap: 10px; flex-wrap: wrap; }
+        .search-controls input { flex: 1 1 240px; max-width: 420px; padding: 11px 14px; border: 1px solid #64748b; border-radius: 10px; background: #020617; color: #f8fafc; font: inherit; }
+        .search-controls input:focus { outline: 2px solid #f97316; outline-offset: 2px; }
+        .search-form p { margin: 8px 0 0; }
+        .address-section { margin: 18px 0; padding-top: 14px; border-top: 1px solid #334155; }
+        .address-section h3 { margin: 0 0 10px; font-size: 1rem; }
+        .address-block { white-space: pre-line; line-height: 1.55; }
+        .address-notice { color: #fcd34d; margin: 14px 0 4px; }
+        .costar-status { margin: 0 0 16px; color: #cbd5e1; }
         .page-wrap {
             display: grid;
             grid-template-columns: 420px 1fr;
@@ -208,6 +219,16 @@
 
     <h1>Tempe Orders Helper</h1>
 
+    <form id="orderSearchForm" class="search-form" role="search">
+        <label for="orderSearchInput">Search by order number</label>
+        <div class="search-controls">
+            <input id="orderSearchInput" name="orderNumber" type="search" placeholder="TTW1730141" maxlength="32" autocomplete="off" spellcheck="false" aria-describedby="orderSearchHelp">
+            <button class="main-btn" type="submit">Search order</button>
+            <button class="main-btn secondary" type="button" id="clearSearchBtn" hidden>Back to pickup orders</button>
+        </div>
+        <p class="muted" id="orderSearchHelp">Search all dates, stores and delivery orders. You can enter the number with or without TTW.</p>
+    </form>
+
     <div class="toolbar">
         <button class="main-btn" id="refreshBtn">Refresh Orders</button>
         <button class="main-btn secondary" id="toggleDayBtn">Tomorrow Orders</button>
@@ -216,7 +237,8 @@
     </div>
 
     <p class="transfer-help">Open Start-COSTAR-Autofill.cmd in this Remote Desktop session. Select an order, click <strong>Send to COSTAR</strong>, then choose <strong>Fill empty Repair Order</strong> in the helper.</p>
-    <div class="status-line" id="statusLine">Ready.</div>
+    <div class="status-line" id="statusLine" role="status" aria-live="polite">Ready.</div>
+    <p class="costar-status" id="costarStatus" hidden></p>
 
     <div class="page-wrap">
         <section class="card">
@@ -279,6 +301,8 @@
     }
     function makeOrder(data, now) {
         if (!data || !/^TTW\d+$/i.test(text(data.orderId))) throw new Error('Select a fully loaded order first.');
+        if (Object.prototype.hasOwnProperty.call(data, 'store') && !/^TEMPE(?:\s+NSW)?$/i.test(text(data.store)))
+            throw new Error('Automatic entry currently supports Tempe pickup orders.');
         const lines = (data.products || []).map(item => {
             const mapped = classify(item.sourceSku || item.sku, item.product);
             if (mapped.kind === 'unmapped') throw new Error('Service/product needs a COSTAR mapping: ' + item.product);
@@ -304,7 +328,6 @@
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);
 
-
         const ORDERS_URL = "https://www.tempetyres.com.au/orders?action=showall";
         const BASE_URL = "https://www.tempetyres.com.au/";
         const EXTENSION_BRIDGE_TIMEOUT_MS = 20000;
@@ -315,6 +338,7 @@
         let currentSelectedOrderId = null;
         let filteredOrdersCache = [];
         let dayMode = "today";
+        let searchQuery = "";
         let extensionFetchRequestCounter = 0;
 
         function fetchViaExtension(targetUrl, options = {}) {
@@ -513,49 +537,57 @@
             return "";
         }
 
-        function extractBillingAddressBlock(doc) {
+        function extractAddressBlock(doc, label) {
             const spans = Array.from(doc.querySelectorAll("span"));
-            const billingSpan = spans.find(s => s.textContent.replace(/\s+/g, " ").trim() === "BILLING ADDRESS:");
-            if (!billingSpan) return null;
+            const heading = spans.find(s => uppercaseSafe(s.textContent.replace(/\s+/g, " ")) === label);
+            if (!heading) return [];
+            const td = heading.closest("td");
+            if (!td) return [];
+            // Read text nodes rather than stripping HTML, so entities and any
+            // nested formatting are decoded without inserting source markup.
+            function linesOf(node) {
+                if (node === heading) return "";
+                if (node.nodeType === 3) return node.textContent;
+                if (node.nodeName === "BR") return "\n";
+                return Array.from(node.childNodes || []).map(linesOf).join("");
+            }
+            return linesOf(td).split("\n").map(line => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+        }
 
-            const td = billingSpan.closest("td");
-            if (!td) return null;
-
-            const html = td.innerHTML;
-            const afterHeading = html.split("</span>")[1] || "";
-            return afterHeading
-                .split(/<br\s*\/?>/i)
-                .map(x => x.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim())
-                .filter(Boolean);
+        function extractBillingAddressBlock(doc) {
+            return extractAddressBlock(doc, "BILLING ADDRESS:");
         }
 
         function splitAddress(parts) {
-            const useful = parts.filter(line =>
-                !/^Phone:/i.test(line) &&
-                !/^Email:/i.test(line) &&
-                !/New South Wales/i.test(line) &&
-                !/^AU$/i.test(line)
-            );
-
-            const streetAddress = useful[1] || "";
-            const suburbPostcodeLine = useful[2] || "";
-
-            let suburb = "";
-            let postcode = "";
-
-            const match = suburbPostcodeLine.match(/^(.*?)(\d{4})$/);
-            if (match) {
-                suburb = match[1].trim();
-                postcode = match[2].trim();
-            } else {
-                suburb = suburbPostcodeLine.trim();
+            const useful = parts.filter(line => !/^(?:Phone|Email):/i.test(line));
+            // Locate the postcode from the end, preserving additional street/
+            // unit lines and keeping the full original block for display.
+            for (let index = useful.length - 1; index >= 2; index--) {
+                const match = useful[index].match(/^(.*?)\s+(\d{4})$/);
+                if (match) return {
+                    recipient: useful[0] || "",
+                    streetAddress: useful.slice(1, index).join(", "),
+                    suburb: match[1].trim().replace(/\s+(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)$/i, ""),
+                    postcode: match[2]
+                };
             }
+            return { recipient: useful[0] || "", streetAddress: useful[1] || "", suburb: useful[2] || "", postcode: "" };
+        }
 
-            return {
-                streetAddress,
-                suburb,
-                postcode
-            };
+        function addressBlocksDiffer(billing, delivery) {
+            const normalized = lines => uppercaseSafe(lines.join(" ").replace(/\s+/g, " "));
+            return normalized(billing) !== normalized(delivery);
+        }
+
+        function extractOrderTotals(doc) {
+            return Array.from(doc.querySelectorAll("tr")).map(row => {
+                const cells = Array.from(row.children).filter(el => el.tagName === "TD");
+                if (cells.length !== 2) return null;
+                const label = cells[0].textContent.replace(/\s+/g, " ").trim();
+                const amount = cells[1].textContent.replace(/\s+/g, " ").trim();
+                if (!/^(?:Sub-?Total|Delivery Charges|Discount Code(?:\s.*)?|Card Surcharge(?:\s.*)?|Total Amount)$/i.test(label)) return null;
+                return { label, amount };
+            }).filter(Boolean);
         }
 
         function extractVehicleInfo(doc) {
@@ -661,21 +693,32 @@
             const lines = [
                 `TTW LINK: ${data.orderLink}`,
                 `NAME: ${data.name}`,
-                `ADDRESS: ${data.streetAddress}`,
-                `SUBURB: ${data.suburb}`,
-                `POSTCODE: ${data.postcode}`,
                 `PHONE: ${data.phone}`,
                 `EMAIL: ${data.email}`,
                 `VEHICLE INFORMATION: ${data.vehicleInfo}`,
                 `REGO: ${data.rego}`,
-                `ORDER ID: ${data.orderId}`
+                `ORDER ID: ${data.orderId}`,
+                `DELIVERY METHOD: ${data.deliveryMethod || "Not listed"}`,
+                `STORE / BRANCH: ${data.store || data.deliveringBranch || "Not listed"}`,
+                `PICKUP: ${data.pickupPreview || "Not listed"}`,
+                "", "BILLING ADDRESS:",
+                ...(data.billingAddress?.lines || [data.streetAddress, data.suburb + " " + data.postcode])
             ];
+            if (data.deliveryAddress?.lines.length) {
+                if (data.addressesDiffer) lines.push("", "DELIVERY ADDRESS:", ...data.deliveryAddress.lines);
+                else lines.push("DELIVERY ADDRESS: Same as billing address.");
+            } else lines.push("DELIVERY ADDRESS: Not supplied.");
+            lines.push("");
 
             (data.products || []).forEach((item, index) => {
                 lines.push(`SKU ${index + 1}: ${item.sku}`);
                 lines.push(`QTY ${index + 1}: ${item.qty}`);
-                lines.push(`PRODUCT ${index + 1}: ${item.product} (${item.stock})`);
+                lines.push(`PRODUCT ${index + 1}: ${item.product}${item.stock ? " (" + item.stock + ")" : ""}`);
+                lines.push(`PRICE ${index + 1}: ${item.unitPrice}`);
+                lines.push(`LINE TOTAL ${index + 1}: ${item.lineTotal}`);
             });
+            for (const total of data.totals || []) lines.push(`${total.label.toUpperCase()}: ${total.amount}`);
+            if (!(data.totals || []).some(total => /^Total Amount$/i.test(total.label))) lines.push(`TOTAL: ${data.amountText}`);
 
             return lines.join("\n");
         }
@@ -723,23 +766,53 @@
             return tag === "input" || tag === "textarea" || target.isContentEditable;
         }
 
+        function renderAddressSection(title, address) {
+            if (!address?.lines.length) return `<section class="address-section"><h3>${escapeHtml(title)}</h3><p class="muted">Not supplied.</p></section>`;
+            const full = address.lines.join("\n");
+            return `<section class="address-section"><h3>${escapeHtml(title)}</h3>
+                ${renderClickableField("FULL ADDRESS", full, full, title + " copied", false, "address-block")}
+                ${renderClickableField("STREET", address.streetAddress, address.streetAddress, title + " street copied")}
+                ${renderClickableField("SUBURB", address.suburb, address.suburb, title + " suburb copied")}
+                ${renderClickableField("POSTCODE", address.postcode, address.postcode, title + " postcode copied")}
+            </section>`;
+        }
+
+        function renderAddresses(data) {
+            let html = renderAddressSection("BILLING ADDRESS", data.billingAddress);
+            if (data.deliveryAddress?.lines.length) {
+                if (data.addressesDiffer) html += `<p class="address-notice">Billing and delivery details differ.</p>` + renderAddressSection("DELIVERY ADDRESS", data.deliveryAddress);
+                else html += `<p class="muted">Delivery address matches billing address.</p>`;
+            } else html += `<p class="muted">Delivery address not supplied.</p>`;
+            if (data.addressesDiffer) html += `<p class="muted">Address keyboard shortcuts and COSTAR use the billing address. Click a delivery field to copy it.</p>`;
+            return html;
+        }
+
         function renderDetails(data) {
             selectedOrderData = data;
-            document.getElementById("sendCostarBtn").disabled = false;
+            const transferStatus = document.getElementById("costarStatus");
+            try {
+                TempeCostar.makeOrder(data);
+                document.getElementById("sendCostarBtn").disabled = false;
+                transferStatus.hidden = true;
+                transferStatus.textContent = "";
+            } catch (err) {
+                document.getElementById("sendCostarBtn").disabled = true;
+                transferStatus.textContent = "COSTAR autofill unavailable: " + err.message + " You can still view and copy the order.";
+                transferStatus.hidden = false;
+            }
 
             const staticFields = `
                 ${renderClickableField("TTW LINK", data.orderLink, data.orderLink, "TTW link copied", true)}
+                ${renderClickableField("ORDER ID", data.orderId, data.orderId, "Order ID copied")}
+                ${renderClickableField("DELIVERY METHOD", data.deliveryMethod, data.deliveryMethod, "Delivery method copied")}
+                ${renderClickableField("STORE / BRANCH", data.store || data.deliveringBranch, data.store || data.deliveringBranch, "Branch copied")}
                 ${renderClickableField("NAME", data.name, data.name, "Name copied")}
-                ${renderClickableField("ADDRESS", data.streetAddress, data.streetAddress, "Address copied")}
-                ${renderClickableField("SUBURB", data.suburb, data.suburb, "Suburb copied")}
-                ${renderClickableField("POSTCODE", data.postcode, data.postcode, "Postcode copied")}
                 ${renderClickableField("PHONE", data.phone, data.phone, "Phone copied")}
                 ${renderClickableField("EMAIL", data.email, data.email, "Email copied")}
+                ${renderAddresses(data)}
                 ${renderClickableField("VEHICLE INFORMATION", data.vehicleInfo, data.vehicleInfo, "Vehicle information copied")}
                 ${renderClickableField("REGO", data.rego, data.rego, "Rego copied")}
-                ${renderClickableField("ORDER ID", data.orderId, data.orderId, "Order ID copied")}
-                ${renderClickableField("PICKUP", data.pickupPreview, data.pickupPreview, "Pickup copied")}
-                ${renderClickableField("TOTAL", data.amountText, data.amountText, "Total copied")}
+                ${data.pickupPreview ? renderClickableField("PICKUP", data.pickupPreview, data.pickupPreview, "Pickup copied") : ""}
             `;
 
             const productFields = (data.products || []).map((item, index) => {
@@ -750,12 +823,14 @@
                     ${renderClickableField(`SKU ${index + 1}`, item.sku, item.sku, `SKU ${index + 1} copied`)}
                     ${renderClickableField(`QTY ${index + 1}`, item.qty, item.qty, `Quantity ${index + 1} copied`)}
                     ${renderClickableField(`PRICE ${index + 1}`, item.unitPrice, item.unitPrice, `Price ${index + 1} copied`)}
+                    ${renderClickableField(`LINE TOTAL ${index + 1}`, item.lineTotal, item.lineTotal, `Line total ${index + 1} copied`)}
                     ${renderClickableField(`PRODUCT ${index + 1}`, productLabel, productLabel, `Product ${index + 1} copied`, false, stockClass)}
                 `;
             }).join("");
 
             const detailsWrap = document.getElementById("detailsWrap");
-            detailsWrap.innerHTML = staticFields + productFields;
+            const totals = (data.totals || []).filter(total => !/^Total Amount$/i.test(total.label)).map(total => renderClickableField(total.label.toUpperCase(), total.amount, total.amount, total.label + " copied")).join("");
+            detailsWrap.innerHTML = staticFields + productFields + totals + renderClickableField("TOTAL", data.amountText, data.amountText, "Total copied");
 
             attachFieldCopyHandlers();
         }
@@ -765,7 +840,10 @@
             const listTitle = document.getElementById("listTitle");
             const listSubtitle = document.getElementById("listSubtitle");
 
-            if (dayMode === "today") {
+            if (searchQuery) {
+                listTitle.textContent = "Order search";
+                listSubtitle.textContent = `Exact match for ${searchQuery} across all dates, stores and delivery methods.`;
+            } else if (dayMode === "today") {
                 listTitle.textContent = "Today Orders";
                 listSubtitle.textContent = "Auto-filtered by Store = Tempe NSW and Pickup Date = today (Sydney time).";
             } else {
@@ -774,7 +852,7 @@
             }
 
             if (!items.length) {
-                orderList.innerHTML = `<div class="empty-state">No Tempe NSW ${dayMode} orders found.</div>`;
+                orderList.innerHTML = `<div class="empty-state">${searchQuery ? "No order found for " + escapeHtml(searchQuery) + "." : "No Tempe NSW " + dayMode + " orders found."}</div>`;
                 return;
             }
 
@@ -782,9 +860,10 @@
                 <div class="order-item ${currentSelectedOrderId === item.orderId ? "active" : ""}" data-order-id="${escapeHtml(item.orderId)}">
                     <div class="order-id">${escapeHtml(item.orderId)}</div>
                     <div class="order-meta">
-                        <div><strong>Store:</strong> ${escapeHtml(item.store)}</div>
+                        <div><strong>Delivery:</strong> ${escapeHtml(item.deliveryMethod || "Not listed")}</div>
+                        ${item.store ? `<div><strong>Store:</strong> ${escapeHtml(item.store)}</div>` : ""}
                         <div><strong>Amount:</strong> ${escapeHtml(item.amountText)}</div>
-                        <div><strong>Pickup:</strong> ${escapeHtml(item.pickupPreview)}</div>
+                        <div><strong>${item.pickupPreview ? "Pickup" : "Ordered"}:</strong> ${escapeHtml(item.pickupPreview || item.orderDate || "Not listed")}</div>
                     </div>
                 </div>
             `).join("");
@@ -802,73 +881,115 @@
             });
         }
 
-        async function loadFilteredOrders() {
-            const request = ++listRequest;
+        function parseOrderList(doc) {
+            if (!doc.querySelector("#table_data")) throw new Error("Orders table missing from the response. Check access to the intranet orders page.");
+            const rows = Array.from(doc.querySelectorAll("#table_data tbody tr"));
+            return rows.map(row => {
+                const cols = Array.from(row.children).filter(el => el.tagName === "TD");
+                if (cols.length < 6) return null;
+                const link = cols[0].querySelector("a");
+                const orderId = uppercaseSafe(link?.textContent.replace(/\s+/g, " "));
+                if (!/^TTW\d+$/.test(orderId) || !link?.getAttribute("href")) return null;
+                const url = new URL(link.getAttribute("href"), BASE_URL);
+                if (url.origin !== new URL(BASE_URL).origin || url.pathname !== "/orders" || url.searchParams.get("action") !== "orderdetails" || !/^\d+$/.test(url.searchParams.get("id") || "")) return null;
+                const amountText = cols[1].textContent.replace(/\s+/g, " ").trim();
+                const pickupPreview = cols[3].querySelector("small")?.textContent.replace(/\s+/g, " ").trim() || "";
+                return {
+                    orderId, orderLink: url.href, amountText, amountNumber: cleanMoney(amountText),
+                    deliveryMethod: cols[2].textContent.replace(/\s+/g, " ").trim(),
+                    store: extractStoreOnly(cols[3]), pickupPreview,
+                    pickupDateKey: normalizePickupPreviewToKey(pickupPreview),
+                    orderDate: cols[5].textContent.replace(/\s+/g, " ").trim()
+                };
+            }).filter(Boolean);
+        }
+
+        function clearSelectedOrder(message = "No order selected.") {
             ++detailRequest;
             selectedOrderData = null;
+            currentSelectedOrderId = null;
             document.getElementById("sendCostarBtn").disabled = true;
-            const statusLine = document.getElementById("statusLine");
-            statusLine.textContent = "Loading orders...";
+            document.getElementById("costarStatus").hidden = true;
+            document.getElementById("costarStatus").textContent = "";
+            document.getElementById("detailsWrap").textContent = message;
+        }
 
+        async function searchOrder(rawQuery) {
+            const request = ++listRequest;
+            const input = String(rawQuery || "").replace(/\s+/g, "").toUpperCase();
+            const query = /^\d+$/.test(input) ? "TTW" + input : input;
+            clearSelectedOrder("Searching for an order…");
+            filteredOrdersCache = [];
+            searchQuery = query;
+            document.getElementById("clearSearchBtn").hidden = false;
+            renderOrderList([]);
+            const statusLine = document.getElementById("statusLine");
+            if (!/^TTW\d{1,20}$/.test(query)) {
+                statusLine.textContent = "Enter an order number such as TTW1730141 or 1730141.";
+                document.getElementById("orderList").textContent = "Enter a valid order number to search.";
+                document.getElementById("detailsWrap").textContent = "No order selected.";
+                return;
+            }
+            document.getElementById("orderSearchInput").value = query;
+            statusLine.textContent = `Searching for ${query}…`;
+            document.getElementById("orderList").textContent = "Searching…";
+            try {
+                const url = new URL(ORDERS_URL);
+                url.searchParams.set("oldorderid", query);
+                const html = await fetchHtml(url.href);
+                if (request !== listRequest) return;
+                const matches = parseOrderList(parseHtml(html)).filter(item => item.orderId === query);
+                const unique = [...new Map(matches.map(item => [item.orderLink, item])).values()];
+                if (unique.length > 1) throw new Error("More than one order link matched this number. Check the intranet result.");
+                filteredOrdersCache = unique;
+                renderOrderList(unique);
+                if (!unique.length) {
+                    statusLine.textContent = `No order found for ${query}.`;
+                    document.getElementById("detailsWrap").textContent = "No matching order selected.";
+                    return;
+                }
+                currentSelectedOrderId = query;
+                renderOrderList(unique);
+                await loadOrderDetails(unique[0]);
+            } catch (err) {
+                if (request !== listRequest) return;
+                statusLine.textContent = `Search failed: ${err.message}`;
+                document.getElementById("orderList").textContent = "Could not search orders.";
+                document.getElementById("detailsWrap").textContent = "No order selected.";
+            }
+        }
+
+        async function loadFilteredOrders() {
+            const request = ++listRequest;
+            const requestedDay = dayMode;
+            searchQuery = "";
+            document.getElementById("orderSearchInput").value = "";
+            document.getElementById("clearSearchBtn").hidden = true;
+            clearSelectedOrder("Loading pickup orders…");
+            filteredOrdersCache = [];
+            renderOrderList([]);
+            document.getElementById("orderList").textContent = "Loading orders…";
+            const statusLine = document.getElementById("statusLine");
+            statusLine.textContent = "Loading orders…";
             try {
                 const html = await fetchHtml(ORDERS_URL);
                 if (request !== listRequest) return;
-                const doc = parseHtml(html);
-                const rows = Array.from(doc.querySelectorAll("#table_data tbody tr"));
-
-                const targetKey = dayMode === "today"
-                    ? getSydneyDateKey(0)
-                    : getSydneyDateKey(1);
-
-                const items = rows.map(row => {
-                    const cols = row.querySelectorAll("td");
-                    if (cols.length < 6) return null;
-
-                    const linkEl = cols[0]?.querySelector("a");
-                    const orderId = linkEl?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const orderLink = toAbsoluteUrl(linkEl?.getAttribute("href") || "");
-
-                    const amountText = cols[1]?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const store = extractStoreOnly(cols[3]);
-                    const pickupPreview = cols[3]?.querySelector("small")?.textContent.replace(/\s+/g, " ").trim() || "";
-                    const pickupDateKey = normalizePickupPreviewToKey(pickupPreview);
-
-                    return {
-                        orderId,
-                        orderLink,
-                        amountText,
-                        amountNumber: cleanMoney(amountText),
-                        store,
-                        pickupPreview,
-                        pickupDateKey
-                    };
-                }).filter(Boolean);
-
-                filteredOrdersCache = items.filter(item =>
-                    item.store.includes("Tempe") &&
-                    item.pickupDateKey === targetKey
+                const targetKey = getSydneyDateKey(requestedDay === "today" ? 0 : 1);
+                filteredOrdersCache = parseOrderList(parseHtml(html)).filter(item =>
+                    /\bTempe\b/i.test(item.store) && item.pickupDateKey === targetKey
                 );
-
                 renderOrderList(filteredOrdersCache);
-                statusLine.textContent = `Loaded ${filteredOrdersCache.length} Tempe order(s) for ${dayMode}.`;
-
+                statusLine.textContent = `Loaded ${filteredOrdersCache.length} Tempe order(s) for ${requestedDay}.`;
                 if (filteredOrdersCache.length) {
                     currentSelectedOrderId = filteredOrdersCache[0].orderId;
                     renderOrderList(filteredOrdersCache);
                     await loadOrderDetails(filteredOrdersCache[0]);
-                } else {
-                    selectedOrderData = null;
-                    currentSelectedOrderId = null;
-                    document.getElementById("detailsWrap").innerHTML =
-                        `<div class="empty-state">No matching order selected.</div>`;
-                }
-
+                } else document.getElementById("detailsWrap").textContent = "No matching order selected.";
             } catch (err) {
-                console.error(err);
                 if (request !== listRequest) return;
                 statusLine.textContent = `Failed to load orders: ${err.message}`;
-                document.getElementById("orderList").innerHTML =
-                    `<div class="empty-state">Could not load orders.</div>`;
+                document.getElementById("orderList").textContent = "Could not load orders.";
+                document.getElementById("detailsWrap").textContent = "No order selected.";
             }
         }
 
@@ -876,6 +997,7 @@
             const request = ++detailRequest;
             selectedOrderData = null;
             document.getElementById("sendCostarBtn").disabled = true;
+            document.getElementById("costarStatus").hidden = true;
             document.getElementById("detailsWrap").textContent = "Loading selected order…";
             const statusLine = document.getElementById("statusLine");
             statusLine.textContent = `Loading ${order.orderId}...`;
@@ -885,13 +1007,17 @@
                 if (request !== detailRequest) return;
                 const doc = parseHtml(html);
 
-                const orderId = uppercaseSafe(extractLabeledValue(doc, "Order ID:") || order.orderId);
+                const orderId = uppercaseSafe(extractLabeledValue(doc, "Order ID:"));
+                if (orderId !== order.orderId) throw new Error("The returned order number does not match the selected order.");
                 const customerName = uppercaseSafe(extractLabeledValue(doc, "Customer:"));
                 const phone = extractLabeledValue(doc, "Phone:");
                 const email = extractLabeledValue(doc, "Email:");
 
                 const billingParts = extractBillingAddressBlock(doc) || [];
                 const addressParts = splitAddress(billingParts);
+                const deliveryParts = extractAddressBlock(doc, "DELIVERY ADDRESS:") || [];
+                const totals = extractOrderTotals(doc);
+                const detailTotal = totals.find(total => /^Total Amount$/i.test(total.label));
 
                 const vehicle = extractVehicleInfo(doc);
                 const productRows = extractProductRows(doc);
@@ -900,8 +1026,15 @@
 
                 const data = {
                     orderLink: order.orderLink,
-                    amountText: order.amountText,
+                    amountText: detailTotal?.amount || order.amountText,
                     pickupPreview: order.pickupPreview,
+                    store: order.store || "",
+                    deliveryMethod: extractLabeledValue(doc, "Delivery Method:") || order.deliveryMethod || "",
+                    deliveringBranch: extractLabeledValue(doc, "Delivering Branch:"),
+                    billingAddress: { lines: billingParts, ...addressParts },
+                    deliveryAddress: { lines: deliveryParts, ...splitAddress(deliveryParts) },
+                    addressesDiffer: deliveryParts.length > 0 && addressBlocksDiffer(billingParts, deliveryParts),
+                    totals,
                     orderId,
                     name: customerName,
                     streetAddress: uppercaseSafe(addressParts.streetAddress),
@@ -943,7 +1076,12 @@
             } catch (err) { alert("Order was not sent: " + err.message); }
         });
 
-        document.getElementById("refreshBtn").addEventListener("click", loadFilteredOrders);
+        document.getElementById("orderSearchForm").addEventListener("submit", event => {
+            event.preventDefault();
+            searchOrder(document.getElementById("orderSearchInput").value);
+        });
+        document.getElementById("clearSearchBtn").addEventListener("click", loadFilteredOrders);
+        document.getElementById("refreshBtn").addEventListener("click", () => searchQuery ? searchOrder(searchQuery) : loadFilteredOrders());
 
         document.getElementById("toggleDayBtn").addEventListener("click", async () => {
             dayMode = dayMode === "today" ? "tomorrow" : "today";
