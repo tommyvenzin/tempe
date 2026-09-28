@@ -275,9 +275,10 @@
         const product = text(description).toUpperCase();
         const service = /\bALIGNMENT\b|\bSERVICES?\s*:/.test(product) || /^SERVICES?$/.test(sourceSku);
         if (!service) {
-            if (!/^[A-Z0-9][A-Z0-9._-]{0,39}$/.test(sourceSku) || /^(?:M|DET|WA|WAFR)$/.test(sourceSku))
+            if (!/^[A-Z0-9][A-Z0-9._-]{0,39}$/.test(sourceSku) || /^(?:F|M|DET|WA|WAFR)$/.test(sourceSku))
                 return { kind: 'unmapped', costarCode: '', sourceSku, product };
-            return { kind: 'product', costarCode: sourceSku, sourceSku, product };
+            const bundledTyres = /\bPACKAGE\b/.test(product) && /\bWITH TYRES?\b/.test(product);
+            return { kind: bundledTyres ? 'package' : 'product', costarCode: sourceSku, sourceSku, product };
         }
         let label = product.replace(/^SERVICES?\s*:\s*/, '').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
         if (/^(?:FRONT (?:WHEEL )?ALIGNMENT|(?:WHEEL )?ALIGNMENT FRONT(?: ONLY)?)$/.test(label))
@@ -301,7 +302,9 @@
     }
     function makeOrder(data, now) {
         if (!data || !/^TTW\d+$/i.test(text(data.orderId))) throw new Error('Select a fully loaded order first.');
-        if (Object.prototype.hasOwnProperty.call(data, 'store') && !/^TEMPE(?:\s+NSW)?$/i.test(text(data.store)))
+        const deliveryMethod = text(data.deliveryMethod).toUpperCase();
+        const delivery = /^(WITHIN AUSTRALIA|FITTING PARTNER)$/.test(deliveryMethod);
+        if (!delivery && Object.prototype.hasOwnProperty.call(data, 'store') && !/^TEMPE(?:\s+NSW)?$/i.test(text(data.store)))
             throw new Error('Automatic entry currently supports Tempe pickup orders.');
         const lines = (data.products || []).map(item => {
             const mapped = classify(item.sourceSku || item.sku, item.product);
@@ -313,12 +316,51 @@
         });
         if (!lines.length || lines.length > 12) throw new Error('This first version supports 1–12 priced lines.');
         const totalCents = money(data.amountText);
-        if (lines.reduce((sum, item) => sum + item.totalCents, 0) !== totalCents) throw new Error('The item totals differ from the online order total. Check for discounts, freight or missing lines before sending.');
-        const slot = pickup(data.pickupPreview);
+        const itemTotal = lines.reduce((sum, item) => sum + item.totalCents, 0);
         const customer = {};
         for (const key of ['name','streetAddress','suburb','postcode','phone','email']) customer[key] = text(data[key]);
         if (!customer.name || !customer.phone) throw new Error('Customer name and phone are required.');
         const rego = text(data.rego).toUpperCase();
+        if (delivery) {
+            const charge = pattern => {
+                const values = (data.totals || []).filter(row => pattern.test(text(row.label)));
+                if (values.length > 1) throw new Error('Duplicate charge rows need checking.');
+                return values.length ? money(text(values[0].amount).replace(/^-\s*/, '')) : 0;
+            };
+            const freightCents = charge(/^Delivery Charges$/i);
+            const surchargeCents = charge(/^Card Surcharge(?:\s.*)?$/i);
+            const discountCents = charge(/^Discount Code(?:\s.*)?$/i);
+            if (itemTotal + freightCents + surchargeCents - discountCents !== totalCents) throw new Error('Products and delivery charges do not match the online total.');
+            if (surchargeCents || discountCents) throw new Error('Nonzero card surcharges or discounts still need their COSTAR entry mapped.');
+            const billing = data.billingAddress, address = data.deliveryAddress;
+            if (!billing?.lines?.length || !address?.lines?.length) throw new Error('Both billing and delivery addresses are required for delivery entry.');
+            const street = value => text(value).replace(/,\s*$/, '').toUpperCase();
+            customer.streetAddress = street(billing.addressLine1 || billing.streetAddress);
+            customer.address2 = street(billing.addressLine2);
+            customer.suburb = text(billing.suburb).toUpperCase();
+            customer.state = text(billing.state).toUpperCase();
+            customer.postcode = text(billing.postcode);
+            const shipping = {
+                name: text(address.recipient).toUpperCase(), streetAddress: street(address.addressLine1 || address.streetAddress),
+                address2: street(address.addressLine2), suburb: text(address.suburb).toUpperCase(), state: text(address.state).toUpperCase(), postcode: text(address.postcode),
+                contact: text(address.contact).toUpperCase(), businessPhone: text(address.phone), mobilePhone: customer.phone,
+                email: text(address.email) || customer.email, shipVia: text(data.shipVia).toUpperCase(),
+                instructions: address.estimatedFittingDate ? 'EST FITTING: ' + text(address.estimatedFittingDate).toUpperCase() : ''
+            };
+            for (const [label, addressToCheck] of [['billing', customer], ['delivery', shipping]]) {
+                if (!addressToCheck.streetAddress || !addressToCheck.suburb || !/^(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)$/.test(addressToCheck.state) || !/^\d{4}$/.test(addressToCheck.postcode))
+                    throw new Error('Check the ' + label + ' street, suburb, state and postcode.');
+            }
+            if (!shipping.name) throw new Error('The delivery recipient is missing.');
+            const requiresReview = lines.some(line => line.kind === 'package');
+            return { schema: 2, type: 'delivery', createdUtc: new Date(now || Date.now()).toISOString(), orderId: text(data.orderId).toUpperCase(),
+                customer, shipping, deliveryMethod, deliveringBranch: text(data.deliveringBranch), paymentMethod: text(data.paymentMethod),
+                vehicle: text(data.vehicleInfo), rego, freightCents, surchargeCents, discountCents, requiresReview,
+                comment: 'ONLINE DELIVERY' + (requiresReview ? ' - PACKAGE REVIEW' : ''), totalCents, lines };
+        }
+        if (lines.some(line => line.kind === 'package')) throw new Error('Package pickup orders still need their component entry mapped.');
+        if (itemTotal !== totalCents) throw new Error('The item totals differ from the online order total. Check for discounts, freight or missing lines before sending.');
+        const slot = pickup(data.pickupPreview);
         return { schema: 1, createdUtc: new Date(now || Date.now()).toISOString(), orderId: text(data.orderId).toUpperCase(), customer,
             vehicle: text(data.vehicleInfo), rego, pickupDate: slot.date, pickupTime: slot.time,
             comment: (rego ? rego + ' - ' : '') + slot.day + ' - ONLINE ' + slot.time, totalCents, lines };
@@ -559,7 +601,7 @@
         }
 
         function splitAddress(parts) {
-            const useful = parts.filter(line => !/^(?:Phone|Email):/i.test(line));
+            const useful = parts.filter(line => !/^(?:Phone|Email|Contact Person|Estimated Fitting Date):/i.test(line));
             // Locate the postcode from the end, preserving additional street/
             // unit lines and keeping the full original block for display.
             for (let index = useful.length - 1; index >= 2; index--) {
@@ -567,11 +609,26 @@
                 if (match) return {
                     recipient: useful[0] || "",
                     streetAddress: useful.slice(1, index).join(", "),
+                    addressLine1: useful[1] || "",
+                    addressLine2: useful.slice(2, index).join(", "),
                     suburb: match[1].trim().replace(/\s+(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)$/i, ""),
-                    postcode: match[2]
+                    postcode: match[2],
+                    state: addressState(match[1] + " " + useful.slice(index + 1).join(" "))
                 };
             }
-            return { recipient: useful[0] || "", streetAddress: useful[1] || "", suburb: useful[2] || "", postcode: "" };
+            return { recipient: useful[0] || "", streetAddress: useful[1] || "", addressLine1: useful[1] || "", addressLine2: "", suburb: useful[2] || "", postcode: "", state: "" };
+        }
+
+        function addressState(text) {
+            const states = { "NEW SOUTH WALES": "NSW", "VICTORIA": "VIC", "QUEENSLAND": "QLD", "SOUTH AUSTRALIA": "SA", "WESTERN AUSTRALIA": "WA", "TASMANIA": "TAS", "NORTHERN TERRITORY": "NT", "AUSTRALIAN CAPITAL TERRITORY": "ACT" };
+            const value = uppercaseSafe(text);
+            for (const [name, code] of Object.entries(states)) if (value.includes(name)) return code;
+            return value.match(/\b(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b/)?.[1] || "";
+        }
+
+        function addressDetail(lines, label) {
+            const line = lines.find(value => value.toUpperCase().startsWith(label.toUpperCase() + ":"));
+            return line ? line.slice(line.indexOf(":") + 1).trim() : "";
         }
 
         function addressBlocksDiffer(billing, delivery) {
@@ -653,7 +710,7 @@
         async function enrichProductsWithStock(productRows) {
             const enriched = await Promise.all(
                 productRows.map(async (item) => {
-                    const stock = item.kind === "product" ? await fetchStockBySku(item.sku) : "";
+                    const stock = ["product", "package"].includes(item.kind) ? await fetchStockBySku(item.sku) : "";
                     return {
                         ...item,
                         stock: uppercaseSafe(stock)
@@ -700,12 +757,14 @@
                 `ORDER ID: ${data.orderId}`,
                 `DELIVERY METHOD: ${data.deliveryMethod || "Not listed"}`,
                 `STORE / BRANCH: ${data.store || data.deliveringBranch || "Not listed"}`,
+                `SHIP VIA: ${data.shipVia || "Not listed"}`,
+                `PAYMENT METHOD: ${data.paymentMethod || "Not listed"}`,
                 `PICKUP: ${data.pickupPreview || "Not listed"}`,
                 "", "BILLING ADDRESS:",
                 ...(data.billingAddress?.lines || [data.streetAddress, data.suburb + " " + data.postcode])
             ];
             if (data.deliveryAddress?.lines.length) {
-                if (data.addressesDiffer) lines.push("", "DELIVERY ADDRESS:", ...data.deliveryAddress.lines);
+                if (data.addressesDiffer || data.fittingPartner) lines.push("", data.fittingPartner ? "SELECTED FITTING PARTNER / DELIVERY ADDRESS:" : "DELIVERY ADDRESS:", ...data.deliveryAddress.lines);
                 else lines.push("DELIVERY ADDRESS: Same as billing address.");
             } else lines.push("DELIVERY ADDRESS: Not supplied.");
             lines.push("");
@@ -780,10 +839,10 @@
         function renderAddresses(data) {
             let html = renderAddressSection("BILLING ADDRESS", data.billingAddress);
             if (data.deliveryAddress?.lines.length) {
-                if (data.addressesDiffer) html += `<p class="address-notice">Billing and delivery details differ.</p>` + renderAddressSection("DELIVERY ADDRESS", data.deliveryAddress);
+                if (data.addressesDiffer || data.fittingPartner) html += `<p class="address-notice">${data.fittingPartner ? "Delivery is to the selected fitting partner." : "Billing and delivery details differ."}</p>` + renderAddressSection(data.fittingPartner ? "SELECTED FITTING PARTNER / DELIVERY ADDRESS" : "DELIVERY ADDRESS", data.deliveryAddress);
                 else html += `<p class="muted">Delivery address matches billing address.</p>`;
             } else html += `<p class="muted">Delivery address not supplied.</p>`;
-            if (data.addressesDiffer) html += `<p class="muted">Address keyboard shortcuts and COSTAR use the billing address. Click a delivery field to copy it.</p>`;
+            if (data.addressesDiffer) html += `<p class="muted">Address keyboard shortcuts copy billing details. The delivery helper fills billing and shipping separately.</p>`;
             return html;
         }
 
@@ -791,10 +850,10 @@
             selectedOrderData = data;
             const transferStatus = document.getElementById("costarStatus");
             try {
-                TempeCostar.makeOrder(data);
+                const exported = TempeCostar.makeOrder(data);
                 document.getElementById("sendCostarBtn").disabled = false;
-                transferStatus.hidden = true;
-                transferStatus.textContent = "";
+                transferStatus.hidden = !exported.requiresReview;
+                transferStatus.textContent = exported.requiresReview ? "Package needs manual completion: the helper enters the available SKU and freight, keeps COSTAR's item price, and leaves the missing tyres and package total for your review." : "";
             } catch (err) {
                 document.getElementById("sendCostarBtn").disabled = true;
                 transferStatus.textContent = "COSTAR autofill unavailable: " + err.message + " You can still view and copy the order.";
@@ -806,6 +865,8 @@
                 ${renderClickableField("ORDER ID", data.orderId, data.orderId, "Order ID copied")}
                 ${renderClickableField("DELIVERY METHOD", data.deliveryMethod, data.deliveryMethod, "Delivery method copied")}
                 ${renderClickableField("STORE / BRANCH", data.store || data.deliveringBranch, data.store || data.deliveringBranch, "Branch copied")}
+                ${data.shipVia ? renderClickableField("SHIP VIA", data.shipVia, data.shipVia, "Ship Via copied") : ""}
+                ${data.paymentMethod ? renderClickableField("PAYMENT METHOD", data.paymentMethod, data.paymentMethod, "Payment method copied") : ""}
                 ${renderClickableField("NAME", data.name, data.name, "Name copied")}
                 ${renderClickableField("PHONE", data.phone, data.phone, "Phone copied")}
                 ${renderClickableField("EMAIL", data.email, data.email, "Email copied")}
@@ -817,7 +878,7 @@
 
             const productFields = (data.products || []).map((item, index) => {
                 const productLabel = item.product + (item.stock ? ` (${item.stock})` : "");
-                const stockClass = item.kind === "product" ? getProductStockClass(item.stock) : "";
+                const stockClass = ["product", "package"].includes(item.kind) ? getProductStockClass(item.stock) : "";
 
                 return `
                     ${renderClickableField(`SKU ${index + 1}`, item.sku, item.sku, `SKU ${index + 1} copied`)}
@@ -1015,7 +1076,9 @@
 
                 const billingParts = extractBillingAddressBlock(doc) || [];
                 const addressParts = splitAddress(billingParts);
-                const deliveryParts = extractAddressBlock(doc, "DELIVERY ADDRESS:") || [];
+                const partnerParts = extractAddressBlock(doc, "SELECTED FITTING PARTNER:") || [];
+                const fittingPartner = /^FITTING PARTNER$/i.test(extractLabeledValue(doc, "Delivery Method:") || order.deliveryMethod || "");
+                const deliveryParts = fittingPartner ? partnerParts : (extractAddressBlock(doc, "DELIVERY ADDRESS:") || []);
                 const totals = extractOrderTotals(doc);
                 const detailTotal = totals.find(total => /^Total Amount$/i.test(total.label));
 
@@ -1031,8 +1094,11 @@
                     store: order.store || "",
                     deliveryMethod: extractLabeledValue(doc, "Delivery Method:") || order.deliveryMethod || "",
                     deliveringBranch: extractLabeledValue(doc, "Delivering Branch:"),
+                    shipVia: extractLabeledValue(doc, "ShipVia:"),
+                    paymentMethod: extractLabeledValue(doc, "Payment Method:"),
+                    fittingPartner,
                     billingAddress: { lines: billingParts, ...addressParts },
-                    deliveryAddress: { lines: deliveryParts, ...splitAddress(deliveryParts) },
+                    deliveryAddress: { lines: deliveryParts, ...splitAddress(deliveryParts), contact: addressDetail(deliveryParts, "Contact Person"), phone: addressDetail(deliveryParts, "Phone"), email: addressDetail(deliveryParts, "Email"), estimatedFittingDate: addressDetail(deliveryParts, "Estimated Fitting Date") },
                     addressesDiffer: deliveryParts.length > 0 && addressBlocksDiffer(billingParts, deliveryParts),
                     totals,
                     orderId,
