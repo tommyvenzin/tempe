@@ -280,7 +280,9 @@
             const bundledTyres = /\bPACKAGE\b/.test(product) && /\bWITH TYRES?\b/.test(product);
             return { kind: bundledTyres ? 'package' : 'product', costarCode: sourceSku, sourceSku, product };
         }
-        let label = product.replace(/^SERVICES?\s*:\s*/, '').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+        // An empty website SKU can leave a leading colon before SERVICES.
+        // Ignore only that formatting; the alignment wording must still match exactly.
+        let label = product.replace(/^[:\s]*(?:SERVICES?\s*:[\s:]*)?/, '').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
         if (/^(?:FRONT (?:WHEEL )?ALIGNMENT|(?:WHEEL )?ALIGNMENT FRONT(?: ONLY)?)$/.test(label))
             return { kind: 'service', costarCode: 'WA', sourceSku, product };
         if (/^(?:FRONT (?:&|AND) REAR (?:WHEEL )?ALIGNMENT|(?:WHEEL )?ALIGNMENT FRONT (?:&|AND) REAR)$/.test(label))
