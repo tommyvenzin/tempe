@@ -132,12 +132,12 @@ function looksLikeJinaResponse(text) {
 }
 
 async function fetchTextWithFallback(targetUrl) {
-    console.log("Fetching through Chrome extension:", targetUrl);
+    const viaPc = window.TempeCostarClient?.isPaired();
+    console.log(viaPc ? "Fetching through paired PC receiver:" : "Fetching through Chrome extension:", targetUrl);
 
-    const result = await fetchViaExtension(targetUrl, {
-        method: "GET",
-        cache: "no-store",
-    });
+    const result = viaPc
+        ? await window.TempeCostarClient.fetchTyres(targetUrl)
+        : await fetchViaExtension(targetUrl, { method: "GET", cache: "no-store" });
 
     const text = String(result.text || "");
 
@@ -153,7 +153,7 @@ async function fetchTextWithFallback(targetUrl) {
 
     return {
         text,
-        proxyBase: "chrome-extension",
+        proxyBase: viaPc ? "pc-receiver" : "chrome-extension",
         isJina: false,
         status: result.status,
         finalUrl: result.finalUrl || targetUrl,
@@ -248,16 +248,27 @@ function copySKU(sku) {
         .catch((err) => console.error("Copy failed", err));
 }
 
-function selectTyreForFitment(tyre) {
+async function selectTyreForFitment(tyre) {
     try {
-        localStorage.setItem("fitment:selectedTyre", JSON.stringify({
-            ...tyre,
-            savedAt: new Date().toISOString(),
-        }));
-        window.location.href = "Fitment_Planner.html";
-    } catch (err) {
-        console.error("Could not save tyre for fitment planning", err);
-        alert("Could not open Fitment Planner. Please try again.");
+        // Other existing pages may also load F_alt_tab.js without the new script tag.
+        if (!window.TempeJobCard) {
+            window.tempeJobCardLoad ||= new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                script.src = "./jobcard-shared.js";
+                script.onload = resolve;
+                script.onerror = () => reject(new Error("Upload jobcard-shared.js beside this page."));
+                document.head.appendChild(script);
+            });
+            await window.tempeJobCardLoad;
+        }
+        return await window.TempeJobCard.addProduct({
+            type: "tyre", sku: tyre.sku,
+            description: [tyre.make, tyre.model].filter(Boolean).join(" "),
+        });
+    } catch (error) {
+        if (window.TempeJobCard) window.TempeJobCard.toast(error.message);
+        else alert(error.message);
+        return null;
     }
 }
 
@@ -825,9 +836,10 @@ function renderFAltProductRow(item) {
         <td>
             <button
                 type="button"
-                onclick="selectTyreForFitment({ sku: '${safeSku}', make: '${safeMake}', model: '${safeModel}', price: ${price.toFixed(2)}, stock: '${escapeJsSingle(stock)}', link: '${safeLink}' });"
+                data-jobcard-product="${escapeHtml(JSON.stringify({ sku, make, model }))}"
+                onclick="selectTyreForFitment(JSON.parse(this.dataset.jobcardProduct));"
             >
-                Add to Fitment Planner
+                Add Tyre
             </button>
         </td>
     </tr>`;
@@ -1033,7 +1045,7 @@ async function checkPrices({ copyLink = true } = {}) {
             return renderManualFallbackRow(
                 query,
                 result.manualUrl,
-                "Could not load results through Chrome Fetch Bridge"
+                "Could not load results. Check the PC receiver connection or desktop Chrome Fetch Bridge"
             );
         }
 
