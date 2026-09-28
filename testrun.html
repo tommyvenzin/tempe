@@ -362,7 +362,7 @@
             return { schema: 2, type: 'delivery', createdUtc: new Date(now || Date.now()).toISOString(), orderId: text(data.orderId).toUpperCase(),
                 customer, shipping, deliveryMethod, deliveringBranch: text(data.deliveringBranch), paymentMethod: text(data.paymentMethod),
                 vehicle: text(data.vehicleInfo), rego, freightCents, surchargeCents, discountCents, requiresReview,
-                comment: 'ONLINE DELIVERY' + (requiresReview ? ' - PACKAGE REVIEW' : ''), totalCents, lines };
+                comment: 'DFE' + (requiresReview ? ' - PACKAGE REVIEW' : ''), totalCents, lines };
         }
         if (lines.some(line => line.kind === 'package')) throw new Error('Package pickup orders still need their component entry mapped.');
         const slot = pickup(data.pickupPreview);
