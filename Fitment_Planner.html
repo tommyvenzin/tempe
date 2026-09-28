@@ -37,17 +37,23 @@
             </div>
 
             <div class="jobcard-header-actions">
-                <span id="saveStatus" class="jobcard-save-status" aria-live="polite">Saved</span>
-                <button type="button" id="newJobBtn" class="jobcard-quiet-button">New job</button>
+                <span id="saveStatus" class="jobcard-save-status" aria-live="polite">Loading…</span>
+                <button type="button" id="newJobBtn" class="jobcard-quiet-button" disabled>New job</button>
             </div>
         </header>
+
+        <div id="jobcardStartupNotice" class="jobcard-hint" role="status" aria-live="polite">
+            <p id="jobcardStartupMessage">Loading your saved Job Card…</p>
+            <button type="button" id="reloadJobCardBtn" hidden>Reload Job Card</button>
+        </div>
+        <noscript><p class="jobcard-error">Enable JavaScript to open your saved Job Card.</p></noscript>
 
         <form id="jobCardForm" class="jobcard-form" autocomplete="on">
             <label class="jobcard-field">
                 <span>Name</span>
                 <input
                     id="customerName"
-                    required maxlength="200"
+                    required maxlength="200" disabled
                     name="customerName"
                     type="text"
                     autocomplete="name"
@@ -61,7 +67,7 @@
                 <span>Mobile number</span>
                 <input
                     id="phone"
-                    required maxlength="30"
+                    required maxlength="30" disabled
                     name="phone"
                     type="tel"
                     inputmode="tel"
@@ -75,7 +81,7 @@
                 <span>Rego</span>
                 <input
                     id="rego"
-                    required maxlength="15"
+                    required maxlength="15" disabled
                     name="rego"
                     type="text"
                     autocapitalize="characters"
@@ -90,7 +96,7 @@
                 <div class="jobcard-input-suffix">
                     <input
                         id="kilometres"
-                    required maxlength="7"
+                        required maxlength="7" disabled
                         name="kilometres"
                         type="text"
                         inputmode="numeric"
@@ -106,7 +112,7 @@
                 <span>Car make / model</span>
                 <input
                     id="vehicle"
-                    required maxlength="200"
+                    required maxlength="200" disabled
                     name="vehicle"
                     type="text"
                     autocapitalize="words"
@@ -125,7 +131,7 @@
                     autocapitalize="characters"
                     autocomplete="off"
                     enterkeyhint="done"
-                    maxlength="400"
+                    maxlength="400" disabled
                     placeholder="Parked in SF; spare on front passenger side…"
                 ></textarea>
             </label>
@@ -133,16 +139,16 @@
                 <div class="jobcard-section-heading"><h2 id="productsHeading">Products</h2><span id="productCount">0 / 3</span></div>
                 <p>Choose tyres with Add Tyre in F Alt Tab. Adjust quantities here.</p>
                 <div id="productLines" class="jobcard-product-lines"></div>
-                <div class="jobcard-product-actions"><button type="button" id="addWheelBtn">Add Wheel</button><a href="index.html">Find tyres in F Alt Tab</a></div>
+                <div class="jobcard-product-actions"><button type="button" id="addWheelBtn" disabled>Add Wheel</button><a href="index.html">Find tyres in F Alt Tab</a></div>
                 <p id="legacyTyreNotice" class="jobcard-hint" hidden></p>
             </section>
             <section class="jobcard-services jobcard-field-wide" aria-label="Fitting and wheel alignment">
                 <p class="jobcard-fitting-note">M FB · Fitting / balancing included</p>
-                <label class="jobcard-check"><input id="alignmentEnabled" type="checkbox"> Wheel Alignment <small>(optional)</small></label>
+                <label class="jobcard-check"><input id="alignmentEnabled" type="checkbox" disabled> Wheel Alignment <small>(optional)</small></label>
                 <fieldset id="alignmentOptions" hidden>
                     <legend>Choose alignment</legend>
-                    <label><input type="radio" name="alignmentCode" value="WA"> Front Wheel Alignment — WA</label>
-                    <label><input type="radio" name="alignmentCode" value="WAFR"> Front &amp; Rear Wheel Alignment — WAFR</label>
+                    <label><input type="radio" name="alignmentCode" value="WA" disabled> Front Wheel Alignment — WA</label>
+                    <label><input type="radio" name="alignmentCode" value="WAFR" disabled> Front &amp; Rear Wheel Alignment — WAFR</label>
                 </fieldset>
             </section>
         </form>
@@ -179,8 +185,39 @@
 
     <div id="jobcardToast" class="jobcard-toast" role="status" aria-live="polite"></div>
 
-    <script src="./jobcard-shared.js" defer></script>
-    <script src="./costar-client.js" defer></script>
-    <script src="./Fitment_Planner.js" defer></script>
+    <script>
+        // Independent of the external files: show a useful message even if a file
+        // is missing or a stale script never starts the page. Never clear storage.
+        (function () {
+            const notice = document.getElementById("jobcardStartupNotice");
+            const message = document.getElementById("jobcardStartupMessage");
+            const reload = document.getElementById("reloadJobCardBtn");
+            let ready = false;
+            function fail(reason) {
+                if (ready) return;
+                window.clearTimeout(timer);
+                notice.hidden = false;
+                message.textContent = "Job Card could not finish loading. " + reason + " Your saved products have not been cleared.";
+                reload.hidden = false;
+                document.getElementById("saveStatus").textContent = "Not loaded";
+                document.getElementById("saveStatus").dataset.state = "error";
+            }
+            const timer = window.setTimeout(() => fail("Reload this page; if it repeats, send the message shown in the browser Console."), 8000);
+            window.TempeJobCardStartup = {
+                ready() { ready = true; window.clearTimeout(timer); notice.hidden = true; },
+                fail
+            };
+            window.addEventListener("error", event => {
+                if (event.target && event.target.tagName === "SCRIPT") {
+                    const file = event.target.src.split("/").pop().split("?")[0];
+                    fail(file + " could not be loaded. Check that this file is uploaded beside this page, then reload.");
+                } else if (event.message) fail(event.message);
+            }, true);
+            reload.addEventListener("click", () => window.location.reload());
+        })();
+    </script>
+    <script src="./jobcard-shared.js?v=20260929-startup1" defer></script>
+    <script src="./costar-client.js?v=20260929-startup1" defer></script>
+    <script src="./Fitment_Planner.js?v=20260929-startup1" defer></script>
 </body>
 </html>
