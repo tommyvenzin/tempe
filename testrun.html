@@ -317,21 +317,25 @@
         if (!lines.length || lines.length > 12) throw new Error('This first version supports 1–12 priced lines.');
         const totalCents = money(data.amountText);
         const itemTotal = lines.reduce((sum, item) => sum + item.totalCents, 0);
+        const charge = (pattern, discount = false) => {
+            const values = (data.totals || []).filter(row => pattern.test(text(row.label)));
+            if (values.length > 1) throw new Error('Duplicate charge rows need checking.');
+            if (!values.length) return 0;
+            const amount = text(values[0].amount);
+            return money(discount ? amount.replace(/^-\s*/, '') : amount);
+        };
+        const freightCents = charge(/^Delivery Charges$/i);
+        const surchargeCents = charge(/^Card Surcharge(?:\s.*)?$/i);
+        const discountCents = charge(/^Discount Code(?:\s.*)?$/i, true);
+        if (discountCents) throw new Error('Nonzero discounts still need their COSTAR entry mapped.');
+        if (!delivery && freightCents) throw new Error('Pickup orders with freight still need their COSTAR entry mapped.');
+        if (itemTotal + freightCents + surchargeCents - discountCents !== totalCents)
+            throw new Error('The item totals differ from the online total after freight, card surcharge and discount.');
         const customer = {};
         for (const key of ['name','streetAddress','suburb','postcode','phone','email']) customer[key] = text(data[key]);
         if (!customer.name || !customer.phone) throw new Error('Customer name and phone are required.');
         const rego = text(data.rego).toUpperCase();
         if (delivery) {
-            const charge = pattern => {
-                const values = (data.totals || []).filter(row => pattern.test(text(row.label)));
-                if (values.length > 1) throw new Error('Duplicate charge rows need checking.');
-                return values.length ? money(text(values[0].amount).replace(/^-\s*/, '')) : 0;
-            };
-            const freightCents = charge(/^Delivery Charges$/i);
-            const surchargeCents = charge(/^Card Surcharge(?:\s.*)?$/i);
-            const discountCents = charge(/^Discount Code(?:\s.*)?$/i);
-            if (itemTotal + freightCents + surchargeCents - discountCents !== totalCents) throw new Error('Products and delivery charges do not match the online total.');
-            if (surchargeCents || discountCents) throw new Error('Nonzero card surcharges or discounts still need their COSTAR entry mapped.');
             const billing = data.billingAddress, address = data.deliveryAddress;
             if (!billing?.lines?.length || !address?.lines?.length) throw new Error('Both billing and delivery addresses are required for delivery entry.');
             const street = value => text(value).replace(/,\s*$/, '').toUpperCase();
@@ -359,10 +363,9 @@
                 comment: 'ONLINE DELIVERY' + (requiresReview ? ' - PACKAGE REVIEW' : ''), totalCents, lines };
         }
         if (lines.some(line => line.kind === 'package')) throw new Error('Package pickup orders still need their component entry mapped.');
-        if (itemTotal !== totalCents) throw new Error('The item totals differ from the online order total. Check for discounts, freight or missing lines before sending.');
         const slot = pickup(data.pickupPreview);
         return { schema: 1, createdUtc: new Date(now || Date.now()).toISOString(), orderId: text(data.orderId).toUpperCase(), customer,
-            vehicle: text(data.vehicleInfo), rego, pickupDate: slot.date, pickupTime: slot.time,
+            vehicle: text(data.vehicleInfo), rego, pickupDate: slot.date, pickupTime: slot.time, freightCents, surchargeCents, discountCents,
             comment: (rego ? rego + ' - ' : '') + slot.day + ' - ONLINE ' + slot.time, totalCents, lines };
     }
     const api = { PREFIX, text, money, classify, pickup, makeOrder };
@@ -852,8 +855,11 @@
             try {
                 const exported = TempeCostar.makeOrder(data);
                 document.getElementById("sendCostarBtn").disabled = false;
-                transferStatus.hidden = !exported.requiresReview;
-                transferStatus.textContent = exported.requiresReview ? "Package needs manual completion: the helper enters the available SKU and freight, keeps COSTAR's item price, and leaves the missing tyres and package total for your review." : "";
+                const notices = [];
+                if (exported.requiresReview) notices.push("Package needs manual completion: the helper enters the available SKU and freight, keeps COSTAR's item price, and leaves the missing tyres and package total for your review.");
+                if (exported.surchargeCents) notices.push(`COSTAR handles the $${(exported.surchargeCents / 100).toFixed(2)} card surcharge automatically. The helper will not add it again.`);
+                transferStatus.hidden = !notices.length;
+                transferStatus.textContent = notices.join(" ");
             } catch (err) {
                 document.getElementById("sendCostarBtn").disabled = true;
                 transferStatus.textContent = "COSTAR autofill unavailable: " + err.message + " You can still view and copy the order.";
