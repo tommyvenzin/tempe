@@ -1,452 +1,259 @@
 "use strict";
 
-const JOBCARD_STORAGE_KEY = "fitment:mobile-jobcard:v3";
-const SELECTED_TYRE_STORAGE_KEY = "fitment:selectedTyre";
+const jobCore = window.TempeJobCard;
+const jobStore = jobCore.getStore();
+const pcClient = window.TempeCostarClient;
+const FIELD_MAP = { customerName: "customerName", phone: "phone", rego: "rego", kilometres: "kilometres", vehicle: "vehicle", tyre: "notes" };
+let currentJob = null;
+let pendingFields = {};
+let fieldVersions = {};
+let editQueue = Promise.resolve();
+let polling = false;
+let sending = false;
+let helperReady = false;
+let storageHealthy = true;
+let lastProductView = "";
+let statusMessage = "";
+const $ = id => document.getElementById(id);
 
-const FIELD_IDS = Object.freeze([
-    "customerName",
-    "phone",
-    "rego",
-    "kilometres",
-    "vehicle",
-    "tyre",
-]);
-
-let selectedTyre = null;
-let currentTyreSku = "";
-let saveTimer = null;
-let toastTimer = null;
-
-function getFields() {
-    return Object.fromEntries(
-        FIELD_IDS.map((id) => [id, document.getElementById(id)])
-    );
+function storageProblem(error) {
+    storageHealthy = false;
+    $("saveStatus").textContent = "Not saved";
+    $("saveStatus").dataset.state = "error";
+    statusMessage = error.message;
+    jobCore.toast(error.message);
+    renderStatus();
 }
-
-function readJson(key, fallback = null) {
+function mutate(action) {
+    // Keep field edits in their input order. Each transaction reads current products,
+    // so a field save cannot overwrite a tyre added in another tab.
+    const operation = editQueue.then(() => jobStore.mutate(action));
+    editQueue = operation.catch(() => {});
+    return operation;
+}
+function saveField(input) {
+    if (!currentJob) return;
+    const key = FIELD_MAP[input.id], value = input.value;
+    const version = fieldVersions[key] = (fieldVersions[key] || 0) + 1;
+    pendingFields[key] = value;
+    $("saveStatus").textContent = "Saving…";
+    $("saveStatus").dataset.state = "saving";
+    renderPreview();
+    mutate({ type: "patch", jobId: currentJob.jobId, fields: { [key]: value } }).then(state => {
+        if (fieldVersions[key] === version) delete pendingFields[key];
+        storageHealthy = true;
+        applyState(state);
+    }).catch(storageProblem);
+}
+function visibleState() {
+    return currentJob ? { ...currentJob, fields: { ...currentJob.fields, ...pendingFields } } : null;
+}
+function applyState(state) {
+    if (currentJob && state.jobId === currentJob.jobId && state.revision < currentJob.revision) return;
+    if (!currentJob || state.jobId !== currentJob.jobId) pendingFields = {};
+    currentJob = state;
+    const display = visibleState();
+    for (const [id, key] of Object.entries(FIELD_MAP)) if ($(id).value !== display.fields[key]) $(id).value = display.fields[key];
+    $("alignmentEnabled").checked = state.alignmentEnabled;
+    $("alignmentOptions").hidden = !state.alignmentEnabled;
+    document.querySelectorAll('input[name="alignmentCode"]').forEach(input => { input.checked = input.value === state.alignment; });
+    $("legacyTyreNotice").hidden = !state.legacyTyreText;
+    $("legacyTyreNotice").textContent = state.legacyTyreText ? "Previous tyre description: " + state.legacyTyreText + ". Select its SKU through Add Tyre." : "";
+    $("saveStatus").textContent = Object.keys(pendingFields).length ? "Saving…" : "Saved";
+    $("saveStatus").dataset.state = Object.keys(pendingFields).length ? "saving" : "saved";
+    renderProducts(); renderPreview(); renderStatus();
+}
+async function refreshDraft() {
+    try { await editQueue; applyState(await jobStore.read()); }
+    catch (error) { storageProblem(error); }
+}
+function renderProducts() {
+    const signature = JSON.stringify(currentJob.products);
+    if (signature === lastProductView) return;
+    lastProductView = signature;
+    const wrap = $("productLines"); wrap.replaceChildren();
+    for (let i = 0; i < 3; i++) {
+        const p = currentJob.products[i];
+        const row = document.createElement("div"); row.className = "jobcard-product-row";
+        const label = document.createElement("label"); label.className = "jobcard-product-sku";
+        const caption = document.createElement("span"); caption.textContent = p ? `${i + 1}. ${p.type === "wheel" ? "Wheel" : "Tyre"}` : `${i + 1}. Empty product slot`;
+        const input = document.createElement("input"); input.type = "text"; input.readOnly = true; input.value = p?.sku || ""; input.placeholder = "No product selected";
+        label.append(caption, input);
+        const qtyLabel = document.createElement("label"); const qtyCaption = document.createElement("span"); qtyCaption.textContent = "Qty";
+        const qty = document.createElement("input"); qty.type = "number"; qty.inputMode = "numeric"; qty.min = "1"; qty.max = "100"; qty.step = "1";
+        qty.value = p ? String(p.quantity) : ""; qty.disabled = !p; qty.setAttribute("aria-label", `Quantity for ${p?.sku || "empty slot " + (i + 1)}`);
+        qty.addEventListener("change", async () => {
+            try { applyState(await mutate({ type: "quantity", jobId: currentJob.jobId, productId: p.id, quantity: Number(qty.value) })); }
+            catch (error) { qty.value = String(p.quantity); jobCore.toast(error.message); }
+        });
+        qtyLabel.append(qtyCaption, qty);
+        const remove = document.createElement("button"); remove.type = "button"; remove.className = "jobcard-remove";
+        remove.textContent = "Remove"; remove.disabled = !p; remove.setAttribute("aria-label", `Remove ${p?.sku || "empty slot " + (i + 1)}`);
+        remove.addEventListener("click", async () => {
+            try { applyState(await mutate({ type: "remove", jobId: currentJob.jobId, productId: p.id })); }
+            catch (error) { jobCore.toast(error.message); }
+        });
+        row.append(label, qtyLabel, remove); wrap.appendChild(row);
+    }
+    $("productCount").textContent = currentJob.products.length + " / 3";
+}
+function renderPreview() {
+    const state = visibleState(); if (!state) return;
+    $("jobCardPreview").textContent = jobCore.preview(state);
+    const f = state.fields;
+    const done = [f.customerName, f.phone, f.rego, f.kilometres, f.vehicle].filter(v => v.trim()).length + (state.products.length ? 1 : 0);
+    $("completionStatus").textContent = done + " / 6";
+    $("completionStatus").dataset.complete = String(jobCore.validation(state).length === 0);
+}
+function renderStatus() {
+    if (!$("submitBtn")) return;
+    const sub = currentJob?.submission;
+    const names = { awaiting_ack: "Waiting for PC confirmation", queued: "Queued", awaiting_approval: "Waiting for approval on PC", injecting: "Filling COSTAR", failed: "Stopped — Retry available", ready_for_review: "READY FOR REVIEW" };
+    $("submissionStatus").textContent = sub ? names[sub.status] || sub.status : "Not submitted";
+    $("injectionProgress").textContent = sub?.progress || sub?.message || "";
+    $("jobcardError").textContent = statusMessage;
+    $("jobcardError").hidden = !statusMessage;
+    $("snapshotNotice").hidden = !sub;
+    $("snapshotNotice").textContent = sub ? "The submitted order is fixed. Further edits and added products stay on this card; they will not change the order sent to COSTAR." : "";
+    $("submitBtn").disabled = !currentJob || !storageHealthy || !helperReady || !!sub || sending;
+    $("submitBtn").textContent = sub ? "ORDER SUBMITTED" : "SUBMIT TO COSTAR";
+    $("retryBtn").hidden = !sub || !(sub.status === "failed" || sub.status === "awaiting_ack");
+    $("retryBtn").disabled = !helperReady || sending;
+    $("newJobBtn").disabled = sending || !!(sub && sub.status !== "ready_for_review");
+}
+async function poll() {
+    if (polling) return;
+    polling = true;
     try {
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : fallback;
-    } catch (error) {
-        console.error(`Could not read ${key}`, error);
-        return fallback;
-    }
-}
-
-function writeJson(key, value) {
-    try {
-        localStorage.setItem(key, JSON.stringify(value));
-        return true;
-    } catch (error) {
-        console.error(`Could not write ${key}`, error);
-        showToast("Could not save on this phone");
-        return false;
-    }
-}
-
-function collectJob() {
-    const fields = getFields();
-
-    return {
-        customerName: fields.customerName.value.trim(),
-        phone: fields.phone.value.trim(),
-        rego: fields.rego.value.trim().toUpperCase(),
-        kilometres: fields.kilometres.value.replace(/[^\d]/g, ""),
-        vehicle: fields.vehicle.value.trim(),
-        tyre: fields.tyre.value.trim(),
-        tyreSku: currentTyreSku.trim().toUpperCase(),
-        updatedAt: new Date().toISOString(),
-    };
-}
-
-function populateJob(job) {
-    const fields = getFields();
-    const safeJob = job && typeof job === "object" ? job : {};
-
-    for (const id of FIELD_IDS) {
-        fields[id].value = safeJob[id] ?? "";
-    }
-
-    fields.rego.value = fields.rego.value.toUpperCase();
-    fields.kilometres.value = fields.kilometres.value.replace(/[^\d]/g, "");
-    currentTyreSku = String(safeJob.tyreSku || "").trim().toUpperCase();
-
-    updateEverything();
-}
-
-function formatKilometres(value) {
-    const digits = String(value || "").replace(/[^\d]/g, "");
-    if (!digits) return "";
-
-    const parsed = Number.parseInt(digits, 10);
-    return Number.isFinite(parsed) ? parsed.toLocaleString("en-AU") : digits;
-}
-
-function valueOrBlank(value) {
-    return String(value || "").trim() || "________________";
-}
-
-function uppercaseCopyValue(value) {
-    return String(value || "").trim().toUpperCase();
-}
-
-function getQuickCopyBindings(job = collectJob()) {
-    return {
-        q: {
-            value: uppercaseCopyValue(job.customerName),
-            label: "Name",
-            message: "Name copied",
-        },
-        w: {
-            value: String(job.phone || "").trim(),
-            label: "Mobile",
-            message: "Mobile copied",
-        },
-        e: {
-            value: uppercaseCopyValue(job.tyreSku),
-            label: "SKU",
-            message: "SKU copied",
-        },
-        a: {
-            value: uppercaseCopyValue(job.vehicle),
-            label: "Make / Model",
-            message: "Make / model copied",
-        },
-        s: {
-            value: uppercaseCopyValue(job.rego),
-            label: "Rego",
-            message: "Rego copied",
-        },
-        d: {
-            value: String(job.kilometres || "").replace(/[^\d]/g, ""),
-            label: "Odo",
-            message: "Odometer copied",
-        },
-    };
-}
-
-function isTypingTarget(target) {
-    if (!target) return false;
-
-    const tagName = target.tagName?.toLowerCase();
-    return (
-        tagName === "input" ||
-        tagName === "textarea" ||
-        tagName === "select" ||
-        target.isContentEditable
-    );
-}
-
-function refreshQuickCopyButtons() {
-    const bindings = getQuickCopyBindings();
-
-    document.querySelectorAll("[data-copy-key]").forEach((button) => {
-        const key = String(button.dataset.copyKey || "").toLowerCase();
-        const binding = bindings[key];
-        const isEmpty = !binding?.value;
-
-        button.classList.toggle("is-empty", isEmpty);
-        button.setAttribute(
-            "aria-label",
-            isEmpty
-                ? `${binding?.label || key.toUpperCase()} has no value`
-                : `Copy ${binding.label} with ${key.toUpperCase()}`
-        );
-    });
-}
-
-async function copyQuickField(key) {
-    const normalizedKey = String(key || "").toLowerCase();
-    const binding = getQuickCopyBindings()[normalizedKey];
-
-    if (!binding) return false;
-
-    if (!binding.value) {
-        showToast(`No ${binding.label.toLowerCase()} to copy`);
-        return true;
-    }
-
-    try {
-        await copyText(binding.value);
-        showToast(`${binding.message} · ${normalizedKey.toUpperCase()}`);
-    } catch (error) {
-        console.error(`${binding.label} copy failed`, error);
-        showToast("Copy failed");
-    }
-
-    return true;
-}
-
-function buildJobCardText(job = collectJob()) {
-    const kilometres = formatKilometres(job.kilometres);
-
-    return [
-        `CUSTOMER: ${valueOrBlank(job.customerName).toUpperCase()}`,
-        `MOBILE: ${valueOrBlank(job.phone)}`,
-        "",
-        `TYRE: ${valueOrBlank(job.tyreSku).toUpperCase()}`,
-        `MAKE/MODEL: ${valueOrBlank(job.vehicle).toUpperCase()}`,
-        `REGO NO: ${valueOrBlank(job.rego).toUpperCase()}`,
-        `ODOMETER: ${kilometres ? `${kilometres} KMS` : "________________ KMS"}`,
-    ].join("\n");
-}
-
-function updatePreview() {
-    const job = collectJob();
-    document.getElementById("jobCardPreview").textContent = buildJobCardText(job);
-
-    const completed = FIELD_IDS.reduce(
-        (count, id) => count + (String(job[id] || "").trim() ? 1 : 0),
-        0
-    );
-
-    const completion = document.getElementById("completionStatus");
-    completion.textContent = `${completed} / ${FIELD_IDS.length}`;
-    completion.dataset.complete = String(completed === FIELD_IDS.length);
-}
-
-function setSaveStatus(text, state = "saved") {
-    const status = document.getElementById("saveStatus");
-    status.textContent = text;
-    status.dataset.state = state;
-}
-
-function saveDraft() {
-    const job = collectJob();
-
-    if (writeJson(JOBCARD_STORAGE_KEY, job)) {
-        setSaveStatus("Saved", "saved");
-    }
-}
-
-function scheduleSave() {
-    setSaveStatus("Saving…", "saving");
-    window.clearTimeout(saveTimer);
-    saveTimer = window.setTimeout(saveDraft, 180);
-}
-
-function updateEverything() {
-    updatePreview();
-    refreshQuickCopyButtons();
-    scheduleSave();
-}
-
-function normalizeLiveField(event) {
-    const input = event.target;
-
-    if (input.id === "rego") {
-        const start = input.selectionStart;
-        input.value = input.value.toUpperCase();
-        if (typeof start === "number") input.setSelectionRange(start, start);
-    }
-
-    if (input.id === "kilometres") {
-        input.value = input.value.replace(/[^\d]/g, "");
-    }
-}
-
-function moveToNextField(event) {
-    if (event.key !== "Enter" || event.target.tagName === "TEXTAREA") return;
-
-    event.preventDefault();
-    const currentIndex = FIELD_IDS.indexOf(event.target.id);
-    const nextId = FIELD_IDS[currentIndex + 1];
-
-    if (nextId) {
-        document.getElementById(nextId).focus();
-    } else {
-        event.target.blur();
-    }
-}
-
-function getSelectedTyreDescription(tyreData) {
-    if (!tyreData || typeof tyreData !== "object") return "";
-
-    return [
-        tyreData.make,
-        tyreData.model,
-    ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-}
-
-function loadSelectedTyre() {
-    selectedTyre = readJson(SELECTED_TYRE_STORAGE_KEY, null);
-
-    const description = getSelectedTyreDescription(selectedTyre);
-    const strip = document.getElementById("selectedTyreStrip");
-
-    if (!description) {
-        strip.hidden = true;
-        return;
-    }
-
-    document.getElementById("selectedTyreText").textContent = description;
-
-    const selectedSku = uppercaseCopyValue(selectedTyre?.sku);
-    const skuElement = document.getElementById("selectedTyreSku");
-    skuElement.textContent = selectedSku ? `SKU: ${selectedSku}` : "SKU unavailable";
-
-    strip.hidden = false;
-
-    const tyreField = document.getElementById("tyre");
-    if (!tyreField.value.trim()) {
-        tyreField.value = description;
-        currentTyreSku = selectedSku;
-        updateEverything();
-    }
-}
-
-function useSelectedTyre() {
-    const description = getSelectedTyreDescription(selectedTyre);
-    if (!description) return;
-
-    const tyreField = document.getElementById("tyre");
-    tyreField.value = description;
-    currentTyreSku = uppercaseCopyValue(selectedTyre?.sku);
-    tyreField.focus();
-    tyreField.setSelectionRange(tyreField.value.length, tyreField.value.length);
-    updateEverything();
-    showToast("Selected tyre added");
-}
-
-async function copyText(text) {
-    if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return;
-    }
-
-    const helper = document.createElement("textarea");
-    helper.value = text;
-    helper.setAttribute("readonly", "");
-    helper.style.position = "fixed";
-    helper.style.opacity = "0";
-    document.body.appendChild(helper);
-    helper.select();
-    document.execCommand("copy");
-    helper.remove();
-}
-
-async function copyJobCard() {
-    try {
-        await copyText(buildJobCardText());
-        showToast("Job card copied");
-    } catch (error) {
-        console.error("Copy failed", error);
-        showToast("Copy failed");
-    }
-}
-
-async function shareJobCard() {
-    const text = buildJobCardText();
-
-    if (navigator.share) {
-        try {
-            await navigator.share({
-                title: "Customer tyre job",
-                text,
-            });
+        await refreshDraft();
+        if (!pcClient?.isPaired()) {
+            helperReady = false;
+            $("helperConnection").textContent = "PC helper not connected";
+            $("queueStatus").textContent = "Open the PC helper’s QR link when it is available.";
+            if (window.TempeCostarPairingError) statusMessage = window.TempeCostarPairingError;
             return;
-        } catch (error) {
-            if (error?.name === "AbortError") return;
-            console.error("Share failed", error);
         }
-    }
-
-    await copyJobCard();
+        const health = await pcClient.health();
+        helperReady = health.receiving === true && health.workerConnected === true;
+        $("helperConnection").textContent = helperReady ? "PC helper connected · RDP worker online" : "PC receiver connected · RDP worker unavailable or stopped";
+        $("queueStatus").textContent = Number.isInteger(health.pendingCount) && health.pendingCount >= 0 ? `${health.pendingCount} pending order${health.pendingCount === 1 ? "" : "s"}` : "Queue status unavailable";
+        statusMessage = "";
+        const sub = currentJob?.submission;
+        if (sub && sub.status !== "ready_for_review") {
+            const status = await pcClient.getJob(sub.payload.submissionId);
+            if (status) applyState(await mutate({ type: "status", jobId: currentJob.jobId, status }));
+            else if (sub.status !== "awaiting_ack") statusMessage = "The PC no longer reports this submission. Check the helper before retrying.";
+        }
+    } catch (error) {
+        helperReady = false;
+        $("helperConnection").textContent = "PC helper offline";
+        statusMessage = "Draft kept on this phone. " + error.message;
+    } finally { polling = false; renderStatus(); }
 }
-
-function newJob() {
-    const hasData = FIELD_IDS.some(
-        (id) => document.getElementById(id).value.trim()
-    );
-
-    if (
-        hasData &&
-        !window.confirm("Clear this job card and start a new one?")
-    ) {
-        return;
+async function sendSnapshot(sub, retry) {
+    try {
+        const status = retry && sub.status === "failed" ? await pcClient.retry(sub.payload.submissionId) : await pcClient.submit(sub.payload);
+        if (!status) throw new Error("The PC did not acknowledge this submission.");
+        applyState(await mutate({ type: "status", jobId: currentJob.jobId, status }));
+        statusMessage = "";
+    } catch (error) {
+        try { applyState(await mutate({ type: "network-error", jobId: currentJob.jobId, submissionId: sub.payload.submissionId })); }
+        catch (saveError) { storageProblem(saveError); }
+        statusMessage = error.message + " Retry will use the same submission.";
+        jobCore.toast(statusMessage);
     }
-
-    localStorage.removeItem(JOBCARD_STORAGE_KEY);
-    currentTyreSku = "";
-
-    for (const id of FIELD_IDS) {
-        document.getElementById(id).value = "";
-    }
-
-    setSaveStatus("New job", "saved");
-    loadSelectedTyre();
-    updatePreview();
-    document.getElementById("customerName").focus();
-    showToast("New job ready");
 }
-
-function showToast(message) {
-    const toast = document.getElementById("jobcardToast");
-    toast.textContent = message;
-    toast.classList.add("is-visible");
-
-    window.clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(
-        () => toast.classList.remove("is-visible"),
-        1500
-    );
+async function submit() {
+    if (sending || !helperReady || !storageHealthy) return;
+    sending = true; renderStatus();
+    try {
+        await refreshDraft();
+        if (currentJob.submission) return;
+        const errors = jobCore.validation(currentJob);
+        if (errors.length) { statusMessage = errors.join(" "); jobCore.toast(errors[0]); return; }
+        const revision = currentJob.revision;
+        const confirmed = await jobCore.dialog("Submit this order to COSTAR?", [{ label: "Confirm", value: true }, { label: "Cancel", value: null }]);
+        if (!confirmed) return;
+        const health = await pcClient.health();
+        if (!health.receiving || !health.workerConnected) throw new Error("The PC helper is unavailable. Your card has not been submitted.");
+        const state = await mutate({ type: "submit", jobId: currentJob.jobId, revision, submissionId: "MJC-" + jobCore.uuid(), createdUtc: new Date().toISOString() });
+        applyState(state);
+        await sendSnapshot(state.submission, false);
+    } catch (error) { statusMessage = error.message; jobCore.toast(error.message); }
+    finally { sending = false; renderStatus(); }
 }
-
-function initJobCard() {
-    const savedJob = readJson(JOBCARD_STORAGE_KEY, null);
-
-    if (savedJob) {
-        populateJob(savedJob);
-        setSaveStatus("Draft restored", "saved");
-    } else {
-        updatePreview();
-    }
-
-    loadSelectedTyre();
-
-    for (const id of FIELD_IDS) {
-        const input = document.getElementById(id);
-
-        input.addEventListener("input", (event) => {
-            normalizeLiveField(event);
-            updateEverything();
+async function retrySubmission() {
+    if (sending || !helperReady || !currentJob?.submission) return;
+    sending = true; renderStatus();
+    try { await refreshDraft(); await sendSnapshot(currentJob.submission, true); }
+    finally { sending = false; renderStatus(); }
+}
+async function newJob() {
+    if ($("newJobBtn").disabled) return;
+    try {
+        await refreshDraft();
+        const oldId = currentJob.jobId;
+        const confirmed = await jobCore.dialog("Clear this job card and start a new one?", [{ label: "Confirm", value: true }, { label: "Cancel", value: null }]);
+        if (!confirmed) return;
+        const state = await mutate({ type: "new", jobId: oldId, newJobId: jobCore.uuid() });
+        // Old one-tyre handoffs must never repopulate the next customer's card.
+        try { localStorage.removeItem("fitment:selectedTyre"); localStorage.removeItem("fitment:mobile-jobcard:v3"); } catch (_) { /* The canonical new draft has already been saved. */ }
+        pendingFields = {}; statusMessage = ""; lastProductView = "";
+        applyState(state); $("customerName").focus(); jobCore.toast("New job ready");
+    } catch (error) { jobCore.toast(error.message); }
+}
+async function addWheel() {
+    try {
+        const value = await jobCore.dialog("Add wheel", [{ label: "Add Wheel", value: "input" }, { label: "Cancel", value: null }], "COSTAR wheel SKU");
+        if (value === null) return;
+        const state = await jobCore.addProduct({ type: "wheel", sku: value, description: "" });
+        if (state) applyState(state);
+    } catch (error) { jobCore.toast(error.message); }
+}
+function saveAlignment() {
+    const selected = document.querySelector('input[name="alignmentCode"]:checked');
+    mutate({ type: "alignment", jobId: currentJob.jobId, enabled: $("alignmentEnabled").checked, code: selected?.value || "" }).then(applyState).catch(storageProblem);
+}
+async function copyQuickField(key) {
+    const state = visibleState(); if (!state) return;
+    const f = state.fields;
+    const values = { q: f.customerName.toUpperCase(), w: f.phone, e: (state.products.find(p => p.type === "tyre") || state.products[0])?.sku || "", a: f.vehicle.toUpperCase(), s: f.rego.toUpperCase(), d: f.kilometres };
+    if (!(key in values)) return;
+    if (!values[key]) { jobCore.toast("No value to copy"); return; }
+    try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(values[key]);
+        else { const box = document.createElement("textarea"); box.value = values[key]; document.body.appendChild(box); box.select(); document.execCommand("copy"); box.remove(); }
+        jobCore.toast(key.toUpperCase() + " copied");
+    } catch (_) { jobCore.toast("Copy failed"); }
+}
+async function initJobCard() {
+    await refreshDraft();
+    for (const id of Object.keys(FIELD_MAP)) {
+        $(id).addEventListener("input", event => {
+            if (id === "rego") { const start = event.target.selectionStart; event.target.value = event.target.value.toUpperCase(); if (start !== null) event.target.setSelectionRange(start, start); }
+            if (id === "kilometres") event.target.value = event.target.value.replace(/[^\d]/g, "");
+            saveField(event.target);
         });
-
-        input.addEventListener("keydown", moveToNextField);
-    }
-
-    document.querySelectorAll("[data-copy-key]").forEach((button) => {
-        button.addEventListener("click", () => {
-            copyQuickField(button.dataset.copyKey);
+        $(id).addEventListener("keydown", event => {
+            if (event.key !== "Enter" || event.target.tagName === "TEXTAREA") return;
+            event.preventDefault(); const ids = Object.keys(FIELD_MAP), next = ids[ids.indexOf(id) + 1];
+            if (next) $(next).focus(); else event.target.blur();
         });
+    }
+    $("jobCardForm").addEventListener("submit", event => event.preventDefault());
+    $("addWheelBtn").addEventListener("click", addWheel);
+    $("alignmentEnabled").addEventListener("change", saveAlignment);
+    document.querySelectorAll('input[name="alignmentCode"]').forEach(input => input.addEventListener("change", saveAlignment));
+    $("submitBtn").addEventListener("click", submit); $("retryBtn").addEventListener("click", retrySubmission);
+    $("newJobBtn").addEventListener("click", newJob);
+    jobStore.subscribe(refreshDraft);
+    window.addEventListener("focus", poll); window.addEventListener("online", poll);
+    window.addEventListener("offline", () => { helperReady = false; $("helperConnection").textContent = "Offline — draft kept on this phone"; renderStatus(); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+    document.addEventListener("keydown", event => {
+        if (event.ctrlKey || event.altKey || event.metaKey || event.repeat || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) || event.target.isContentEditable || document.querySelector("dialog[open]")) return;
+        const key = event.key.toLowerCase(); if ("qweasd".includes(key) && key.length === 1) { event.preventDefault(); copyQuickField(key); }
     });
-
-    document.addEventListener("keydown", (event) => {
-        if (event.altKey || event.ctrlKey || event.metaKey) return;
-        if (event.repeat) return;
-        if (isTypingTarget(event.target)) return;
-
-        const key = String(event.key || "").toLowerCase();
-        if (!getQuickCopyBindings()[key]) return;
-
-        event.preventDefault();
-        copyQuickField(key);
-    });
-
-    document.getElementById("useSelectedTyreBtn")
-        .addEventListener("click", useSelectedTyre);
-
-    document.getElementById("copyBtn")
-        .addEventListener("click", copyJobCard);
-
-    document.getElementById("shareBtn")
-        .addEventListener("click", shareJobCard);
-
-    document.getElementById("newJobBtn")
-        .addEventListener("click", newJob);
-
-    refreshQuickCopyButtons();
-    window.addEventListener("pagehide", saveDraft);
+    await poll(); window.setInterval(() => { if (!document.hidden) poll(); }, 3000);
 }
-
 document.addEventListener("DOMContentLoaded", initJobCard);
