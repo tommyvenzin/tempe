@@ -1,11 +1,11 @@
-/* Tempe Order Check board 1.2.2
+/* Tempe Order Check board 1.3.1
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
    as the publisher, shares the results with the team.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.2.2";
+  const VERSION = "1.3.1";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
@@ -23,6 +23,7 @@
   const LEASE_MS = 4 * 60000;          // another board counts as sharing for this long
   const STALE_MS = 5 * 60000;          // the team view warns after this
   const STORE_KEY = "orderCheck.v1";
+  const UPDATE_KEY = "orderCheck.autoUpdate";
 
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -36,7 +37,7 @@
     share: { started: false, note: "", user: null, role: "", error: "", otherPublisher: false, showForm: false, sending: false, lastShared: 0 },
     cloud: { rows: null, status: null, acks: {} },
     pending: new Map(),
-    lastBeat: 0, lastBeatKey: "", checkedOnce: false,
+    lastBeat: 0, lastBeatKey: "", checkedOnce: false, updateNote: "",
   };
 
   // Source = this browser can read COSTAR (the reader answered at least once).
@@ -244,7 +245,7 @@
       renderAccount();
     };
     const github = Share.kind === "github";
-    if (!watchers.status && !(github && isSource())) watchers.status = Share.watchStatus((s) => { state.cloud.status = s; evaluateAll(); render(); }, failed);
+    if (!watchers.status && !(github && isSource())) watchers.status = Share.watchStatus((s) => { state.cloud.status = s; if (isViewer() && s) maybeUpdate(s.version); evaluateAll(); render(); }, failed);
     if (isSource()) {
       if (github && watchers.status) { watchers.status(); watchers.status = null; state.cloud.status = null; }
       if (watchers.rows) { watchers.rows(); watchers.rows = null; state.cloud.rows = null; }
@@ -257,6 +258,28 @@
   function stopWatchers() {
     for (const key of Object.keys(watchers)) { if (watchers[key]) { watchers[key](); watchers[key] = null; } }
     state.cloud = { rows: null, status: null, acks: {} };
+  }
+
+  // The RDP board shares its version. When it's newer than this page, reload once
+  // with a fresh address so GitHub's cache can't serve the old files. If GitHub
+  // hasn't caught up yet, wait 10 minutes before trying again (never a reload loop).
+  function newerThan(a, b) {
+    const x = String(a).split(".").map(Number), y = String(b).split(".").map(Number);
+    for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+    return false;
+  }
+  function maybeUpdate(version) {
+    if (!version || !newerThan(version, VERSION)) { state.updateNote = ""; return; }
+    let last = {};
+    try { last = JSON.parse(localStorage.getItem(UPDATE_KEY) || "{}"); } catch { /* ignore */ }
+    if (last.to === version && Date.now() - last.at < 10 * 60000) {
+      state.updateNote = `A newer board (${version}) is on its way from GitHub. It loads by itself within 10 minutes.`;
+      return;
+    }
+    try { localStorage.setItem(UPDATE_KEY, JSON.stringify({ to: version, at: Date.now() })); } catch { /* ignore */ }
+    const url = new URL(location.href);
+    url.searchParams.set("v", version);
+    location.replace(url.toString());
   }
 
   function canPublish() {
@@ -281,7 +304,7 @@
     state.share.sending = true;
     try {
       await Share.publish(state.results);
-      const problems = currentProblems();
+      const problems = currentProblems(true);
       const key = JSON.stringify(problems) + (state.wip.readAt || "");
       if (force || key !== state.lastBeatKey || Date.now() - state.lastBeat > BEAT_EVERY_MS) {
         await Share.beat({ readAt: state.wip.readAt || "", jobs: state.wip.jobs || 0, pickingAt: state.pickingAt || 0, problems, version: VERSION });
@@ -382,7 +405,6 @@
   };
 
   function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-  function money(n) { return Number(n || 0).toLocaleString("en-AU", { style: "currency", currency: "AUD" }); }
   function timeOf(ms) { return new Date(ms).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }); }
 
   function render() {
@@ -406,9 +428,10 @@
     document.title = counts.red ? `(${counts.red}) Order check` : "Order check";
   }
 
-  function currentProblems() {
+  function currentProblems(forTeam) {
     const w = state.wip, problems = [];
-    if (w && w.state && w.state !== "ok") problems.push(w.message);
+    const onlyHere = ["waiting", "sleeping", "paused"];   // e.g. "You're using the WIP COSTAR window"
+    if (w && w.state && w.state !== "ok" && !(forTeam && onlyHere.includes(w.state))) problems.push(w.message);
     if (w && w.state === "ok" && w.filter) problems.push(w.message);
     if (state.pickingError) problems.push(state.pickingError);
     return problems.filter(Boolean);
@@ -424,6 +447,7 @@
       wipLine.textContent = s && s.readAt ? `COSTAR read ${timeOf(Date.parse(s.readAt))}, ${s.jobs} jobs` : "Waiting for the board on the RDP PC";
       p.textContent = s && s.pickingAt ? `Picking checked ${timeOf(s.pickingAt)}` : "";
       problems = s && Array.isArray(s.problems) ? s.problems.slice() : [];
+      if (state.updateNote) problems.unshift(state.updateNote);
       if (beat && Date.now() - beat > (Share.staleMs || STALE_MS)) {
         wipLine.className = "feed-warn";
         problems.unshift(`The board on the RDP PC stopped updating at ${timeOf(beat)}. Open it there to bring this up to date.`);
@@ -502,7 +526,7 @@
     }
     const canAct = isSource() || (isViewer() && Share.canAck !== false);
     let action = "";
-    if (!canAct && isViewer() && r.status === "red") action = `<span class="hint">To clear it, add NO ORDER to the COSTAR comment</span>`;
+    if (!canAct && isViewer() && r.status === "red") action = `<span class="hint">To clear, put HOLD in the comment</span>`;
     if (canAct && r.status === "red") action = `<button type="button" class="act" data-ack="${esc(row.doc)}">Mark OK</button>`;
     if (canAct && r.status === "ok" && r.label === "Marked OK") action = `<button type="button" class="act quiet" data-unack="${esc(row.doc)}">Undo</button>`;
     const open = state.expanded.has(row.doc);
@@ -510,20 +534,17 @@
     const main = `<tr class="job s-${r.status}${hasSlips ? " has-slips" : ""}" data-doc="${esc(row.doc)}"${hasSlips ? ` aria-expanded="${open}" tabindex="0"` : ""}>
       <td class="c-status"><span class="pill">${esc(r.label)}</span></td>
       <td class="c-doc">${esc(row.doc)}</td>
-      <td class="c-date">${esc(R.friendlyDate(row.orderDate, R.isoOf(new Date())))}</td>
       <td class="c-name">${esc(row.name)}</td>
-      <td class="c-total">${money(row.total)}</td>
-      <td class="c-via">${row.shipVia ? esc(row.shipVia) : '<span class="blank">blank</span>'}</td>
       <td class="c-comment" title="${esc(row.comment)}">${esc(row.comment)}</td>
       <td class="c-by">${esc(row.by)}</td>
-      <td class="c-detail">${detail}</td>
+      <td class="c-detail"${r.detail ? ` title="${esc(r.detail)}"` : ""}>${detail}</td>
       <td class="c-act">${action}</td>
     </tr>`;
     if (!open || !hasSlips) return main;
     const slips = r.slips.slice().sort((a, b) => (a.time < b.time ? 1 : -1)).map((s) =>
       `<li><strong>${esc(s.qty)} × ${esc(s.desc || s.sku)}</strong> <span>${esc(s.sku)}${s.bins ? `, bins ${esc(s.bins)}` : ""}</span>
         <span>Slip ${esc(s.time)}${s.manual ? " (manual)" : ""}, ${s.picked ? `picked ${esc(String(s.pickedAt).slice(11))} by ${esc(String(s.picker).replace(/^\d+-/, ""))}` : "not picked yet"}, ${esc(String(s.progress).toLowerCase())}${s.driver && s.driver.length ? `, ${esc(s.driver.join(", "))}` : ""}</span></li>`).join("");
-    return main + `<tr class="slips"><td colspan="10"><ul>${slips}</ul></td></tr>`;
+    return main + `<tr class="slips"><td colspan="7"><ul>${slips}</ul></td></tr>`;
   }
 
   function renderAccount() {
@@ -675,6 +696,7 @@
     }, 4000);
   }
 
+  $("ver").textContent = `v${VERSION}`;
   loadStore();
   wire();
   render();
