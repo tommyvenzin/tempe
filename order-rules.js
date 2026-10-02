@@ -13,6 +13,7 @@
 
   // Words in the COSTAR comment that mean "don't order yet".
   const HOLD_RULES = [
+    [/^(?!.*\bPAID\b).*\$/, "waiting for payment"],   // "$", "$$", "$$$" … but "PAID TT" stays a normal job
     [/\b(ON\s+)?HOLD\b/, "on hold"],
     [/\bCONF[IO]RM/, "waiting to confirm"],
     [/\bCHECK\s+STOCK\b/, "checking stock"],
@@ -166,6 +167,22 @@
 
   const ORDER = { red: 0, new: 1, checking: 2, amber: 3, ok: 4, green: 5, grey: 6 };
 
+  // The fix a salesperson sees on a red job. Every board writes these itself from
+  // the codes, so the wording never depends on which version the RDP board runs.
+  const FIX = { shop: "Put SHOP", date: "Incorrect date", waiting: "Tick Customer Waiting" };
+  function shortFixes(r) {
+    if (Array.isArray(r.codes) && r.codes.length) return r.codes.map((c) => FIX[c] || c);
+    const out = [];
+    for (const text of r.reasons || []) {       // results shared by an older RDP board
+      const t = String(text);
+      if (/ship via is blank|put shop/i.test(t)) out.push(FIX.shop);
+      else if (/order date|incorrect date/i.test(t)) out.push(FIX.date);
+      else if (/no picking slip|customer waiting/i.test(t)) out.push(FIX.waiting);
+      else out.push(t);
+    }
+    return [...new Set(out)];
+  }
+
   function slipSummary(slips, today) {
     const latest = slips.slice().sort((a, b) => (a.time < b.time ? 1 : -1))[0];
     const day = (latest.pickedAt || "").slice(0, 10);
@@ -223,11 +240,12 @@
     }
 
     // Short fixes for the salesperson; the longer explanation shows on hover.
-    const reasons = [], detail = [];
-    if (!shipVia) { reasons.push("Put SHOP"); detail.push("Ship Via is blank."); }
-    if (row.orderDate && row.orderDate < today) { reasons.push("Incorrect date"); detail.push(`Order date is ${friendlyDate(row.orderDate, today)}; the slip only prints for today's date.`); }
-    if (!reasons.length) { reasons.push("Tick Customer waiting"); detail.push("SHOP and the date are right, but no picking slip has printed."); }
-    return { ...base, status: "red", label: "Not ordered", reasons, reason: reasons.join(", "), detail: detail.join(" ") };
+    const codes = [], detail = [];
+    if (!shipVia) { codes.push("shop"); detail.push("Ship Via is blank."); }
+    if (row.orderDate && row.orderDate < today) { codes.push("date"); detail.push(`Order date is ${friendlyDate(row.orderDate, today)}; the slip only prints for today's date.`); }
+    if (!codes.length) { codes.push("waiting"); detail.push("SHOP and the date are right, but no picking slip has printed."); }
+    const reasons = codes.map((c) => FIX[c]);
+    return { ...base, status: "red", label: "Not ordered", codes, reasons, reason: reasons.join(", "), detail: detail.join(" ") };
   }
 
   function compare(a, b) {
@@ -237,7 +255,7 @@
     return (a.row.orderDate || "") < (b.row.orderDate || "") ? -1 : (a.row.orderDate || "") > (b.row.orderDate || "") ? 1 : (a.row.doc < b.row.doc ? -1 : 1);
   }
 
-  const api = { GRACE_MINUTES, ORDER, isoOf, parseIso, addDays, friendlyDate, readComment, parsePicking, docKey, evaluate, compare, slipSummary, clean };
+  const api = { GRACE_MINUTES, ORDER, FIX, shortFixes, isoOf, parseIso, addDays, friendlyDate, readComment, parsePicking, docKey, evaluate, compare, slipSummary, clean };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.OrderRules = api;
 })(this);
