@@ -1,11 +1,11 @@
-/* Tempe Order Check board 1.3.1
+/* Tempe Order Check board 1.3.2
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
    as the publisher, shares the results with the team.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.3.1";
+  const VERSION = "1.3.2";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
@@ -16,7 +16,7 @@
   const PICKING_EVERY_MS = 120000;     // today's picking page
   const HISTORY_DAYS = 7;              // loaded once per day
   const SEARCH_TTL_MS = 12 * 3600000;  // a "no slip in history" answer is reused for 12 h
-  const SEARCHES_PER_ROUND = 20;
+  const SEARCHES_PER_ROUND = 40;
   const BRIDGE_TIMEOUT_MS = 25000;     // intranet pages can be slow
   const READER_TIMEOUT_MS = 5000;      // the reader answers from memory
   const BEAT_EVERY_MS = 110000;        // "still alive" note for the team view
@@ -34,7 +34,7 @@
     results: [], lastRed: null, expanded: new Set(), bridgeOk: null,
     prefs: { view: "action", by: "ALL", sound: false, me: "" },
     query: "",
-    share: { started: false, note: "", user: null, role: "", error: "", otherPublisher: false, showForm: false, sending: false, lastShared: 0 },
+    share: { started: false, note: "", user: null, role: "", error: "", otherPublisher: false, showForm: false, sending: false, lastShared: 0, lastSharedAt: 0 },
     cloud: { rows: null, status: null, acks: {} },
     pending: new Map(),
     lastBeat: 0, lastBeatKey: "", checkedOnce: false, updateNote: "",
@@ -272,14 +272,26 @@
     if (!version || !newerThan(version, VERSION)) { state.updateNote = ""; return; }
     let last = {};
     try { last = JSON.parse(localStorage.getItem(UPDATE_KEY) || "{}"); } catch { /* ignore */ }
+    const tries = last.to === version ? last.n || 1 : 0;
+    if (tries >= 3) { state.updateNote = `Board ${version} is on GitHub. Reload this page to get it.`; return; }
     if (last.to === version && Date.now() - last.at < 10 * 60000) {
       state.updateNote = `A newer board (${version}) is on its way from GitHub. It loads by itself within 10 minutes.`;
       return;
     }
-    try { localStorage.setItem(UPDATE_KEY, JSON.stringify({ to: version, at: Date.now() })); } catch { /* ignore */ }
+    try { localStorage.setItem(UPDATE_KEY, JSON.stringify({ to: version, at: Date.now(), n: tries + 1 })); } catch { /* ignore */ }
     const url = new URL(location.href);
     url.searchParams.set("v", version);
     location.replace(url.toString());
+  }
+
+  async function checkForUpdate() {
+    if (location.protocol !== "https:") return;
+    try {
+      const res = await fetch(`order-check.js?check=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const found = /const VERSION = "([\d.]+)"/.exec(await res.text());
+      if (found) { maybeUpdate(found[1]); render(); }
+    } catch { /* offline: try again later */ }
   }
 
   function canPublish() {
@@ -288,6 +300,10 @@
     // that suddenly drops to nothing wipe what the team is looking at.
     if (!state.wip.readAt || !Array.isArray(state.wip.rows)) return false;
     if (!state.checkedOnce) return false;   // wait until picking and the history search have run once
+    // Don't share jobs that are still being checked (for example at midnight, when tomorrow's
+    // bookings become today's): wait for the search, unless the team hasn't had an update for 5 minutes.
+    const halfChecked = !state.pickingError && state.results.some((r) => r.status === "checking");
+    if (halfChecked && Date.now() - state.share.lastSharedAt < 5 * 60000) return false;
     if (!state.wip.rows.length && state.share.lastShared >= 5) return false;
     if (Share.kind === "github") return true;   // GitHub mode checks who saved last when it saves
     const s = state.cloud.status;
@@ -312,6 +328,7 @@
       }
       if (/^Sharing failed/.test(state.share.error)) state.share.error = "";
       state.share.lastShared = state.results.length;
+      state.share.lastSharedAt = Date.now();
       if (Share.kind === "github") state.share.otherPublisher = false;
     } catch (error) {
       if (error.code === "other-board") state.share.otherPublisher = true;
@@ -344,7 +361,13 @@
       if (!isSource()) return;
       await refreshPicking(forcePicking);
       evaluateAll(); render();
-      if (await searchHistory(state.results)) { evaluateAll(); render(); }
+      // Keep searching until nothing is left "checking" (or a round makes no progress).
+      for (let round = 0; round < 3; round++) {
+        const before = state.results.filter((r) => r.status === "checking").length;
+        if (!before || !(await searchHistory(state.results))) break;
+        evaluateAll(); render();
+        if (state.results.filter((r) => r.status === "checking").length >= before) break;
+      }
       state.checkedOnce = true;
       await publish(true);
     } finally { busy = false; }
@@ -434,6 +457,7 @@
     if (w && w.state && w.state !== "ok" && !(forTeam && onlyHere.includes(w.state))) problems.push(w.message);
     if (w && w.state === "ok" && w.filter) problems.push(w.message);
     if (state.pickingError) problems.push(state.pickingError);
+    if (!forTeam && state.updateNote) problems.push(state.updateNote);
     return problems.filter(Boolean);
   }
 
@@ -519,14 +543,13 @@
     if (r.status === "green" && r.summary) {
       const s = r.summary;
       detail = `<span class="slip">${esc(s.headline)}</span><span class="sub">${esc(s.pick)}${s.progress && s.progress !== "Timed out" ? `, ${esc(String(s.progress).toLowerCase())}` : ""}${s.more ? `, plus ${s.more} more slip${s.more > 1 ? "s" : ""}` : ""}</span>`;
-    } else if (r.status === "red" && Array.isArray(r.reasons)) {
-      detail = r.reasons.map((x) => `<span class="why">${esc(x)}</span>`).join("");
+    } else if (r.status === "red") {
+      detail = R.shortFixes(r).map((x) => `<span class="why">${esc(x)}</span>`).join("");
     } else {
       detail = `<span class="sub">${esc(r.reason || "")}</span>`;
     }
     const canAct = isSource() || (isViewer() && Share.canAck !== false);
     let action = "";
-    if (!canAct && isViewer() && r.status === "red") action = `<span class="hint">To clear, put HOLD in the comment</span>`;
     if (canAct && r.status === "red") action = `<button type="button" class="act" data-ack="${esc(row.doc)}">Mark OK</button>`;
     if (canAct && r.status === "ok" && r.label === "Marked OK") action = `<button type="button" class="act quiet" data-unack="${esc(row.doc)}">Undo</button>`;
     const open = state.expanded.has(row.doc);
@@ -703,5 +726,10 @@
   startSharing();
   cycle(true);
   setInterval(() => cycle(false), WIP_EVERY_MS);
-  setInterval(() => { evaluateAll(); render(); publish(); }, 30000);  // grace periods and dates roll over without a fetch
+  setInterval(() => {   // grace periods and dates roll over without a fetch
+    evaluateAll(); render();
+    if (isSource() && state.results.some((r) => r.status === "checking")) cycle(false); else publish();
+  }, 30000);
+  setTimeout(checkForUpdate, 30000);
+  setInterval(checkForUpdate, 10 * 60000);
 })();
