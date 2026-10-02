@@ -191,42 +191,43 @@
     const today = ctx.today;
     const base = { doc: row.doc, key, row };
 
-    if (!(Number(row.total) > 0)) return { ...base, status: "grey", label: "Not checked", reason: "No amount on this job." };
-    if (shipVia && shipVia !== SHOP) return { ...base, status: "grey", label: "Not checked", reason: `Ship Via is ${row.shipVia}, not SHOP.` };
+    if (!(Number(row.total) > 0)) return { ...base, status: "grey", label: "Not checked", reason: "No amount" };
+    if (shipVia && shipVia !== SHOP) return { ...base, status: "grey", label: "Not checked", reason: `Ship via ${row.shipVia}` };
 
     const slips = (ctx.slips && ctx.slips.get(key)) || [];
     if (slips.length) return { ...base, status: "green", label: "Ordered", slips, summary: slipSummary(slips, today) };
 
     const anchor = row.orderDate && row.orderDate < today ? row.orderDate : today;
     const note = readComment(row.comment, anchor);
-    if (note.noOrder) return { ...base, status: "ok", label: "No order needed", reason: `Comment says ${note.noOrder}.` };
+    if (note.noOrder) return { ...base, status: "ok", label: "No order needed", reason: `${note.noOrder} in comment` };
     if (row.orderDate && row.orderDate > today) {
-      return { ...base, status: "amber", label: "Booked", until: row.orderDate, reason: `Order date is ${friendlyDate(row.orderDate, today)}.` };
+      return { ...base, status: "amber", label: "Booked", until: row.orderDate, reason: `Booked for ${friendlyDate(row.orderDate, today)}` };
     }
     if (note.date && note.date > today) {
-      return { ...base, status: "amber", label: "Waiting", until: note.date, reason: `Comment says ${note.dateText}, so it alerts ${friendlyDate(note.date, today)}.` };
+      return { ...base, status: "amber", label: "Waiting", until: note.date, reason: `Waiting until ${friendlyDate(note.date, today)}` };
     }
-    if (note.hold) return { ...base, status: "amber", label: "On hold", reason: `Comment says ${note.hold}.` };
+    if (note.hold) return { ...base, status: "amber", label: "On hold", reason: note.hold === "on hold" ? "HOLD in comment" : note.hold.charAt(0).toUpperCase() + note.hold.slice(1) };
 
     if (!(ctx.searched && ctx.searched.has(key))) {
-      return { ...base, status: "checking", label: "Checking", reason: "Searching picking history for this document." };
+      return { ...base, status: "checking", label: "Checking", reason: "Checking picking history" };
     }
 
     const changed = Date.parse(row.changedAt || "");
     if (Number.isFinite(changed) && ctx.nowMs - changed < GRACE_MINUTES * 60000) {
-      return { ...base, status: "new", label: "Just changed", reason: "Slips usually print within 2 minutes.", until: changed + GRACE_MINUTES * 60000 };
+      return { ...base, status: "new", label: "Just changed", reason: "Slip due within 2 min", until: changed + GRACE_MINUTES * 60000 };
     }
 
     const ack = ctx.acks && ctx.acks[row.doc];
     if (ack && ack.sig === row.sig) {
-      return { ...base, status: "ok", label: "Marked OK", reason: `Marked as not needing an order by ${ack.by}.`, ack };
+      return { ...base, status: "ok", label: "Marked OK", reason: `Cleared by ${ack.by}`, ack };
     }
 
-    const reasons = [];
-    if (!shipVia) reasons.push("Ship Via is blank. Put SHOP and tick Customer waiting.");
-    if (row.orderDate && row.orderDate < today) reasons.push(`Order date is ${friendlyDate(row.orderDate, today)}. Change it to today, or the slip won't print.`);
-    if (!reasons.length) reasons.push("No picking slip. Check Customer waiting is ticked.");
-    return { ...base, status: "red", label: "Not ordered", reasons, reason: reasons.join(" ") };
+    // Short fixes for the salesperson; the longer explanation shows on hover.
+    const reasons = [], detail = [];
+    if (!shipVia) { reasons.push("Put SHOP"); detail.push("Ship Via is blank."); }
+    if (row.orderDate && row.orderDate < today) { reasons.push("Incorrect date"); detail.push(`Order date is ${friendlyDate(row.orderDate, today)}; the slip only prints for today's date.`); }
+    if (!reasons.length) { reasons.push("Tick Customer waiting"); detail.push("SHOP and the date are right, but no picking slip has printed."); }
+    return { ...base, status: "red", label: "Not ordered", reasons, reason: reasons.join(", "), detail: detail.join(" ") };
   }
 
   function compare(a, b) {
