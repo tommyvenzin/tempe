@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1d2125;
+    --ink-soft: #57606a;
+    --paper: #eef0f2;
+    --sheet: #ffffff;
+    --rule: #d6dbe0;
+    --stop: #c0161f;
+    --stop-tint: #fcebec;
+    --wait: #8a5300;
+    --wait-tint: #fff3d9;
+    --go: #1b7342;
+    --go-tint: #e8f5ee;
+    --tag: #ffc461;          /* the intranet's wheel-row orange */
+    --body: "Barlow", "Segoe UI", Arial, sans-serif;
+    --tight: "Barlow Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.45 var(--body); font-variant-numeric: tabular-nums; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--tag); outline-offset: 2px; }
+
+  .top { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 32px; padding: 20px 28px 14px; background: var(--sheet); border-bottom: 1px solid var(--rule); }
+  .top h1 { margin: 0; font: 700 30px/1 var(--tight); letter-spacing: 0.01em; }
+  .top .sub { margin: 4px 0 0; color: var(--ink-soft); }
+  .feed { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--ink-soft); }
+  .feed-warn { color: var(--wait); font-weight: 600; }
+  .feed-bad { color: var(--stop); font-weight: 600; }
+  .actions { display: flex; align-items: center; gap: 16px; }
+  #refresh { border: 1px solid var(--ink); background: var(--ink); color: #fff; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600; }
+  #refresh:disabled { opacity: 0.6; cursor: progress; }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); cursor: pointer; }
+
+  main { padding: 18px 28px 40px; max-width: 1500px; }
+  .problem { margin: 0 0 16px; padding: 12px 16px; background: var(--wait-tint); border-left: 5px solid var(--wait); color: #4d2f00; font-weight: 500; }
+
+  .tally { display: flex; flex-wrap: wrap; align-items: stretch; gap: 18px; margin-bottom: 18px; }
+  .tally-main { display: flex; align-items: center; gap: 16px; min-width: 300px; padding: 10px 24px 10px 18px; border: 0; border-radius: 6px; background: var(--stop); color: #fff; cursor: pointer; text-align: left; }
+  .tally-main .big { font: 700 84px/0.9 var(--tight); }
+  .tally-main .cap { font: 600 22px/1.1 var(--tight); max-width: 9ch; }
+  .tally-main.is-clear { background: var(--go); }
+  .tally-main[aria-pressed="true"] { box-shadow: 0 0 0 4px var(--tag); }
+  .tally-rest { display: flex; flex-wrap: wrap; align-content: center; gap: 8px; }
+  .tally-rest button { display: inline-flex; align-items: baseline; gap: 6px; padding: 8px 14px; border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet); cursor: pointer; }
+  .tally-rest .n { font: 700 20px/1 var(--tight); }
+  .tally-rest button[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 -3px 0 var(--tag); }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .people { display: flex; flex-wrap: wrap; gap: 6px; }
+  .person { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px; background: var(--sheet); cursor: pointer; font-weight: 600; }
+  .person[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .person-red { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--stop); color: #fff; font-size: 13px; text-align: center; }
+  #q { margin-left: auto; min-width: 260px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 4px; font: inherit; background: var(--sheet); }
+
+  .table-wrap { overflow-x: auto; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { position: sticky; top: 0; background: var(--sheet); text-align: left; font-weight: 600; color: var(--ink-soft); padding: 10px 12px; border-bottom: 2px solid var(--rule); white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tr.job td:first-child { box-shadow: inset 5px 0 0 var(--edge, transparent); padding-left: 16px; }
+  .c-doc { font-weight: 600; white-space: nowrap; }
+  .c-date, .c-by, .c-via { white-space: nowrap; }
+  .c-total { text-align: right; white-space: nowrap; }
+  .c-name { min-width: 160px; }
+  .c-comment { max-width: 240px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .c-detail { min-width: 260px; }
+  .c-detail span { display: block; }
+  .c-detail .sub { color: var(--ink-soft); }
+  .c-detail .why { color: var(--stop); font-weight: 500; }
+  .c-act { text-align: right; white-space: nowrap; }
+  .blank { color: var(--stop); font-style: italic; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600; white-space: nowrap; background: var(--pill-bg, #eef0f2); color: var(--pill, var(--ink-soft)); }
+
+  .s-red { --edge: var(--stop); --pill: #fff; --pill-bg: var(--stop); background: var(--stop-tint); }
+  .s-new, .s-checking { --edge: var(--ink-soft); }
+  .s-amber { --edge: #d9961a; --pill: var(--wait); --pill-bg: var(--wait-tint); }
+  .s-ok { --edge: var(--rule); color: var(--ink-soft); }
+  .s-green { --edge: var(--go); --pill: var(--go); --pill-bg: var(--go-tint); }
+  .s-grey { color: var(--ink-soft); }
+  tr.has-slips { cursor: pointer; }
+  tr.has-slips:hover td { background: #f7f8f9; }
+
+  .act { padding: 6px 12px; border: 1px solid var(--stop); border-radius: 4px; background: var(--sheet); color: var(--stop); font-weight: 600; cursor: pointer; }
+  .act.quiet { border-color: var(--rule); color: var(--ink-soft); }
+  tr.slips td { background: #f7f8f9; padding: 8px 16px 12px 40px; }
+  tr.slips ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  tr.slips li span { display: block; color: var(--ink-soft); }
+  .empty { margin: 28px 4px; font-size: 17px; color: var(--ink-soft); }
+  .account { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; max-width: 360px; color: var(--ink-soft); }
+  .acct-who { font-weight: 600; color: var(--ink); }
+  .is-bad { color: var(--stop); font-weight: 600; }
+  .link { border: 0; background: none; padding: 0; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .signin { max-width: 420px; margin: 8px 0 24px; padding: 24px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; }
+  .signin h2 { margin: 0 0 16px; font: 700 26px/1.1 var(--tight); }
+  .signin label { display: block; margin-bottom: 12px; font-weight: 600; }
+  .signin input { display: block; width: 100%; margin-top: 4px; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 4px; font: inherit; }
+  .signin-actions { display: flex; align-items: center; gap: 18px; }
+  .signin button[type="submit"] { border: 1px solid var(--ink); background: var(--ink); color: #fff; padding: 8px 18px; border-radius: 4px; font-weight: 600; cursor: pointer; }
+  .signin button[type="submit"]:disabled { opacity: 0.6; cursor: progress; }
+  .signin-help { margin: 0 0 14px; color: var(--ink-soft); font-size: 14px; }
+  .hint { display: inline-block; max-width: 190px; color: var(--ink-soft); font-size: 13px; line-height: 1.3; white-space: normal; text-align: right; }
+  .signin-msg { min-height: 1.4em; margin: 12px 0 0; color: var(--stop); font-weight: 500; }
+  body[data-mode="signin"] .board-only { display: none; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  @media (max-width: 760px) {
+    .top, main { padding-left: 14px; padding-right: 14px; }
+    .feed { margin-left: 0; align-items: flex-start; }
+    .tally-main { min-width: 0; width: 100%; }
+    #q { margin-left: 0; width: 100%; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .tally-main { transition: background-color 0.4s ease; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>Order check</h1>
+    <p class="sub">Every COSTAR Work-in-Progress job, matched to its retail picking slip</p>
+  </div>
+  <div class="feed" aria-live="polite">
+    <span id="feedWip">Connecting to Order Check…</span>
+    <span id="feedPicking">Loading picking…</span>
+  </div>
+  <div class="actions">
+    <div class="account" id="account" hidden></div>
+    <label class="toggle"><input type="checkbox" id="sound"> Sound for new alerts</label>
+    <button type="button" id="refresh">Refresh now</button>
+  </div>
+</header>
+
+<main>
+  <p id="problem" class="problem" role="status" hidden></p>
+
+  <section id="signin" class="signin" hidden aria-labelledby="signinTitle">
+    <h2 id="signinTitle">Sign in to see the team board</h2>
+    <form id="signinForm">
+      <label id="rowEmail">Email <input id="email" type="email" autocomplete="username" required></label>
+      <label id="rowToken" hidden>GitHub token <input id="token" type="password" autocomplete="off" spellcheck="false"></label>
+      <label id="rowPass"><span id="passLabel">Password</span> <input id="password" type="password" autocomplete="off" spellcheck="false" required></label>
+      <p id="setupHelp" class="signin-help" hidden>Make the token on GitHub under Settings, Developer settings, Fine-grained tokens: only the <strong id="setupRepo">data</strong> repo, with Contents set to Read and write. Everyone types the passphrase once on their own device, so write it down.</p>
+      <div class="signin-actions">
+        <button type="submit" id="signinSubmit">Sign in</button>
+        <button type="button" class="link" id="suggest" hidden>Suggest a passphrase</button>
+        <button type="button" class="link" id="forgot">Forgot password</button>
+      </div>
+      <p id="signinMsg" class="signin-msg" role="status"></p>
+    </form>
+    <div id="signinNoAccess" hidden>
+      <p id="signinNoAccessText" class="signin-msg"></p>
+      <button type="button" class="link" id="signOutNoAccess">Sign out</button>
+    </div>
+  </section>
+
+  <section class="tally board-only" aria-label="Jobs by status">
+    <button type="button" class="tally-main" id="tallyMain" data-view="action">
+      <span class="big" id="countRed">–</span>
+      <span class="cap" id="capRed">waiting for COSTAR</span>
+    </button>
+    <div class="tally-rest">
+      <button type="button" data-view="action"><span class="n" id="countPending">0</span> checking or just changed</button>
+      <button type="button" data-view="amber"><span class="n" id="countAmber">0</span> waiting</button>
+      <button type="button" data-view="green"><span class="n" id="countGreen">0</span> ordered</button>
+      <button type="button" data-view="ok"><span class="n" id="countOk">0</span> marked OK</button>
+      <button type="button" data-view="grey"><span class="n" id="countGrey">0</span> not checked</button>
+      <button type="button" data-view="all">Show all</button>
+    </div>
+  </section>
+
+  <div class="bar board-only">
+    <nav class="people" id="people" aria-label="Salesperson"></nav>
+    <input id="q" type="search" placeholder="Find a doc #, customer or comment" aria-label="Find a job">
+  </div>
+
+  <div class="table-wrap board-only">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Status</th>
+          <th scope="col">Doc #</th>
+          <th scope="col">Order date</th>
+          <th scope="col">Customer</th>
+          <th scope="col">Total</th>
+          <th scope="col">Ship via</th>
+          <th scope="col">Comment</th>
+          <th scope="col">By</th>
+          <th scope="col">What's happening</th>
+          <th scope="col"><span class="visually-hidden">Action</span></th>
+        </tr>
+      </thead>
+      <tbody id="jobsBody"></tbody>
+    </table>
+  </div>
+  <p class="empty board-only" id="empty" hidden></p>
+</main>
+
+<script src="order-rules.js"></script>
+<script src="share-config.js"></script>
+<script src="share.js"></script>
+<script src="order-check.js"></script>
+</body>
+</html>
