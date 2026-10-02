@@ -92,6 +92,7 @@
       },
     };
     if (Array.isArray(r.reasons)) out.reasons = r.reasons.slice(0, 4);
+    if (Array.isArray(r.codes)) out.codes = r.codes.slice(0, 4);
     if (r.until !== undefined && r.until !== null) out.until = r.until;
     if (r.summary) out.summary = r.summary;
     if (r.ack) out.ack = { by: r.ack.by || "?" };
