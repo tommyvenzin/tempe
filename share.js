@@ -88,8 +88,7 @@
       status: r.status, label: r.label, reason: r.reason || "",
       row: {
         doc: String(row.doc || ""), orderDate: row.orderDate || "", name: row.name || "",
-        total: Number(row.total) || 0, shipVia: row.shipVia || "", comment: row.comment || "",
-        by: row.by || "", sig: row.sig || "",
+        comment: row.comment || "", by: row.by || "", sig: row.sig || "",
       },
     };
     if (Array.isArray(r.reasons)) out.reasons = r.reasons.slice(0, 4);
