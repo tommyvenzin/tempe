@@ -1,11 +1,11 @@
-/* Tempe Order Check board 1.2.0
+/* Tempe Order Check board 1.2.2
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
    as the publisher, shares the results with the team.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.2.0";
+  const VERSION = "1.2.2";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
@@ -33,10 +33,10 @@
     results: [], lastRed: null, expanded: new Set(), bridgeOk: null,
     prefs: { view: "action", by: "ALL", sound: false, me: "" },
     query: "",
-    share: { started: false, note: "", user: null, role: "", error: "", otherPublisher: false, showForm: false, sending: false },
+    share: { started: false, note: "", user: null, role: "", error: "", otherPublisher: false, showForm: false, sending: false, lastShared: 0 },
     cloud: { rows: null, status: null, acks: {} },
     pending: new Map(),
-    lastBeat: 0, lastBeatKey: "",
+    lastBeat: 0, lastBeatKey: "", checkedOnce: false,
   };
 
   // Source = this browser can read COSTAR (the reader answered at least once).
@@ -107,6 +107,9 @@
         state.bridgeOk = false;
       }
     }
+    // With team sharing on, a browser without the extension can't check picking,
+    // so it shows the shared board instead of reading the reader directly.
+    if (state.share.started) throw new Error("This browser shows the shared board.");
     try {
       const response = await fetch(READER + path, options);
       const text = await response.text();
@@ -258,6 +261,12 @@
 
   function canPublish() {
     if (!Share || state.share.role !== "publisher" || !isSource() || !state.wip || state.wipError) return false;
+    // Never share before Order Check has really read COSTAR, and never let a list
+    // that suddenly drops to nothing wipe what the team is looking at.
+    if (!state.wip.readAt || !Array.isArray(state.wip.rows)) return false;
+    if (!state.checkedOnce) return false;   // wait until picking and the history search have run once
+    if (!state.wip.rows.length && state.share.lastShared >= 5) return false;
+    if (Share.kind === "github") return true;   // GitHub mode checks who saved last when it saves
     const s = state.cloud.status;
     const other = !!(s && s.tab && s.tab !== Share.tab && Date.now() - Share.toMs(s.beatAt) < LEASE_MS);
     if (other !== state.share.otherPublisher) { state.share.otherPublisher = other; renderAccount(); }
@@ -279,8 +288,11 @@
         state.lastBeat = Date.now(); state.lastBeatKey = key;
       }
       if (/^Sharing failed/.test(state.share.error)) state.share.error = "";
+      state.share.lastShared = state.results.length;
+      if (Share.kind === "github") state.share.otherPublisher = false;
     } catch (error) {
-      state.share.error = `Sharing failed: ${error.message}`;
+      if (error.code === "other-board") state.share.otherPublisher = true;
+      else state.share.error = `Sharing failed: ${error.message}`;
     } finally {
       publishing = false; state.share.sending = false;
       renderAccount();
@@ -310,7 +322,8 @@
       await refreshPicking(forcePicking);
       evaluateAll(); render();
       if (await searchHistory(state.results)) { evaluateAll(); render(); }
-      await publish();
+      state.checkedOnce = true;
+      await publish(true);
     } finally { busy = false; }
   }
 
@@ -481,7 +494,7 @@
     let detail = "";
     if (r.status === "green" && r.summary) {
       const s = r.summary;
-      detail = `<span class="slip">${esc(s.headline)}</span><span class="sub">${esc(s.pick)}${s.progress ? `, ${esc(String(s.progress).toLowerCase())}` : ""}${s.more ? `, plus ${s.more} more slip${s.more > 1 ? "s" : ""}` : ""}</span>`;
+      detail = `<span class="slip">${esc(s.headline)}</span><span class="sub">${esc(s.pick)}${s.progress && s.progress !== "Timed out" ? `, ${esc(String(s.progress).toLowerCase())}` : ""}${s.more ? `, plus ${s.more} more slip${s.more > 1 ? "s" : ""}` : ""}</span>`;
     } else if (r.status === "red" && Array.isArray(r.reasons)) {
       detail = r.reasons.map((x) => `<span class="why">${esc(x)}</span>`).join("");
     } else {
@@ -519,7 +532,7 @@
     const box = $("account");
     let html = "";
     if (s.note) html = `<span class="acct-what">${esc(s.note)}</span>`;
-    else if (s.started && !s.user && isSource()) html = `<button type="button" class="link" id="openSignin">${github ? "Share with the team" : "Sign in to share with the team"}</button>`;
+    else if (s.started && !s.user && isSource()) html = `<button type="button" class="link" id="openSignin">${github ? "Set up sharing" : "Sign in to share with the team"}</button>`;
     else if (s.user) {
       let what = "Team view";
       if (isSource()) what = s.role === "publisher" ? (s.otherPublisher ? "Another board is already sharing" : s.sending ? "Sharing with the team…" : "Sharing with the team") : (github ? "Viewing only, not sharing" : "Signed in");
