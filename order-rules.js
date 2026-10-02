@@ -115,7 +115,7 @@
     const r = /^RT-(\d+)-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-(\d+)$/.exec(record);
     const smalls = [...c[1].matchAll(/<small>([\s\S]*?)<\/small>/gi)].map((x) => x[1]);
     const descHtml = smalls[1] || "";
-    const notes = [...descHtml.matchAll(/class="bg-info[^"]*">([\s\S]*?)<\/div>/gi)]
+    const notes = [...descHtml.matchAll(/class=["'][^"']*\bbg-info\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)]
       .flatMap((x) => x[1].split(/<br\s*\/?>/i)).map(clean).filter(Boolean);
     const doc = clean(c[3].replace(/<small>[\s\S]*$/i, ""));
     const pickedText = clean(c[7]);
@@ -125,7 +125,7 @@
       time: `${r[2]}-${r[3]}-${r[4]} ${r[5]}:${r[6]}`,
       manual: /MANUAL/.test(c[4]),
       sku: clean(smalls[0] || ""),
-      bins: clean(first(/<div class="label label-default">([\s\S]*?)<\/div>/i, c[1])),
+      bins: clean(first(/<div\b[^>]*class=["'][^"']*\blabel-default\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i, c[1])),
       desc: clean(descHtml.replace(/<div[\s\S]*$/i, "")),
       notes,
       customer: clean(String(c[2]).split(/<br\s*\/?>/i)[0]),
@@ -134,11 +134,11 @@
       enteredBy: clean(first(/<a\b[^>]*>([\s\S]*?)<\/a>/i, c[3])),
       shipVia: clean(first(/<a\b[^>]*>([\s\S]*?)<\/a>/i, c[4])),
       qty: parseInt(clean(c[5]), 10) || 0,
-      zone: clean(([...c[6].matchAll(/<label class="label label-default">([\s\S]*?)<\/label>/gi)].pop() || [])[1] || ""),
+      zone: clean(([...c[6].matchAll(/<label\b[^>]*class=["'][^"']*\blabel-default\b[^"']*["'][^>]*>([\s\S]*?)<\/label>/gi)].pop() || [])[1] || ""),
       picked: /Picked \(\d+\)/.test(pickedText),
       pickedQty: +(first(/Picked \((\d+)\)/, pickedText) || 0),
       pickedAt: first(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}):\d{2}/, c[7]),
-      picker: clean(first(/<label class="label label-success">([\s\S]*?)<\/label>/i, c[7])),
+      picker: first(/Picked \(\d+\)\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?\s*(.+)$/, pickedText).trim(),
       progress: /Completed/.test(progressText) ? "Completed" : /Timed Out/i.test(progressText) ? "Timed out" : /In Progress/i.test(progressText) ? "In progress" : progressText,
       driver: [...c[8].matchAll(/(\d{2}:\d{2})\s*(?:&gt;|>)\s*Shop Driver \((\d+)\)/g)].map((x) => `${x[1]} shop driver (${x[2]})`),
     };
@@ -166,9 +166,14 @@
 
   const ORDER = { red: 0, new: 1, checking: 2, amber: 3, ok: 4, green: 5, grey: 6 };
 
-  function slipSummary(slips) {
+  function slipSummary(slips, today) {
     const latest = slips.slice().sort((a, b) => (a.time < b.time ? 1 : -1))[0];
-    const pick = latest.picked ? `picked ${latest.pickedAt.slice(11)}${latest.picker ? " by " + latest.picker.replace(/^\d+-/, "") : ""}` : "not picked yet";
+    const day = (latest.pickedAt || "").slice(0, 10);
+    const when = !day || day === today ? latest.pickedAt.slice(11) : `${friendlyDate(day, today)} ${latest.pickedAt.slice(11)}`;
+    const slipDay = (latest.time || "").slice(0, 10);
+    const pick = latest.picked
+      ? `picked ${when}${latest.picker ? " by " + latest.picker.replace(/^\d+-/, "") : ""}`
+      : `not picked yet${slipDay && slipDay !== today ? ` (slip printed ${friendlyDate(slipDay, today)})` : ""}`;
     return {
       headline: `${latest.qty} × ${latest.desc || latest.sku}`,
       pick,
@@ -190,7 +195,7 @@
     if (shipVia && shipVia !== SHOP) return { ...base, status: "grey", label: "Not checked", reason: `Ship Via is ${row.shipVia}, not SHOP.` };
 
     const slips = (ctx.slips && ctx.slips.get(key)) || [];
-    if (slips.length) return { ...base, status: "green", label: "Ordered", slips, summary: slipSummary(slips) };
+    if (slips.length) return { ...base, status: "green", label: "Ordered", slips, summary: slipSummary(slips, today) };
 
     const anchor = row.orderDate && row.orderDate < today ? row.orderDate : today;
     const note = readComment(row.comment, anchor);
