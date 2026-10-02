@@ -11,7 +11,8 @@
   const HEARTBEAT_MS = 4 * 60000;    // save at least every 4 minutes so viewers know it's alive
   const POLL_MS = 60000;             // viewers check for a new file every minute
   const MAX_SLIPS = 6;
-  const KEYS = { pass: "orderCheck.share.passphrase", token: "orderCheck.share.githubToken" };
+  const KEYS = { pass: "orderCheck.share.passphrase", token: "orderCheck.share.githubToken", board: "orderCheck.share.boardId" };
+  const LEASE_MS = 6 * 60000;        // another board that saved this recently keeps the job
   const README = "# Order Check data\n\nEncrypted. Unreadable without the Tempe team passphrase.\n";
   const WORDS = ["able","acid","aged","also","arch","area","army","atom","aunt","away","baby","back","bake","ball","band","bank","barn","base","bath","beam","bean","bear","beef","bell","belt","bench","bike","bird","blue","boat","body","bold","bolt","bone","book","boot","bowl","brick","bride","brush","bulb","cake","calm","camp","card","cart","cash","cave","chair","chalk","cheek","chess","chin","city","clay","cliff","clock","cloud","coal","coast","coat","code","coin","cold","cook","cool","copy","corn","cotton","crab","crow","cube","cup","curve","dairy","dawn","deck","deer","desk","dial","dish","dock","dog","door","dove","draw","dream","dress","drum","duck","dune","eagle","east","echo","edge","egg","elbow","elk","empty","fair","farm","fern","field","film","fish","flag","flame","flock","flute","foam","fog","fork","fort","frog","fruit","gate","gear","gift","glass","glove","goat","gold","golf","grape","grass","gravel","green","grid","gulf","hall","hand","harp","hawk","heat","hedge","hill","honey","hook","horn","horse","hotel","house","ice","inch","iron","island","ivy","jacket","jam","jar","jelly","jet","jewel","judge","juice","kettle","kite","knee","knot","ladder","lake","lamb","lamp","lane","lawn","leaf","lemon","lens","lily","lime","lion","lock","loft","lunch","magnet","maple","map","marble","market","mask","meadow","melon","mill","mint","moon","moss","motor","mouse","mud","nail","nest","net","night","north","nut","oak","ocean","olive","orange","otter","owl","paint","palm","panda","paper","park","pearl","pencil","pepper","piano","pier","pillow","pine","pipe","plain","plant","plate","plum","pond","pony","pool","port","pot","pumpkin","quail","quilt","rabbit","rain","ranch","raven","reef","rice","ridge","ring","river","road","robin","rock","roof","rope","rose","ruby","sail","salt","sand","scarf","sea","seed","shell","ship","shirt","shore","silk","silver","sky","snow"];
 
@@ -19,7 +20,6 @@
   let latestRows = null, latestMeta = null, lastRowsJson = "", lastProblems = "", dirty = false, lastSaved = 0, saving = null;
   let lastText = "", pollTimer = 0, lastRows = null, lastStatus = null;
   const listeners = { rows: new Set(), status: new Set(), errors: new Set() };
-  const tab = Math.random().toString(36).slice(2, 10);
   let now = () => Date.now();
 
   const store = {
@@ -27,6 +27,9 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
     del(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } },
   };
+  // Identifies this browser as a sharing board. Kept across reloads, so
+  // reloading the RDP tab doesn't lock it out of its own lease.
+  const tab = store.get(KEYS.board) || (() => { const id = Math.random().toString(36).slice(2, 12); store.set(KEYS.board, id); return id; })();
   function fail(code, message) { const e = new Error(message); e.code = code; return e; }
   function toMs(t) { return t && typeof t.toMillis === "function" ? t.toMillis() : typeof t === "number" ? t : 0; }
 
@@ -132,6 +135,17 @@
   async function save() {
     const token = store.get(KEYS.token), pass = store.get(KEYS.pass);
     if (!token || !pass) throw fail("setup", "Team sharing isn't set up on this PC.");
+    // Only one board shares at a time: if another one saved in the last 6 minutes, leave it.
+    const current = await gh(token, "GET", `/contents/${FILE}?ref=${encodeURIComponent(cfg.branch)}`).catch((e) => { if (e.code === "repo") return null; throw e; });
+    if (current && current.content) {
+      try {
+        const previous = await unseal(atob(String(current.content).replace(/\s+/g, "")), pass);
+        const m = previous.meta || {};
+        if (m.tab && m.tab !== tab && now() - (m.publishedAt || 0) < LEASE_MS) {
+          throw fail("other-board", "Another board is already sharing. Close it, or press Stop sharing on it.");
+        }
+      } catch (e) { if (e.code === "other-board") throw e; /* older passphrase: this board takes over */ }
+    }
     const text = await seal({ meta: { ...(latestMeta || {}), tab, publishedAt: now() }, rows: latestRows || [] }, pass);
     // One fresh commit with no history, so the repo never grows.
     const tree = await gh(token, "POST", "/git/trees", { tree: [
@@ -144,7 +158,7 @@
   async function maybeSave() {
     if (saving) return saving;
     const t = now();
-    const due = latestRows && ((dirty && t - lastSaved >= MIN_GAP_MS) || t - lastSaved >= HEARTBEAT_MS);
+    const due = latestRows && latestMeta && ((dirty && t - lastSaved >= MIN_GAP_MS) || t - lastSaved >= HEARTBEAT_MS);
     if (!due) return 0;
     saving = (async () => {
       try { await save(); lastSaved = now(); dirty = false; return 1; }
