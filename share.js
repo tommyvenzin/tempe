@@ -96,6 +96,8 @@
     if (r.until !== undefined && r.until !== null) out.until = r.until;
     if (r.summary) out.summary = r.summary;
     if (r.ack) out.ack = { by: r.ack.by || "?" };
+    // Only the helper tag is shared, never raw PO numbers (customers' own PO references).
+    if (r.helper && r.helper.ref) out.helper = { kind: r.helper.kind === "mobile" ? "mobile" : "online", ref: String(r.helper.ref).slice(0, 20) };
     if (Array.isArray(r.slips) && r.slips.length) {
       out.slips = r.slips.slice().sort((a, b) => (a.time < b.time ? 1 : -1)).slice(0, MAX_SLIPS).map((s) => ({
         time: s.time, qty: s.qty, desc: s.desc, sku: s.sku, bins: s.bins, manual: !!s.manual,
