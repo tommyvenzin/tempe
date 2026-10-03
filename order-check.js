@@ -5,7 +5,7 @@
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.3.2";
+  const VERSION = "1.4.0";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
@@ -526,7 +526,7 @@
   function renderTable(mine) {
     const view = VIEWS[state.prefs.view] || VIEWS.action;
     const q = state.query.trim().toUpperCase();
-    const rows = mine.filter(view).filter((r) => !q || [r.row.doc, r.row.name, r.row.comment].some((v) => String(v || "").toUpperCase().includes(q)));
+    const rows = mine.filter(view).filter((r) => !q || [r.row.doc, r.row.name, r.row.comment, r.helper ? r.helper.ref : ""].some((v) => String(v || "").toUpperCase().includes(q)));
     $("jobsBody").innerHTML = rows.map(rowHtml).join("");
     const empty = $("empty");
     empty.hidden = rows.length > 0 || !haveData();
@@ -535,6 +535,13 @@
         : state.prefs.view === "action" ? "Every SHOP job with an amount has a picking slip or a reason in its comment."
         : "No jobs in this group.";
     }
+  }
+
+  // Jobs the COSTAR helper typed in: online orders (TTW…) and mobile job cards (MJC-…).
+  function helperTag(r) {
+    if (!r.helper || !r.helper.ref) return "";
+    const mobile = r.helper.kind === "mobile";
+    return ` <span class="tag ${mobile ? "t-mobile" : "t-online"}" title="Entered by the COSTAR helper: ${esc(r.helper.ref)}">${mobile ? "Mobile" : "Online"}</span>`;
   }
 
   function rowHtml(r) {
@@ -556,7 +563,7 @@
     const hasSlips = r.slips && r.slips.length;
     const main = `<tr class="job s-${r.status}${hasSlips ? " has-slips" : ""}" data-doc="${esc(row.doc)}"${hasSlips ? ` aria-expanded="${open}" tabindex="0"` : ""}>
       <td class="c-status"><span class="pill">${esc(r.label)}</span></td>
-      <td class="c-doc">${esc(row.doc)}</td>
+      <td class="c-doc">${esc(row.doc)}${helperTag(r)}</td>
       <td class="c-name">${esc(row.name)}</td>
       <td class="c-comment" title="${esc(row.comment)}">${esc(row.comment)}</td>
       <td class="c-by">${esc(row.by)}</td>
