@@ -202,11 +202,21 @@
   /* row: one WIP row from the reader.
      ctx: { today, nowMs, slips: Map(docKey → slip[]), searched: Map(docKey → ms),
             acks: { doc: {sig, by, at} } } */
+  // COSTAR's PO column: the COSTAR helper writes the online order number (TTW…) or the
+  // mobile job reference (MJC- and 12 hex characters) there. Anything else is not a tag.
+  function helperRef(po) {
+    const v = String(po || "").trim().toUpperCase();
+    if (/^TTW\d{4,}$/.test(v)) return { kind: "online", ref: v };
+    if (/^MJC-[0-9A-F]{12}$/.test(v)) return { kind: "mobile", ref: v };
+    return null;
+  }
+
   function evaluate(row, ctx) {
     const key = docKey(row.doc);
     const shipVia = String(row.shipVia || "").trim().toUpperCase();
     const today = ctx.today;
-    const base = { doc: row.doc, key, row };
+    const helper = helperRef(row.po);
+    const base = helper ? { doc: row.doc, key, row, helper } : { doc: row.doc, key, row };
 
     if (!(Number(row.total) > 0)) return { ...base, status: "grey", label: "Not checked", reason: "No amount" };
     if (shipVia && shipVia !== SHOP) return { ...base, status: "grey", label: "Not checked", reason: `Ship via ${row.shipVia}` };
@@ -255,7 +265,7 @@
     return (a.row.orderDate || "") < (b.row.orderDate || "") ? -1 : (a.row.orderDate || "") > (b.row.orderDate || "") ? 1 : (a.row.doc < b.row.doc ? -1 : 1);
   }
 
-  const api = { GRACE_MINUTES, ORDER, FIX, shortFixes, isoOf, parseIso, addDays, friendlyDate, readComment, parsePicking, docKey, evaluate, compare, slipSummary, clean };
+  const api = { GRACE_MINUTES, ORDER, FIX, shortFixes, isoOf, parseIso, addDays, friendlyDate, readComment, parsePicking, docKey, evaluate, compare, slipSummary, clean, helperRef };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.OrderRules = api;
 })(this);
