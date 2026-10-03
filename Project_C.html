@@ -39,9 +39,9 @@
             </div>
 
             <div class="hero-status" aria-label="Dashboard status">
-                <span class="status-chip status-chip-live">
+                <span class="status-chip status-chip-live" id="projectCLiveChip" data-state="live" aria-live="polite">
                     <span class="status-dot"></span>
-                    Live ranking
+                    <span data-live-text>Live ranking</span>
                 </span>
                 <span class="status-chip" id="rangeSummary">Loading current sales week…</span>
             </div>
@@ -80,8 +80,8 @@
                 <div class="project-c-table-actions">
                     <span class="privacy-pill">Initials hidden on screen</span>
                     <button type="button" id="projectCRefreshPrices" class="project-c-refresh"
-                        title="Fetch fresh website prices. Recent prices are otherwise reused for up to 30 minutes in this tab.">
-                        Refresh prices
+                        title="Re-read every day of this sales week and fetch fresh website prices. Normal loads reuse saved days and prices and only fetch what changed.">
+                        Full refresh
                     </button>
                 </div>
             </div>
@@ -104,6 +104,6 @@
         </section>
     </main>
 
-    <script src="Project_C.js?v=20260921" defer></script>
+    <script src="Project_C.js?v=20261003" defer></script>
 </body>
 </html>
