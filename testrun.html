@@ -21,6 +21,20 @@
         .address-block { white-space: pre-line; line-height: 1.55; }
         .address-notice { color: #fcd34d; margin: 14px 0 4px; }
         .costar-status { margin: 0 0 16px; color: #cbd5e1; }
+        .fix-panel { margin: 0 0 18px; padding: 14px 16px; border: 1px solid #f97316; border-radius: 12px; background: #1a1208; }
+        .fix-panel.check { border-color: #f59e0b; }
+        .fix-panel h3 { margin: 0 0 4px; font-size: 1rem; color: #fdba74; }
+        .fix-panel .muted { margin: 0 0 6px; }
+        .fix-row { display: grid; grid-template-columns: 110px repeat(5, minmax(0, 1fr)); gap: 8px; align-items: end; margin-top: 10px; }
+        .fix-title { font-weight: 700; color: #e2e8f0; padding-bottom: 9px; }
+        .fix-row label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #cbd5e1; }
+        .fix-row input, .fix-row select { padding: 8px 10px; border: 1px solid #475569; border-radius: 8px; background: #020617; color: #f8fafc; font: inherit; min-width: 0; }
+        .fix-row .bad { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3); }
+        .fix-row .warn { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3); }
+        .fix-panel .main-btn { margin-top: 12px; }
+        .fix-result { margin: 10px 0 0; font-weight: 700; color: #fca5a5; }
+        .fix-result.fix-ok { color: #86efac; }
+        @media (max-width: 980px) { .fix-row { grid-template-columns: 1fr 1fr; } .fix-title { grid-column: 1 / -1; padding-bottom: 0; } }
         .page-wrap {
             display: grid;
             grid-template-columns: 420px 1fr;
@@ -239,6 +253,7 @@
     <p class="transfer-help">Open Start-COSTAR-Autofill.cmd in this Remote Desktop session. Select an order, click <strong>Send to COSTAR</strong>, then choose <strong>Fill empty Repair Order</strong> in the helper.</p>
     <div class="status-line" id="statusLine" role="status" aria-live="polite">Ready.</div>
     <p class="costar-status" id="costarStatus" hidden></p>
+    <section class="fix-panel" id="fixPanel" hidden aria-live="polite"></section>
 
     <div class="page-wrap">
         <section class="card">
@@ -611,14 +626,17 @@
             // unit lines and keeping the full original block for display.
             for (let index = useful.length - 1; index >= 2; index--) {
                 const match = useful[index].match(/^(.*?)\s+(\d{4})$/);
-                if (match) return {
+                if (!match) continue;
+                const resolved = resolveState(match[1], useful.slice(index + 1).join(" "), match[2]);
+                return {
                     recipient: useful[0] || "",
                     streetAddress: useful.slice(1, index).join(", "),
                     addressLine1: useful[1] || "",
                     addressLine2: useful.slice(2, index).join(", "),
                     suburb: match[1].trim().replace(/\s+(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)$/i, ""),
                     postcode: match[2],
-                    state: addressState(match[1] + " " + useful.slice(index + 1).join(" "))
+                    state: resolved.state,
+                    stateNote: resolved.note
                 };
             }
             return { recipient: useful[0] || "", streetAddress: useful[1] || "", addressLine1: useful[1] || "", addressLine2: "", suburb: useful[2] || "", postcode: "", state: "" };
@@ -629,6 +647,55 @@
             const value = uppercaseSafe(text);
             for (const [name, code] of Object.entries(states)) if (value.includes(name)) return code;
             return value.match(/\b(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b/)?.[1] || "";
+        }
+
+        // Each Australian postcode belongs to one state (apart from a few border towns).
+        function postcodeState(postcode) {
+            if (!/^\d{4}$/.test(String(postcode || ""))) return "";
+            const n = Number(postcode);
+            if ((n >= 200 && n <= 299) || (n >= 2600 && n <= 2618) || (n >= 2900 && n <= 2920)) return "ACT";
+            if ((n >= 1000 && n <= 2599) || (n >= 2619 && n <= 2899) || (n >= 2921 && n <= 2999)) return "NSW";
+            if ((n >= 3000 && n <= 3999) || (n >= 8000 && n <= 8999)) return "VIC";
+            if ((n >= 4000 && n <= 4999) || (n >= 9000 && n <= 9999)) return "QLD";
+            if (n >= 5000 && n <= 5999) return "SA";
+            if (n >= 6000 && n <= 6999) return "WA";
+            if (n >= 7000 && n <= 7999) return "TAS";
+            if (n >= 800 && n <= 999) return "NT";
+            return "";
+        }
+
+        // Reads a misspelt state ("vicoria", "vict", "Queensand") from its first letters.
+        function guessState(text) {
+            const words = uppercaseSafe(text).replace(/[^A-Z ]/g, " ").split(/\s+/).filter(word => word && !/^(?:AU|AUS|AUST|AUSTRALIA)$/.test(word));
+            const first = words[0] || "", two = words.slice(0, 2).join(" ");
+            if (/^VI[CT]/.test(first)) return "VIC";
+            if (/^(?:NSW|NEW)/.test(first)) return "NSW";
+            if (/^Q[LU]/.test(first)) return "QLD";
+            if (/^TAS/.test(first)) return "TAS";
+            if (/^SOUTH A/.test(two)) return "SA";
+            if (/^WEST/.test(first)) return "WA";
+            if (/^NORTH/.test(first)) return "NT";
+            if (/^(?:ACT|CANB)/.test(first) || /^AUSTRALIAN CAP/.test(two)) return "ACT";
+            return "";
+        }
+
+        // The written state wins when it's clear. When it's misspelt or missing, the
+        // postcode decides, but only if any misspelling points the same way.
+        function resolveState(suburbText, stateText, postcode) {
+            // Read the state from the state part first, so a suburb like "Victoria Park" (WA) isn't read as VIC;
+            // a state code or name written straight after the suburb ("Sunshine VIC 3020") still counts.
+            const trailing = uppercaseSafe(suburbText).match(/\s(NSW|VIC|QLD|SA|WA|TAS|NT|ACT|NEW SOUTH WALES|VICTORIA|QUEENSLAND|SOUTH AUSTRALIA|WESTERN AUSTRALIA|TASMANIA|NORTHERN TERRITORY|AUSTRALIAN CAPITAL TERRITORY)$/)?.[1] || "";
+            const typed = addressState(stateText) || addressState(trailing);
+            const fromPostcode = postcodeState(postcode);
+            const written = uppercaseSafe(stateText).replace(/\b(?:AU|AUS|AUSTRALIA)\b/g, " ").replace(/[\s,]+/g, " ").trim();
+            if (typed) {
+                return { state: typed, note: fromPostcode && fromPostcode !== typed ? `Postcode ${postcode} is normally ${fromPostcode}, but the customer wrote ${typed}. Check the address.` : "" };
+            }
+            const guess = guessState(stateText);
+            if (fromPostcode && (!guess || guess === fromPostcode)) {
+                return { state: fromPostcode, note: `State set to ${fromPostcode} from postcode ${postcode}` + (written ? ` (the customer wrote "${written.toLowerCase()}")` : "") + "." };
+            }
+            return { state: "", note: guess && fromPostcode ? `The customer wrote "${written.toLowerCase()}", which doesn't match postcode ${postcode} (${fromPostcode}). Check the address.` : "" };
         }
 
         function addressDetail(lines, label) {
@@ -827,7 +894,7 @@
         function isTypingTarget(target) {
             if (!target) return false;
             const tag = target.tagName?.toLowerCase();
-            return tag === "input" || tag === "textarea" || target.isContentEditable;
+            return tag === "input" || tag === "textarea" || tag === "select" || target.isContentEditable;
         }
 
         function renderAddressSection(title, address) {
@@ -851,22 +918,157 @@
             return html;
         }
 
-        function renderDetails(data) {
-            selectedOrderData = data;
+        function stateNotes(data) {
+            const notes = [];
+            if (data.billingAddress?.stateNote) notes.push("Billing address: " + data.billingAddress.stateNote);
+            if (data.addressesDiffer && data.deliveryAddress?.stateNote) notes.push("Delivery address: " + data.deliveryAddress.stateNote);
+            return notes;
+        }
+
+        // ---------- Fix on the spot. When the COSTAR check fails on details a person can
+        // correct, ask for exactly those and turn Send to COSTAR back on once they pass.
+        // Only these corrections go to COSTAR; the website order is never changed.
+        const FIX_STATES = ["NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT"];
+        const FIXABLE = /street, suburb, state and postcode|delivery recipient is missing|billing and delivery addresses are required|name and phone are required/i;
+        let fixes = {};
+
+        function isDeliveryOrder(data) { return /^(WITHIN AUSTRALIA|FITTING PARTNER)$/i.test(String(data.deliveryMethod || "").trim()); }
+        function addressFields(address) {
+            return { recipient: address?.recipient || "", street: address?.addressLine1 || address?.streetAddress || "",
+                suburb: address?.suburb || "", state: String(address?.state || "").toUpperCase(), postcode: address?.postcode || "" };
+        }
+
+        // The order as COSTAR will get it: the website's details plus anything fixed here.
+        function withFixes(data) {
+            const result = { ...data };
+            for (const part of ["billing", "delivery"]) {
+                const own = Object.keys(fixes).filter(key => key.startsWith(part + "."));
+                if (!own.length) continue;
+                const address = { ...(data[part + "Address"] || {}) };
+                for (const key of own) {
+                    const field = key.slice(part.length + 1), value = fixes[key];
+                    if (field === "street") { address.addressLine1 = value; address.streetAddress = [value, address.addressLine2].filter(Boolean).join(", "); }
+                    else address[field] = value;
+                }
+                if (!address.lines || !address.lines.length) {
+                    address.lines = [address.recipient || data.name || "", address.addressLine1 || "", `${address.suburb || ""} ${address.postcode || ""}`.trim(), address.state || ""].filter(Boolean);
+                }
+                if (own.some(key => key.endsWith(".state"))) address.stateNote = "";
+                result[part + "Address"] = address;
+            }
+            if ("name" in fixes) result.name = fixes.name;
+            if ("phone" in fixes) result.phone = fixes.phone;
+            return result;
+        }
+
+        // Field-by-field version of the COSTAR check, so the box can point at what's wrong.
+        function fixProblems(data) {
+            const d = withFixes(data), bad = new Set();
+            if (!String(d.name || "").trim()) bad.add("name");
+            if (!String(d.phone || "").trim()) bad.add("phone");
+            if (isDeliveryOrder(d)) {
+                for (const part of ["billing", "delivery"]) {
+                    const a = addressFields(d[part + "Address"]);
+                    if (!a.street.trim()) bad.add(part + ".street");
+                    if (!a.suburb.trim()) bad.add(part + ".suburb");
+                    if (!FIX_STATES.includes(a.state.trim())) bad.add(part + ".state");
+                    if (!/^\d{4}$/.test(a.postcode.trim())) bad.add(part + ".postcode");
+                }
+                if (!addressFields(d.deliveryAddress).recipient.trim()) bad.add("delivery.recipient");
+            }
+            return bad;
+        }
+        function guessedFields(data) {
+            const d = withFixes(data), marks = new Set();
+            if (d.billingAddress?.stateNote) marks.add("billing.state");
+            if (d.addressesDiffer && d.deliveryAddress?.stateNote) marks.add("delivery.state");
+            return marks;
+        }
+
+        function renderFixPanel(data, marks, mode) {
+            const panel = document.getElementById("fixPanel");
+            const d = withFixes(data);
+            const cls = key => marks.has(key) ? (mode === "fix" ? "bad" : "warn") : "";
+            const input = (key, label, value, extra = "") => `<label>${label}<input data-fix="${key}" class="${cls(key)}" value="${escapeHtml(value)}" autocomplete="off" ${extra}></label>`;
+            const state = (key, value) => `<label>State<select data-fix="${key}" class="${cls(key)}"><option value="">Choose</option>${FIX_STATES.map(code => `<option${code === value ? " selected" : ""}>${code}</option>`).join("")}</select></label>`;
+            const row = (part, title) => {
+                const a = addressFields(d[part + "Address"]);
+                return `<div class="fix-row"><div class="fix-title">${title}</div>
+                    ${part === "delivery" ? input("delivery.recipient", "Recipient", a.recipient) : "<span></span>"}
+                    ${input(part + ".street", "Street", a.street)}
+                    ${input(part + ".suburb", "Suburb", a.suburb)}
+                    ${state(part + ".state", a.state)}
+                    ${input(part + ".postcode", "Postcode", a.postcode, 'inputmode="numeric" maxlength="4"')}</div>`;
+            };
+            let html = mode === "fix"
+                ? `<h3>Fix these details to send this order to COSTAR</h3><p class="muted">Only what you change here goes to COSTAR. The website order stays as it is.</p>`
+                : `<h3>Check before sending</h3><p class="muted">The state was worked out from the postcode. Change it here if it's wrong.</p>`;
+            if (marks.has("name") || marks.has("phone")) html += `<div class="fix-row"><div class="fix-title">Customer</div>${input("name", "Name", d.name)}${input("phone", "Phone", d.phone)}</div>`;
+            if (isDeliveryOrder(d)) {
+                html += row("billing", "Billing");
+                html += row("delivery", d.fittingPartner ? "Fitting partner" : "Delivery");
+                if (!(data.deliveryAddress?.lines || []).length) html += `<button type="button" class="main-btn secondary" id="fixCopyBilling">Delivery same as billing</button>`;
+            }
+            html += `<p class="fix-result" id="fixResult" role="status"></p>`;
+            panel.innerHTML = html;
+            panel.className = "fix-panel" + (mode === "check" ? " check" : "");
+            panel.dataset.mode = mode;
+            panel.hidden = false;
+        }
+        function markFixes(marks, mode) {
+            document.querySelectorAll("#fixPanel [data-fix]").forEach(el => {
+                el.classList.toggle("bad", mode === "fix" && marks.has(el.dataset.fix));
+                el.classList.toggle("warn", mode === "check" && marks.has(el.dataset.fix));
+            });
+        }
+        function hideFixPanel() {
+            const panel = document.getElementById("fixPanel");
+            panel.hidden = true; panel.innerHTML = "";
+        }
+
+        // Runs the COSTAR check on the order plus any fixes, and sets the button, status and box.
+        function refreshExport(rebuild) {
+            const data = selectedOrderData;
+            if (!data) return;
             const transferStatus = document.getElementById("costarStatus");
+            const send = document.getElementById("sendCostarBtn");
+            const panel = document.getElementById("fixPanel");
+            const fixed = withFixes(data);
             try {
-                const exported = TempeCostar.makeOrder(data);
-                document.getElementById("sendCostarBtn").disabled = false;
+                const exported = TempeCostar.makeOrder(fixed);
+                send.disabled = false;
                 const notices = [];
                 if (exported.requiresReview) notices.push("Package needs manual completion: the helper enters the available SKU and freight, keeps COSTAR's item price, and leaves the missing tyres and package total for your review.");
                 if (exported.surchargeCents) notices.push(`COSTAR handles the $${(exported.surchargeCents / 100).toFixed(2)} card surcharge automatically. The helper will not add it again.`);
+                notices.push(...stateNotes(fixed));
                 transferStatus.hidden = !notices.length;
                 transferStatus.textContent = notices.join(" ");
+                const guessed = guessedFields(data);
+                if (panel.hidden && guessed.size) renderFixPanel(data, guessed, "check");
+                else if (!panel.hidden) markFixes(panel.dataset.mode === "check" ? guessedFields(data) : new Set(), panel.dataset.mode);
+                const result = document.getElementById("fixResult");
+                if (result) { result.className = "fix-result fix-ok"; result.textContent = Object.keys(fixes).length ? "All fixed. Send to COSTAR is ready." : "Send to COSTAR is ready."; }
             } catch (err) {
-                document.getElementById("sendCostarBtn").disabled = true;
-                transferStatus.textContent = "COSTAR autofill unavailable: " + err.message + " You can still view and copy the order.";
-                transferStatus.hidden = false;
+                send.disabled = true;
+                if (FIXABLE.test(err.message)) {
+                    const bad = fixProblems(data);
+                    if (rebuild || panel.hidden || panel.dataset.mode !== "fix") renderFixPanel(data, bad, "fix"); else markFixes(bad, "fix");
+                    transferStatus.hidden = false;
+                    transferStatus.textContent = "Almost ready for COSTAR: fix the highlighted details below.";
+                    const result = document.getElementById("fixResult");
+                    result.className = "fix-result";
+                    result.textContent = err.message;
+                } else {
+                    hideFixPanel();
+                    transferStatus.textContent = ["COSTAR autofill unavailable: " + err.message, ...stateNotes(fixed), "You can still view and copy the order."].join(" ");
+                    transferStatus.hidden = false;
+                }
             }
+        }
+
+        function renderDetails(data) {
+            selectedOrderData = data;
+            refreshExport(true);
 
             const staticFields = `
                 ${renderClickableField("TTW LINK", data.orderLink, data.orderLink, "TTW link copied", true)}
@@ -980,6 +1182,7 @@
             document.getElementById("sendCostarBtn").disabled = true;
             document.getElementById("costarStatus").hidden = true;
             document.getElementById("costarStatus").textContent = "";
+            fixes = {}; hideFixPanel();
             document.getElementById("detailsWrap").textContent = message;
         }
 
@@ -1067,6 +1270,7 @@
             selectedOrderData = null;
             document.getElementById("sendCostarBtn").disabled = true;
             document.getElementById("costarStatus").hidden = true;
+            fixes = {}; hideFixPanel();
             document.getElementById("detailsWrap").textContent = "Loading selected order…";
             const statusLine = document.getElementById("statusLine");
             statusLine.textContent = `Loading ${order.orderId}...`;
@@ -1143,11 +1347,27 @@
         document.getElementById("sendCostarBtn").addEventListener("click", async () => {
             try {
                 if (!selectedOrderData || selectedOrderData.orderId !== currentSelectedOrderId) throw new Error("Select a fully loaded order first.");
-                const order = TempeCostar.makeOrder(selectedOrderData);
+                const order = TempeCostar.makeOrder(withFixes(selectedOrderData));
                 await navigator.clipboard.writeText(TempeCostar.PREFIX + JSON.stringify(order));
                 flashCopied(order.orderId + " sent. Choose Fill empty Repair Order in the Windows helper.");
                 document.getElementById("statusLine").textContent = order.orderId + " copied for COSTAR — open the Windows helper to fill it.";
             } catch (err) { alert("Order was not sent: " + err.message); }
+        });
+
+        function onFixEdit(event) {
+            const key = event.target?.dataset?.fix;
+            if (!key || !selectedOrderData) return;
+            fixes[key] = key.endsWith(".state") ? String(event.target.value).toUpperCase() : event.target.value;
+            refreshExport(false);
+        }
+        document.getElementById("fixPanel").addEventListener("input", onFixEdit);
+        document.getElementById("fixPanel").addEventListener("change", onFixEdit);
+        document.getElementById("fixPanel").addEventListener("click", event => {
+            if (event.target.id !== "fixCopyBilling" || !selectedOrderData) return;
+            const billing = addressFields(withFixes(selectedOrderData).billingAddress);
+            Object.assign(fixes, { "delivery.recipient": selectedOrderData.name || billing.recipient, "delivery.street": billing.street,
+                "delivery.suburb": billing.suburb, "delivery.state": billing.state, "delivery.postcode": billing.postcode });
+            refreshExport(true);
         });
 
         document.getElementById("orderSearchForm").addEventListener("submit", event => {
