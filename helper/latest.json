@@ -1,8 +1,8 @@
 {
-  "version": "2.2.0",
-  "name": "2.2.0 - resume and updates",
-  "zip": "Tempe-COSTAR-Helper-v2.2.0.zip",
-  "sha256": "8c36d341a2fe624754435335993d09e1a9a1fb7aa52daf6c7c3931fc9ef93630",
-  "size": 351419,
-  "notes": "Stopped online orders continue where they stopped; missing-order check on Tempe Orders; auto-update; time-saved Boss report."
+  "version": "2.2.1",
+  "name": "2.2.1 - finds Order Check",
+  "zip": "Tempe-COSTAR-Helper-v2.2.1.zip",
+  "sha256": "69945cfb0382c7420b64698c080f0f32b48408ecb8cf482c93c4e762ad97d2e2",
+  "size": 354991,
+  "notes": "Fixes the Tempe Orders COSTAR check: Order Check now moves to the next free port when another copy holds 8795, and the page finds it."
 }

@@ -400,7 +400,7 @@
         let searchQuery = "";
         // COSTAR check: per order "in" / "maybe" / "missing" / "sent", from the helper's
         // Order Check (Work-in-Progress list) and the orders the helper entered itself.
-        let costarCheck = { busy: false, error: "", readAt: "", byOrder: new Map(), list: "" };
+        let costarCheck = { busy: false, error: "", readAt: "", byOrder: new Map(), list: "", port: 0, note: "" };
         let extensionFetchRequestCounter = 0;
 
         function fetchViaExtension(targetUrl, options = {}) {
@@ -1169,15 +1169,32 @@
         // (its Order Check reads COSTAR's Work-in-Progress list; it also lists the orders the
         // helper entered itself). Matches by the order number in PO# or the comment, by the
         // helper's own record, and otherwise flags a job with the same amount as "probably".
-        const HELPER_URL = "http://127.0.0.1:8795";
-        async function fetchHelperJson(path) {
+        // Order Check serves on 8795, or on the next free port up to 8804 when another copy holds
+        // 8795 (on the shared RDP server that can be an old copy left running in another Windows
+        // session: 127.0.0.1 ports are shared by every session). Every one answering is asked;
+        // the one that has actually read COSTAR is used.
+        const HELPER_PORTS = [8795, 8796, 8797, 8798, 8799, 8800, 8801, 8802, 8803, 8804];
+        async function fetchHelperJson(base, path, timeoutMs = 4000) {
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 4000);
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
             try {
-                const response = await fetch(HELPER_URL + path, { cache: "no-store", signal: controller.signal });
+                const response = await fetch(base + path, { cache: "no-store", signal: controller.signal });
                 if (!response.ok) throw new Error("helper answered " + response.status);
                 return await response.json();
             } finally { clearTimeout(timer); }
+        }
+        async function findOrderChecks() {
+            const found = await Promise.all(HELPER_PORTS.map(async port => {
+                const base = "http://127.0.0.1:" + port;
+                try {
+                    const health = await fetchHelperJson(base, "/health", 1500);
+                    if (!health || health.app !== "Tempe Order Check") return null;
+                    let wip = null;
+                    try { wip = await fetchHelperJson(base, "/wip.json"); } catch (e) { wip = null; }
+                    return { port, base, health, wip };
+                } catch (e) { return null; }
+            }));
+            return found.filter(Boolean);
         }
         function costarMatch(order, rows, entered) {
             const id = String(order.orderId || "").toUpperCase();
@@ -1215,11 +1232,12 @@
                 const states = filteredOrdersCache.map(o => (costarCheck.byOrder.get(o.orderId) || {}).kind);
                 const count = kind => states.filter(k => k === kind).length;
                 const missing = count("missing");
-                bar.innerHTML = `COSTAR check${costarCheck.readAt ? " (Work-in-Progress read " + escapeHtml(String(costarCheck.readAt).slice(11, 16)) + ")" : ""}: ` +
+                bar.innerHTML = `COSTAR check${costarCheck.readAt ? " (Work-in-Progress read " + escapeHtml(String(costarCheck.readAt).slice(11, 16)) + (costarCheck.port && costarCheck.port !== 8795 ? ", port " + costarCheck.port : "") + ")" : ""}: ` +
                     `<strong>${count("in")}</strong> in COSTAR · <strong>${count("maybe")}</strong> probably · <strong>${missing}</strong> missing` +
                     (count("sent") ? ` · ${count("sent")} sent` : "") +
                     (missing ? ' <button type="button" id="costarMakeAll">Make all missing</button>' : "") +
-                    ' <button type="button" id="costarAgain">Check again</button>';
+                    ' <button type="button" id="costarAgain">Check again</button>' +
+                    (costarCheck.note ? '<div class="muted" style="flex-basis:100%">' + escapeHtml(costarCheck.note) + '</div>' : "");
             }
             const again = document.getElementById("costarAgain");
             if (again) again.addEventListener("click", () => checkCostar());
@@ -1230,24 +1248,35 @@
             if (searchQuery || !filteredOrdersCache.length || costarCheck.busy) { renderCostarBar(); return; }
             const listKey = dayMode + "|" + filteredOrdersCache.map(o => o.orderId).join(",");
             const sent = new Map([...costarCheck.byOrder].filter(([, v]) => v.kind === "sent"));
-            costarCheck = { busy: true, error: "", readAt: "", byOrder: new Map(), list: listKey };
+            costarCheck = { busy: true, error: "", readAt: "", byOrder: new Map(), list: listKey, port: 0, note: "" };
             renderCostarBar();
             try {
-                const wip = await fetchHelperJson("/wip.json");
-                let entered = new Map();
-                try {
-                    const mine = await fetchHelperJson("/entered.json");
-                    entered = new Map((mine.entered || []).map(e => [String(e.orderId || "").toUpperCase(), String(e.at || "").slice(11, 16)]));
-                } catch (e) { /* older helper: Work-in-Progress only */ }
-                if (wip.state && wip.state !== "ok" && !(wip.rows || []).length) throw new Error("Order Check has not read COSTAR yet (" + wip.state + ")");
-                const rows = Array.isArray(wip.rows) ? wip.rows : [];
+                const checks = await findOrderChecks();
+                if (!checks.length) throw new Error("No Order Check answered on this PC. Turn Order Check on in the helper (Order Check tab, second COSTAR on Work-in-Progress).");
+                const reading = checks.filter(c => c.wip && (c.wip.state === "ok" || (c.wip.rows || []).length));
+                const idle = checks.filter(c => !reading.includes(c));
+                const describe = c => "port " + c.port + " (" + ((c.wip && c.wip.state) || "no data") + (c.health.user ? ", " + c.health.user : "") + ")";
+                if (!reading.length) throw new Error("Order Check answered on " + idle.map(describe).join(", ") + " but has not read COSTAR yet. " +
+                    "If the helper's Order Check tab says Reading normally, an old copy (for example in another Windows session) is answering instead: update the helper to 2.2.1, or close the old copy.");
+                reading.sort((a, b) => String(b.wip.readAt || "").localeCompare(String(a.wip.readAt || "")));
+                const best = reading[0];
+                const entered = new Map();
+                for (const c of checks) {
+                    try {
+                        const mine = await fetchHelperJson(c.base, "/entered.json", 2000);
+                        for (const e of mine.entered || []) entered.set(String(e.orderId || "").toUpperCase(), String(e.at || "").slice(11, 16));
+                    } catch (e) { /* an older Order Check: Work-in-Progress only */ }
+                }
+                const rows = Array.isArray(best.wip.rows) ? best.wip.rows : [];
                 for (const order of filteredOrdersCache) {
                     const match = costarMatch(order, rows, entered);
                     costarCheck.byOrder.set(order.orderId, match.kind === "missing" && sent.has(order.orderId) ? sent.get(order.orderId) : match);
                 }
-                costarCheck.readAt = wip.readAt || "";
+                costarCheck.readAt = best.wip.readAt || "";
+                costarCheck.port = best.port;
+                if (idle.length) costarCheck.note = "Also answering, not set up: " + idle.map(describe).join(", ") + " (probably an old copy; it can be closed).";
             } catch (err) {
-                costarCheck.error = "COSTAR check unavailable: turn Order Check on in the helper (Order Check tab, second COSTAR on Work-in-Progress). " + (err.name === "AbortError" ? "The helper did not answer." : err.message);
+                costarCheck.error = "COSTAR check unavailable: " + (err.name === "AbortError" ? "the helper did not answer." : err.message);
             }
             costarCheck.busy = false;
             renderOrderList(filteredOrdersCache);
