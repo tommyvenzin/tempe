@@ -1,0 +1,45 @@
+rules_version = '2';
+// Tempe Order Check. Paste into Firestore > Rules and press Publish.
+// Who may sign in is set in the document config/access:
+//   publishers: [your email]          (the board on the RDP PC)
+//   viewers:    [everyone else's email]
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function access() { return get(/databases/$(database)/documents/config/access).data; }
+    function signedIn() { return request.auth != null && request.auth.token.email != null; }
+    function email() { return request.auth.token.email.lower(); }
+    function isPublisher() { return signedIn() && email() in access().publishers; }
+    function isViewer() { return signedIn() && (email() in access().viewers || email() in access().publishers); }
+
+    // Edited only in the Firebase console.
+    match /config/access {
+      allow read: if isViewer();
+    }
+
+    // One document per Work-in-Progress job, written by the RDP board.
+    match /wip/{docId} {
+      allow read: if isViewer();
+      allow write: if isPublisher() && docId.matches('^[0-9]{5,10}$');
+    }
+
+    match /meta/status {
+      allow read: if isViewer();
+      allow write: if isPublisher();
+    }
+
+    // "Mark OK" marks. Anyone on the list can add or remove them, as themselves.
+    match /acks/{docId} {
+      allow read: if isViewer();
+      allow create, update: if isViewer()
+        && docId.matches('^[0-9]{5,10}$')
+        && request.resource.data.keys().hasOnly(['sig', 'by', 'email', 'at'])
+        && request.resource.data.sig is string && request.resource.data.sig.size() <= 40
+        && request.resource.data.by is string && request.resource.data.by.size() <= 12
+        && request.resource.data.email == email()
+        && request.resource.data.at == request.time;
+      allow delete: if isViewer();
+    }
+
+    // Anything not matched above is denied.
+  }
+}

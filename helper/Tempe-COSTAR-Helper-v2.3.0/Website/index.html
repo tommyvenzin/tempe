@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>F Alt Tab — Price Checker</title>
+    <link rel="stylesheet" href="./allaround.css">
+</head>
+<body class="app-page price-checker-page">
+    <nav class="navbar app-nav" aria-label="Primary navigation">
+        <div class="navbar-links">
+            <a href="index.html" aria-current="page">F Alt Tab</a>
+            <a href="Project_C.html">Project C</a>
+            <a href="Tyrestinder.html">Tyres Tinder</a>
+            <a href="Fitment_Planner.html">Job Card</a>
+            <a href="testrun.html">Tempe Orders</a>
+        </div>
+        <select class="nav-dropdown" aria-label="Navigation menu" onchange="if (this.value) window.location.href=this.value;">
+            <option value="index.html" selected>F Alt Tab</option>
+            <option value="Project_C.html">Project C</option>
+            <option value="Tyrestinder.html">Tyres Tinder</option>
+            <option value="Fitment_Planner.html">Job Card</option>
+            <option value="testrun.html">Tempe Orders</option>
+        </select>
+    </nav>
+
+    <main class="app-shell">
+        <section class="app-hero">
+            <div>
+                <h1>Price Checker</h1>
+            </div>
+        </section>
+
+        <section class="dashboard-card controls-card" aria-labelledby="searchHeading">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Product search</span>
+                    <h2 id="searchHeading">Enter sizes or SKUs</h2>
+                </div>
+            </div>
+
+            <input type="text" id="skuInput" inputmode="numeric" pattern="[0-9]*"
+                placeholder="Enter tyre size or SKU..."
+                onkeydown="handleSkuInputEnter(event)">
+
+            <input type="text" id="searchBar" placeholder="Filter loaded results..."
+                oninput="filterTable()">
+
+            <div class="button-group">
+                <button class="primary-action" onclick="checkPrices()">Search</button>
+                <button onclick="removeOutOfStock()">Available Only</button>
+            </div>
+        </section>
+
+        <section class="dashboard-card results-card" aria-labelledby="resultsHeading">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Search results</span>
+                    <h2 id="resultsHeading">Products</h2>
+                </div>
+            </div>
+
+            <div class="table-container app-table-container">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Make</th>
+                            <th>Model</th>
+                            <th>Price (AUD)</th>
+                            <th>SKU</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="./jobcard-shared.js"></script>
+    <script src="./costar-client.js"></script>
+    <script src="./F_alt_tab.js"></script>
+</body>
+</html>
