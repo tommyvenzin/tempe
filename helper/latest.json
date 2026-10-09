@@ -1,8 +1,8 @@
 {
-  "version": "2.3.0",
-  "name": "2.3.0 - any branch",
-  "zip": "Tempe-COSTAR-Helper-v2.3.0.zip",
-  "sha256": "2449dbbe007abfd0ca0a0014274fa3644d928bebf048742898808d779f9e78a3",
-  "size": 369117,
-  "notes": "Works with any COSTAR branch open on this PC (Branch 1 too). DET goes in first on line 6, items above it. A failed update now sets itself aside."
+  "version": "2.3.1",
+  "name": "2.3.1 - unstuck",
+  "zip": "Tempe-COSTAR-Helper-v2.3.1.zip",
+  "sha256": "8ce0d3f68fef73113d3d24d4a4d526eb8140e76e0babeb4c1da373b0e84cd69b",
+  "size": 379524,
+  "notes": "Fixes the stop after the first item, makes Branch 1 (any branch) work, and lets a stopped order be sent again when nothing in it changed."
 }
