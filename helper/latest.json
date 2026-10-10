@@ -1,8 +1,8 @@
 {
-  "version": "2.3.1",
-  "name": "2.3.1 - unstuck",
-  "zip": "Tempe-COSTAR-Helper-v2.3.1.zip",
-  "sha256": "8ce0d3f68fef73113d3d24d4a4d526eb8140e76e0babeb4c1da373b0e84cd69b",
-  "size": 379524,
-  "notes": "Fixes the stop after the first item, makes Branch 1 (any branch) work, and lets a stopped order be sent again when nothing in it changed."
+  "version": "2.3.2",
+  "name": "2.3.2 - DET first fixed",
+  "zip": "Tempe-COSTAR-Helper-v2.3.2.zip",
+  "sha256": "9ea764081ac2d2105a8d45f1dc07a5e29ff934da9ae735bcce0bd692416ef614",
+  "size": 386040,
+  "notes": "Fixes the stop after the first item with DET first (COSTAR opens the line you are on), and adds a DET first tick box: untick it for the old way, items first then DET."
 }
