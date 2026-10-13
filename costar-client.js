@@ -40,7 +40,12 @@
                     ...(body ? { body: JSON.stringify(body) } : {})
                 });
                 if (response.status === 404 && path.startsWith("/jobs/")) return null;
-                if (!response.ok) throw new Error(response.status === 401 ? "Pair this phone with the PC helper again." : `PC helper returned HTTP ${response.status}.`);
+                if (response.status === 401) throw new Error("Pair this phone with the PC helper again.");
+                if (!response.ok) {
+                    // The helper says why it refused (e.g. a website it is not paired with, or Tempe failing).
+                    const detail = await response.json().then(body => typeof body?.error === "string" ? " " + body.error : "", () => "");
+                    throw new Error(`PC helper returned HTTP ${response.status}.${detail}`);
+                }
                 const value = await response.json();
                 if (!value || typeof value !== "object") throw new Error("The PC returned an invalid response.");
                 return value;

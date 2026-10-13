@@ -131,12 +131,62 @@ function looksLikeJinaResponse(text) {
     );
 }
 
+function usesPcReceiver() {
+    return !!window.TempeCostarClient?.isPaired();
+}
+
+// Where the phone is paired to, for error messages ("10.145.20.103:8790").
+function pcReceiverHost() {
+    try {
+        const pairing = JSON.parse(window.localStorage.getItem("tempe:costar-pairing:v1") || "null");
+        return pairing?.baseUrl ? new URL(pairing.baseUrl).host : "";
+    } catch {
+        return "";
+    }
+}
+
+// The desk PC helper serves 12 connections at a time and closes any more
+// straight away, which the browser reports as a failed connection. Such a
+// request is tried once more before giving up.
+async function fetchViaPcReceiver(targetUrl) {
+    try {
+        return await window.TempeCostarClient.fetchTyres(targetUrl);
+    } catch (error) {
+        if (!(error instanceof TypeError)) throw describePcError(error);
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 600));
+
+    try {
+        return await window.TempeCostarClient.fetchTyres(targetUrl);
+    } catch (error) {
+        throw describePcError(error);
+    }
+}
+
+// Says why the PC helper could not be used, in words staff can act on.
+function describePcError(error) {
+    const host = pcReceiverHost();
+    const pc = host ? `the PC helper at ${host}` : "the PC helper";
+
+    if (error?.name === "AbortError") {
+        return new Error(`${pc[0].toUpperCase()}${pc.slice(1)} did not answer within 8 seconds.`);
+    }
+
+    if (error instanceof TypeError) {
+        return new Error(`Could not connect to ${pc}. Check it is receiving, this phone is on the shop Wi-Fi and the PC certificate is still trusted.`);
+    }
+
+    const message = error?.message || "request failed";
+    return new Error(/PC helper/.test(message) ? message : `PC helper: ${message}`);
+}
+
 async function fetchTextWithFallback(targetUrl) {
-    const viaPc = window.TempeCostarClient?.isPaired();
+    const viaPc = usesPcReceiver();
     console.log(viaPc ? "Fetching through paired PC receiver:" : "Fetching through Chrome extension:", targetUrl);
 
     const result = viaPc
-        ? await window.TempeCostarClient.fetchTyres(targetUrl)
+        ? await fetchViaPcReceiver(targetUrl)
         : await fetchViaExtension(targetUrl, { method: "GET", cache: "no-store" });
 
     const text = String(result.text || "");
@@ -615,6 +665,7 @@ const DETAIL_KEEP_MS = 30 * 24 * 60 * 60 * 1000; // a product link's SKU never c
 const MAX_SAVED_LISTINGS = 30;
 const MAX_SAVED_DETAILS = 600;
 const DETAIL_CONCURRENCY = 8;                    // product pages in flight across all searches
+const PC_DETAIL_CONCURRENCY = 2;                 // the PC helper fetches 2 Tempe pages at a time
 
 const MISSING_SKUS = new Set(["", "No SKU", "No SKU available", "JINA-N/A"]);
 
@@ -758,7 +809,11 @@ function runDetailLimited(task) {
 }
 
 function pumpDetailQueue() {
-    while (fAltDetailActive < DETAIL_CONCURRENCY && fAltDetailQueue.length) {
+    // More than the PC helper can fetch at once would only hold its
+    // connections and lock out the next search.
+    const limit = usesPcReceiver() ? PC_DETAIL_CONCURRENCY : DETAIL_CONCURRENCY;
+
+    while (fAltDetailActive < limit && fAltDetailQueue.length) {
         const { task, resolve, reject } = fAltDetailQueue.shift();
         fAltDetailActive++;
 
@@ -927,13 +982,16 @@ async function searchTyreSize(size, onUpdate = () => {}) {
 }
 
 // Starts a size in the background so pressing Enter finds it ready.
+// Through the PC helper only the listing is fetched early: product pages
+// for a size that is still being typed would keep the PC busy.
 function prefetchTyreSize(size) {
     if (!buildTempeTyreSearchUrl(size)) return;
 
     const saved = getFAltCache().listings[size];
     if (saved && Date.now() - saved.t < LISTING_FRESH_MS) return;
 
-    searchTyreSize(size).catch(() => {});
+    if (usesPcReceiver()) loadListing(size).catch(() => {});
+    else searchTyreSize(size).catch(() => {});
 }
 
 const fAltPrefetchTimers = new Map();
@@ -987,10 +1045,11 @@ async function fetchTyreProductsBySize(size) {
     };
 }
 
-function renderManualFallbackRow(query, manualUrl, message = "Could not load results automatically") {
+function renderManualFallbackRow(query, manualUrl, message = "Could not load results automatically", reason = "") {
     return `<tr data-message="error">
         <td colspan="5">
             ${escapeHtml(message)} for <strong>${escapeHtml(query)}</strong>.<br>
+            ${reason ? `<span class="falt-error-reason">${escapeHtml(reason)}</span><br>` : ""}
             Manual link: <a class="falt-manual-link" href="${manualUrl}" target="_blank">Open Tempe Tyres search</a>
         </td>
     </tr>`;
@@ -1353,6 +1412,20 @@ function queueFAltRender() {
     }
 }
 
+// The reason a size did not load, as shown under "Could not load results".
+function describeFAltLoadError(error) {
+    switch (error) {
+        case "No products parsed":
+            return "";
+        case "empty-response":
+            return "Tempe sent back an empty page.";
+        case "captcha-or-blocked-response":
+            return "Tempe asked for a captcha or blocked the request. Open the search below once, then try again.";
+        default:
+            return error || "";
+    }
+}
+
 function renderFAltMessageRow(html) {
     return `<tr data-message="info"><td colspan="5">${html}</td></tr>`;
 }
@@ -1378,7 +1451,8 @@ function renderFAltResults() {
             rows.push([`error|${query}`, renderManualFallbackRow(
                 query,
                 section.manualUrl,
-                "Could not load results. Check the PC receiver connection or desktop Chrome Fetch Bridge"
+                section.error === "No products parsed" ? "Tempe listed no tyres" : "Could not load results",
+                describeFAltLoadError(section.error)
             )]);
         }
     }
