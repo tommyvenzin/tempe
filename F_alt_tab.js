@@ -1149,7 +1149,9 @@ async function Tinder() {
     const skuInput = document.getElementById("skuInput").value.trim();
     const skuInput2 = document.getElementById("skuInput2").value.trim();
     const resultsTable = document.querySelector("#resultsTable tbody");
-    resultsTable.innerHTML = `<tr data-message="loading"><td colspan="5">Matching ${escapeHtml(skuInput)} and ${escapeHtml(skuInput2)}…</td></tr>`;
+    // Only sizes that are looked up (7 digits, see fetchTyreDetails).
+    const sizesText = [skuInput, skuInput2].filter((size) => size.length === 7).map(escapeHtml).join(" and ");
+    resultsTable.innerHTML = `<tr data-message="loading"><td colspan="5">Matching ${sizesText || "tyres"}…</td></tr>`;
     tinderLastSearchKey = `${skuInput}|${skuInput2}`;
     closeFAltKeyboard();
 
@@ -1575,7 +1577,7 @@ function applyFAltRowFilters() {
    the screen for FALT_BAR_QUERY. Keep the two in step.
    ========================= */
 
-const FALT_BAR_QUERY = "screen and (max-width: 740px), (max-height: 500px) and (pointer: coarse)";
+const FALT_BAR_QUERY = "screen and (max-width: 740px), screen and (max-height: 500px) and (pointer: coarse)";
 const FALT_SIZE_INPUT_IDS = ["skuInput", "skuInput2"];
 
 // Where the last tap landed (see keyboardClosedByTap).
@@ -1649,6 +1651,9 @@ function keyboardClosedByTap(input) {
     const { target, at } = fAltLastTap;
     if (!target || input.contains(target) || Date.now() - at > 800) return false;
 
+    // Moving between the Tinder size boxes keeps the keyboard open.
+    if (FALT_SIZE_INPUT_IDS.includes(target.id)) return false;
+
     return !!target.closest?.("#resultsTable, button, a, input, select, textarea, label, [onclick]");
 }
 
@@ -1686,6 +1691,21 @@ function handleTinderSizeBlur(event) {
     }, 150);
 }
 
+// Keyboard focus moving back up the cards would stop under the sticky
+// search card, out of sight: nudge the page so it shows below the card.
+// (scroll-padding would do this too, but it also scrolls the page every
+// time the size or filter box in the card gets focus.)
+function keepFAltFocusBelowBar(event) {
+    const bar = document.querySelector(".price-checker-page .controls-card");
+    if (!bar || !usesFAltPhoneBar()) return;
+
+    window.requestAnimationFrame(() => {
+        const barBottom = bar.getBoundingClientRect().bottom;
+        const top = event.target.getBoundingClientRect().top;
+        if (top < barBottom + 8) window.scrollBy(0, top - barBottom - 8);
+    });
+}
+
 // The filter applies as you type; its Done/Enter key just closes the keyboard.
 function handleFilterEnter(event) {
     if (event.key === "Enter" && isFAltTouchScreen()) event.currentTarget.blur();
@@ -1709,6 +1729,7 @@ function wireFAltPhoneLayout() {
 
     if (document.body.classList.contains("price-checker-page")) {
         document.getElementById("skuInput")?.addEventListener("blur", handleSkuInputBlur);
+        document.getElementById("resultsTable")?.addEventListener("focusin", keepFAltFocusBelowBar);
 
         placeFAltStatusChip();
         onFAltMediaChange(FALT_BAR_QUERY, placeFAltStatusChip);

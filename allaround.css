@@ -3728,10 +3728,14 @@ body:not(.project-c-page) .table-container,
    card media query below. */
 
 /* The results table is at least 700px wide. Without an explicit column
-   the shell grows to fit it and the whole page is wider than a phone. */
-body.price-checker-page .app-shell,
-body.tinder-page .app-shell {
-    grid-template-columns: minmax(0, 1fr);
+   the shell grows to fit it and the whole page is wider than a phone.
+   Screens only: in print the wider shell lets Chrome shrink the page to
+   fit, so the whole table prints. */
+@media screen {
+    body.price-checker-page .app-shell,
+    body.tinder-page .app-shell {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 /* --falt-gutter is the side padding of the page (same values as the
@@ -4001,7 +4005,7 @@ body.price-checker-page .jobcard-shared-toast {
 
 /* ---------- Sticky search card (phones, short touch screens) ---------- */
 
-@media screen and (max-width: 740px), (max-height: 500px) and (pointer: coarse) {
+@media screen and (max-width: 740px), screen and (max-height: 500px) and (pointer: coarse) {
     body.price-checker-page,
     body.tinder-page {
         padding-top: 8px;
@@ -4088,13 +4092,6 @@ body.price-checker-page .jobcard-shared-toast {
         grid-area: only;
     }
 
-    /* Keyboard focus moving back up the cards stops below the bar
-       rather than underneath it. */
-    body.price-checker-page #resultsTable a,
-    body.price-checker-page #resultsTable button {
-        scroll-margin-top: 160px;
-    }
-
     /* Moved here from the results heading by F_alt_tab.js. Sits on its
        own row, so the bar is no taller before the first search. */
     body.price-checker-page .controls-card .status-chip {
@@ -4111,15 +4108,10 @@ body.price-checker-page .jobcard-shared-toast {
 
 /* Landscape phones: fewer rows, so most of the screen is results. The
    width test keeps a portrait phone as it is if a keyboard shortens it. */
-@media (max-height: 500px) and (min-width: 560px) and (pointer: coarse) {
+@media screen and (max-height: 500px) and (min-width: 560px) and (pointer: coarse) {
     body.price-checker-page .controls-card {
         grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
         grid-template-areas: "size search filter only";
-    }
-
-    body.price-checker-page #resultsTable a,
-    body.price-checker-page #resultsTable button {
-        scroll-margin-top: 108px;
     }
 
     /* Tyres Tinder: sizes + Match Tyres, then filter + Available Only. */
@@ -4208,7 +4200,7 @@ body.price-checker-page .jobcard-shared-toast {
     body.price-checker-page #resultsTable tbody,
     body.tinder-page #resultsTable tbody {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 18.75rem), 1fr));
         gap: 8px;
     }
 
@@ -4243,11 +4235,13 @@ body.price-checker-page .jobcard-shared-toast {
        MAKE [stock]                 $was
        size Model                   $price
        [copy SKU]               [Add Tyre]
-       The make and the price keep their full width; when space runs out
-       the stock pill between them wraps inside itself instead. */
+       The make wraps between words past 40% of the card, the stock pill
+       wraps between words, and the price keeps its full width. Narrower
+       than that (for the text size), the pill gets its own line: see
+       max-width: 18em below. */
     body.price-checker-page #resultsTable tr.falt-row {
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-columns: fit-content(40%) minmax(min-content, 1fr) auto;
         grid-template-areas:
             "make  stock price"
             "model model price"
@@ -4314,7 +4308,7 @@ body.price-checker-page .jobcard-shared-toast {
         font-size: 0.74rem;
         font-weight: 700;
         line-height: 1.35;
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
         opacity: 1;
     }
 
@@ -4477,7 +4471,7 @@ body.price-checker-page .jobcard-shared-toast {
 
     /* Both toasts are centred here: an SKU copied while "added on the Job
        Card" is showing goes above it rather than behind it. */
-    .jobcard-shared-toast.is-visible ~ .falt-toast {
+    body:has(> .jobcard-shared-toast.is-visible) .falt-toast {
         bottom: calc(100px + env(safe-area-inset-bottom, 0px));
     }
 
@@ -4661,5 +4655,18 @@ body.price-checker-page .jobcard-shared-toast {
     body.price-checker-page #resultsTable td.falt-action button {
         min-width: 104px;
         padding: 4px 12px;
+    }
+}
+
+/* Too narrow for the text size (about 288px at a 16px default font; more
+   with a larger font or zoom): the stock pill moves under the make. */
+@media screen and (max-width: 18em) {
+    body.price-checker-page #resultsTable tr.falt-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "make  price"
+            "stock price"
+            "model model"
+            "foot  foot";
     }
 }
