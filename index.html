@@ -41,15 +41,17 @@
             </div>
 
             <input type="text" id="skuInput" inputmode="numeric" pattern="[0-9]*"
-                placeholder="Enter tyre size or SKU..."
+                enterkeyhint="search" autocomplete="off" aria-label="Tyre sizes or SKUs"
+                placeholder="Enter tyre size or SKU..." data-phone-placeholder="Size or SKU"
                 onkeydown="handleSkuInputEnter(event)">
 
-            <input type="text" id="searchBar" placeholder="Filter loaded results..."
+            <input type="text" id="searchBar" placeholder="Filter loaded results..." data-phone-placeholder="Filter results"
+                enterkeyhint="done" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Filter loaded results"
                 oninput="filterTable()">
 
             <div class="button-group">
                 <button class="primary-action" onclick="checkPrices()">Search</button>
-                <button onclick="removeOutOfStock()">Available Only</button>
+                <button id="availableOnlyButton" aria-pressed="false" onclick="removeOutOfStock()">Available Only</button>
             </div>
         </section>
 

@@ -216,35 +216,31 @@ function extractSkuFromProductUrl(url) {
     return "";
 }
 
+// Short confirmation for SKU and link copies. Styled by .falt-toast in
+// allaround.css: centred above the home indicator on phones, and it lets
+// taps through to the row underneath.
+function showFAltToast(message) {
+    const toast = document.createElement("div");
+    toast.className = "falt-toast";
+    toast.setAttribute("role", "status");
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.classList.add("is-visible");
+    });
+
+    setTimeout(() => {
+        toast.classList.remove("is-visible");
+        setTimeout(() => toast.remove(), 300);
+    }, 800);
+}
+
 function copySKU(sku) {
-    if (!sku || sku === "No SKU" || sku === "No SKU available" || sku === "JINA-N/A") return;
+    if (!sku || sku === "No SKU" || sku === "No SKU available" || sku === "SKU unavailable" || sku === "JINA-N/A") return;
 
     navigator.clipboard.writeText(sku)
-        .then(() => {
-            const toast = document.createElement("div");
-            toast.textContent = `Copied: ${sku}`;
-            toast.style.position = "fixed";
-            toast.style.bottom = "20px";
-            toast.style.right = "20px";
-            toast.style.padding = "8px 12px";
-            toast.style.background = "#16a34a";
-            toast.style.color = "white";
-            toast.style.borderRadius = "6px";
-            toast.style.fontSize = "14px";
-            toast.style.opacity = "0";
-            toast.style.transition = "opacity 0.3s ease";
-            toast.style.zIndex = "9999";
-            document.body.appendChild(toast);
-
-            requestAnimationFrame(() => {
-                toast.style.opacity = "1";
-            });
-
-            setTimeout(() => {
-                toast.style.opacity = "0";
-                setTimeout(() => toast.remove(), 300);
-            }, 800);
-        })
+        .then(() => showFAltToast(`Copied: ${sku}`))
         .catch((err) => console.error("Copy failed", err));
 }
 
@@ -283,7 +279,11 @@ function handleSkuInputEnter(e) {
 
         // Keep keyboard focus on the tyre-size box after Enter.
         // Tab then follows the browser's normal/native tab order.
+        // On a touch screen checkPrices() has closed the keyboard instead,
+        // so the results are not hidden behind it.
         const tyreInput = e.currentTarget;
+        if (isFAltTouchScreen()) return;
+
         if (tyreInput && typeof tyreInput.focus === "function") {
             try {
                 tyreInput.focus({ preventScroll: true });
@@ -470,31 +470,9 @@ function getTempeSearchUrlsFromQueries(queries) {
 }
 
 function showTempeLinkCopiedToast(count) {
-    const toast = document.createElement("div");
-    toast.textContent = count === 1
+    showFAltToast(count === 1
         ? "Tempe link copied"
-        : `${count} Tempe links copied`;
-    toast.style.position = "fixed";
-    toast.style.bottom = "20px";
-    toast.style.right = "20px";
-    toast.style.padding = "8px 12px";
-    toast.style.background = "#16a34a";
-    toast.style.color = "white";
-    toast.style.borderRadius = "6px";
-    toast.style.fontSize = "14px";
-    toast.style.opacity = "0";
-    toast.style.transition = "opacity 0.3s ease";
-    toast.style.zIndex = "9999";
-    document.body.appendChild(toast);
-
-    requestAnimationFrame(() => {
-        toast.style.opacity = "1";
-    });
-
-    setTimeout(() => {
-        toast.style.opacity = "0";
-        setTimeout(() => toast.remove(), 300);
-    }, 800);
+        : `${count} Tempe links copied`);
 }
 
 function legacyCopyText(text) {
@@ -1010,7 +988,7 @@ function renderManualFallbackRow(query, manualUrl, message = "Could not load res
     return `<tr data-message="error">
         <td colspan="5">
             ${escapeHtml(message)} for <strong>${escapeHtml(query)}</strong>.<br>
-            Manual link: <a href="${manualUrl}" target="_blank" style="color:#93c5fd;">Open Tempe Tyres search</a>
+            Manual link: <a class="falt-manual-link" href="${manualUrl}" target="_blank">Open Tempe Tyres search</a>
         </td>
     </tr>`;
 }
@@ -1018,6 +996,15 @@ function renderManualFallbackRow(query, manualUrl, message = "Could not load res
 function renderFAltProductRow(item) {
     const make = item.make || item.brand || "No make";
     const model = item.model || item.pattern || "No model";
+
+    // The listing gives "size pattern". The size is wrapped so phones can
+    // show it smaller; the cell text stays exactly the same.
+    const size = item.pattern && model.endsWith(` ${item.pattern}`)
+        ? model.slice(0, -item.pattern.length).trim()
+        : "";
+    const modelHtml = size
+        ? `<span class="falt-size">${escapeHtml(size)}</span> ${escapeHtml(item.pattern)}`
+        : escapeHtml(model);
     const price = Number(item.price || 0);
     const originalPrice = Number(item.originalPrice ?? price);
     const stock = item.stock || "No stock";
@@ -1035,37 +1022,45 @@ function renderFAltProductRow(item) {
     const skuDisplay = sku === "JINA-N/A"
         ? `<span title="Jina result does not expose the exact hidden SKU">JINA-N/A</span>`
         : escapeHtml(sku);
+    const hasSku = sku !== "SKU unavailable" && sku !== "JINA-N/A";
 
-    return `<tr 
+    // Classes, not inline styles, so allaround.css can turn the row into a
+    // card on phones. The stock brackets are separate so cards can drop them.
+    return `<tr
+        class="falt-row"
         style="background:${getStockColor(stock)};"
         data-stock="${safeStockAttr}"
     >
-        <td>${escapeHtml(make)}</td>
+        <td class="falt-make">${escapeHtml(make)}</td>
 
-        <td>
-            <a href="${link}" target="_blank" style="color:#93c5fd; text-decoration:none;">
-                ${escapeHtml(model)}
+        <td class="falt-model">
+            <a class="falt-model-link" href="${link}" target="_blank">
+                ${modelHtml}
             </a>
-            <span style="opacity:0.8; font-size:0.9em;"> (${escapeHtml(stock)})</span>
+            <span class="falt-stock"><span class="falt-paren"> (</span>${escapeHtml(stock)}<span class="falt-paren">)</span></span>
         </td>
 
-        <td>
+        <td class="falt-price">
             ${item.bridgestoneHiddenPrice
-                ? `<div style="text-decoration:line-through; opacity:0.55;">$${originalPrice.toFixed(2)}</div>
-                   <div style="font-weight:700;">$${price.toFixed(2)}</div>`
-                : `$${price.toFixed(2)}`}
+                ? `<div class="falt-price-was">$${originalPrice.toFixed(2)}</div>
+                   <div class="falt-price-now falt-price-hidden">$${price.toFixed(2)}</div>`
+                : `<span class="falt-price-now">$${price.toFixed(2)}</span>`}
             ${pricePending
-                ? `<div style="font-size:0.75em; opacity:0.7;">checking…</div>`
+                ? `<div class="falt-pending">checking…</div>`
                 : ""}
         </td>
 
         ${skuPending
-            ? `<td style="opacity:0.7;">looking up…</td>`
-            : `<td onclick="copySKU('${safeSku}')" style="cursor:pointer; color:#60a5fa;">
+            ? `<td class="falt-sku is-pending">looking up…</td>`
+            : hasSku
+                ? `<td class="falt-sku falt-sku-copy" onclick="copySKU('${safeSku}')" title="Copy SKU">
+            ${skuDisplay}
+        </td>`
+                : `<td class="falt-sku falt-sku-none">
             ${skuDisplay}
         </td>`}
 
-        <td>
+        <td class="falt-action">
             <button
                 type="button"
                 ${skuPending ? "disabled" : ""}
@@ -1085,6 +1080,7 @@ function renderFAltProductRow(item) {
 let savedTinderResults = {};
 let activeTinderResults = {};
 let tinderSearchCounter = 0;
+let tinderLastSearchKey = "";
 
 function cloneTinderResults(data) {
     return Object.fromEntries(
@@ -1151,6 +1147,8 @@ async function Tinder() {
     const skuInput2 = document.getElementById("skuInput2").value.trim();
     const resultsTable = document.querySelector("#resultsTable tbody");
     resultsTable.innerHTML = "";
+    tinderLastSearchKey = `${skuInput}|${skuInput2}`;
+    closeFAltKeyboard();
 
     const fetchTyreDetails = async (size) => {
         if (!size || size.length !== 7) return [];
@@ -1207,19 +1205,23 @@ function renderTinderResults(data) {
 
             const safeFrontSku = escapeJsSingle(f.sku || "");
             const safeRearSku = escapeJsSingle(r.sku || "");
+            const frontSkuClass = hasTinderSku(f) ? "" : " tinder-sku-none";
+            const rearSkuClass = hasTinderSku(r) ? "" : " tinder-sku-none";
 
-            const row = `<tr data-brand="${safeBrand.toLowerCase()}">
-                ${i === 0 ? `<td rowspan="${rowCount}">${safeBrand}</td>` : ""}
-                <td style="background:${getStockColor(f.stock)};" data-stock="${escapeHtml(f.stock || "")}">
+            // Classes are for the phone cards (allaround.css); the brand cell
+            // is hidden there and every card shows data-brand instead.
+            const row = `<tr class="tinder-row" data-brand="${safeBrand.toLowerCase()}">
+                ${i === 0 ? `<td class="tinder-brand" rowspan="${rowCount}">${safeBrand}</td>` : ""}
+                <td class="tinder-front" style="background:${getStockColor(f.stock)};" data-stock="${escapeHtml(f.stock || "")}">
                     ${f.pattern ? `<a href="${f.link}" target="_blank">${escapeHtml(f.pattern)}</a>` : "No data"}${f.price ? ` - $${escapeHtml(f.price)}` : ""} (${escapeHtml(f.stock || "No stock")})</td>
-                <td style="background:${getStockColor(r.stock)};" data-stock="${escapeHtml(r.stock || "")}">
+                <td class="tinder-rear" style="background:${getStockColor(r.stock)};" data-stock="${escapeHtml(r.stock || "")}">
                     ${r.pattern ? `<a href="${r.link}" target="_blank">${escapeHtml(r.pattern)}</a>` : "No data"}${r.price ? ` - $${escapeHtml(r.price)}` : ""} (${escapeHtml(r.stock || "No stock")})</td>
 
-                <td onclick="copySKU('${safeFrontSku}')" style="cursor:pointer; color:#60a5fa;">
+                <td class="tinder-sku tinder-front-sku${frontSkuClass}" onclick="copySKU('${safeFrontSku}')" style="cursor:pointer; color:#60a5fa;">
                     ${escapeHtml(f.sku || "No SKU")}
                 </td>
 
-                <td onclick="copySKU('${safeRearSku}')" style="cursor:pointer; color:#60a5fa;">
+                <td class="tinder-sku tinder-rear-sku${rearSkuClass}" onclick="copySKU('${safeRearSku}')" style="cursor:pointer; color:#60a5fa;">
                     ${escapeHtml(r.sku || "No SKU")}
                 </td>
             </tr>`;
@@ -1230,6 +1232,10 @@ function renderTinderResults(data) {
     resultsTable.innerHTML = sorted.length
         ? rows.join("")
         : `<tr><td colspan="5">No matching tyres found.</td></tr>`;
+}
+
+function hasTinderSku(item) {
+    return !!item.sku && item.sku !== "No SKU available";
 }
 
 function removeOutOfStockTinder() {
@@ -1259,11 +1265,14 @@ function removeOutOfStockTinder() {
 
 let fAltSearch = null;
 let fAltAvailableOnly = false;
+let fAltLastSearchText = "";
 let fAltRenderQueued = false;
 let fAltRowElements = new Map();
 
 async function checkPrices({ copyLink = true } = {}) {
-    const skuInput = document.getElementById("skuInput").value.trim().split("\n");
+    const skuInputBox = document.getElementById("skuInput");
+    const skuInput = skuInputBox.value.trim().split("\n");
+    fAltLastSearchText = skuInputBox.value.trim();
 
     // Search button clicks still copy automatically.
     // Enter-key searches already copied directly inside handleSkuInputEnter().
@@ -1276,6 +1285,7 @@ async function checkPrices({ copyLink = true } = {}) {
     const search = {
         startedAt: Date.now(),
         finishedAt: 0,
+        revealOnPhone: true,
         sections: queries.map((query) => {
             const invalid = ![5, 7].includes(query.length);
 
@@ -1294,6 +1304,7 @@ async function checkPrices({ copyLink = true } = {}) {
 
     fAltSearch = search;
     fAltAvailableOnly = false;
+    syncFAltAvailableButton();
 
     // Results stream into the table as they arrive: saved results first,
     // then the live listing, then each Bridgestone price / missing SKU.
@@ -1310,6 +1321,7 @@ async function checkPrices({ copyLink = true } = {}) {
     // Saved results were applied synchronously above, so the first paint
     // already shows them.
     renderFAltResults();
+    closeFAltKeyboard();
 
     await work;
 
@@ -1386,6 +1398,13 @@ function renderFAltResults() {
     applyFAltRowFilters();
     updateFAltStatus(search);
 
+    // Phones: once this search has something to show, bring the first card
+    // into view. Only once, so later updates never move the page.
+    if (search.revealOnPhone && (products.length || search.finishedAt)) {
+        search.revealOnPhone = false;
+        revealFAltResultsOnPhone();
+    }
+
     // Saved rows stay dimmed until the live listing has replaced them.
     tbody.style.opacity = search.sections.some((section) => section.loading && section.products.length)
         ? "0.65"
@@ -1432,7 +1451,7 @@ function formatSavedAge(time) {
     return `${Math.round(minutes / 60)} h ago`;
 }
 
-function describeFAltStatus(search) {
+function describeFAltStatus(search, shown = null) {
     const sections = search.sections.filter((section) => !section.invalid);
     if (!sections.length) return "";
 
@@ -1444,7 +1463,10 @@ function describeFAltStatus(search) {
             .filter((section) => section.savedAt && section.products.length)
             .map((section) => section.savedAt)
     );
-    const tyres = `${count} tyre${count === 1 ? "" : "s"}`;
+    // "7 of 10 tyres" while the filter or Available Only hides some.
+    const tyres = shown !== null && shown !== count
+        ? `${shown} of ${count} tyres`
+        : `${count} tyre${count === 1 ? "" : "s"}`;
 
     if (loading && !count) return "Searching…";
     if (loading) return `${tyres} · saved ${formatSavedAge(savedAt)} · refreshing…`;
@@ -1463,11 +1485,22 @@ function describeFAltStatus(search) {
 
 function updateFAltStatus(search) {
     const status = document.getElementById("resultsStatus");
-    if (!status) return;
+    if (!status || !search) return;
 
-    const text = describeFAltStatus(search);
+    const text = describeFAltStatus(search, countShownFAltProducts());
     status.textContent = text;
     status.style.display = text ? "" : "none";
+}
+
+// Product rows left visible by the text filter and Available Only, or null
+// while neither is on.
+function countShownFAltProducts() {
+    const keyword = (document.getElementById("searchBar")?.value || "").trim();
+    if (!keyword && !fAltAvailableOnly) return null;
+
+    return [...document.querySelectorAll("#resultsTable tbody tr[data-stock]")]
+        .filter((row) => row.style.display !== "none")
+        .length;
 }
 
 /* =========================
@@ -1475,9 +1508,17 @@ function updateFAltStatus(search) {
    ========================= */
 
 function removeOutOfStock() {
-    // Remembered so rows that stream in afterwards are filtered too.
-    fAltAvailableOnly = true;
+    // A toggle: tap again to show every tyre. Remembered so rows that
+    // stream in afterwards are filtered too.
+    fAltAvailableOnly = !fAltAvailableOnly;
+    syncFAltAvailableButton();
     applyFAltRowFilters();
+    updateFAltStatus(fAltSearch);
+}
+
+function syncFAltAvailableButton() {
+    document.getElementById("availableOnlyButton")
+        ?.setAttribute("aria-pressed", String(fAltAvailableOnly));
 }
 
 function filterTable() {
@@ -1496,6 +1537,7 @@ function filterTable() {
 
     // Standard row filtering for F Alt Tab.
     applyFAltRowFilters();
+    updateFAltStatus(fAltSearch);
 }
 
 // Applies both the text filter and Available Only, so neither undoes the other.
@@ -1518,4 +1560,151 @@ function applyFAltRowFilters() {
 
         row.style.display = matchesKeyword && inStock ? "" : "none";
     });
+}
+
+/* =========================
+   PHONES AND TABLETS
+   allaround.css shows result cards and keeps the search card at the top of
+   the screen for FALT_BAR_QUERY. Keep the two in step.
+   ========================= */
+
+const FALT_BAR_QUERY = "(max-width: 740px), (max-height: 500px) and (pointer: coarse)";
+const FALT_SIZE_INPUT_IDS = ["skuInput", "skuInput2"];
+
+// Where the last tap landed (see keyboardClosedByTap).
+let fAltLastTap = { target: null, at: 0 };
+
+function matchesFAltMedia(query) {
+    return !!window.matchMedia && window.matchMedia(query).matches;
+}
+
+function isFAltTouchScreen() {
+    return matchesFAltMedia("(pointer: coarse)");
+}
+
+function usesFAltPhoneBar() {
+    return matchesFAltMedia(FALT_BAR_QUERY);
+}
+
+// After a search on a touch screen, close the keyboard so it does not cover
+// the results.
+function closeFAltKeyboard() {
+    const active = document.activeElement;
+    if (isFAltTouchScreen() && FALT_SIZE_INPUT_IDS.includes(active?.id)) {
+        active.blur();
+    }
+}
+
+// A new search started while scrolled down the old cards: go back to the
+// first card, just below the sticky search card.
+function revealFAltResultsOnPhone() {
+    const bar = document.querySelector(".price-checker-page .controls-card");
+    const results = document.querySelector(".price-checker-page .results-card");
+    if (!bar || !results || !usesFAltPhoneBar()) return;
+
+    const top = results.getBoundingClientRect().top + window.scrollY - bar.offsetHeight - 8;
+    if (window.scrollY > top) window.scrollTo(0, Math.max(0, top));
+}
+
+// The status chip sits in the sticky search card on phones, so it stays in
+// view while the cards scroll, and beside the results heading elsewhere.
+function placeFAltStatusChip() {
+    const status = document.getElementById("resultsStatus");
+    const bar = document.querySelector(".price-checker-page .controls-card");
+    const home = document.querySelector(".price-checker-page .results-card .section-heading");
+    if (!status || !bar || !home) return;
+
+    const target = usesFAltPhoneBar() ? bar : home;
+    if (status.parentElement !== target) target.appendChild(status);
+}
+
+// Shorter placeholders where the search card is narrow, so they are not cut
+// off. The HTML placeholder is kept for wider screens.
+function placeFAltPlaceholders() {
+    const narrow = usesFAltPhoneBar();
+
+    document.querySelectorAll("input[data-phone-placeholder]").forEach((input) => {
+        input.dataset.widePlaceholder ??= input.placeholder;
+        input.placeholder = narrow ? input.dataset.phonePlaceholder : input.dataset.widePlaceholder;
+    });
+}
+
+// True when the size box lost focus because the user tapped a control or a
+// result (Search, Add Tyre, an SKU, another field). That tap does its own
+// thing, so the Done search below must not run or replace the results under
+// the finger. The iPhone keyboard's Done button is not a tap on the page.
+function keyboardClosedByTap(input) {
+    const { target, at } = fAltLastTap;
+    if (!target || input.contains(target) || Date.now() - at > 800) return false;
+
+    return !!target.closest?.("#resultsTable, button, a, input, select, textarea, label, [onclick]");
+}
+
+// iPhone number pads have no return key: Done only closes the keyboard, which
+// fires "change". Search then, unless Enter or the Search button already did.
+function handleSkuInputChange(event) {
+    const input = event.currentTarget;
+    if (!isFAltTouchScreen() || keyboardClosedByTap(input)) return;
+
+    window.setTimeout(() => {
+        const text = input.value.trim();
+        if (text && text !== fAltLastSearchText) checkPrices({ copyLink: false });
+    }, 150);
+}
+
+// Tyres Tinder: the same for the two size boxes, once both sizes are filled
+// in. Moving on to the other size box is not a search.
+function handleTinderSizeChange(event) {
+    if (!isFAltTouchScreen() || keyboardClosedByTap(event.currentTarget)) return;
+
+    window.setTimeout(() => {
+        if (FALT_SIZE_INPUT_IDS.includes(document.activeElement?.id)) return;
+
+        const front = document.getElementById("skuInput")?.value.trim() || "";
+        const rear = document.getElementById("skuInput2")?.value.trim() || "";
+        const key = `${front}|${rear}`;
+
+        if (/^\d{7}\|\d{7}$/.test(key) && key !== tinderLastSearchKey) Tinder();
+    }, 150);
+}
+
+// The filter applies as you type; its Done/Enter key just closes the keyboard.
+function handleFilterEnter(event) {
+    if (event.key === "Enter" && isFAltTouchScreen()) event.currentTarget.blur();
+}
+
+function onFAltMediaChange(query, listener) {
+    const list = window.matchMedia?.(query);
+    if (list?.addEventListener) list.addEventListener("change", listener);
+    else list?.addListener?.(listener);
+}
+
+function wireFAltPhoneLayout() {
+    document.addEventListener("pointerdown", (event) => {
+        fAltLastTap = { target: event.target, at: Date.now() };
+    }, true);
+
+    if (document.body.classList.contains("price-checker-page")) {
+        document.getElementById("skuInput")?.addEventListener("change", handleSkuInputChange);
+
+        placeFAltStatusChip();
+        onFAltMediaChange(FALT_BAR_QUERY, placeFAltStatusChip);
+    }
+
+    if (document.body.classList.contains("tinder-page")) {
+        FALT_SIZE_INPUT_IDS.forEach((id) => {
+            document.getElementById(id)?.addEventListener("change", handleTinderSizeChange);
+        });
+    }
+
+    placeFAltPlaceholders();
+    onFAltMediaChange(FALT_BAR_QUERY, placeFAltPlaceholders);
+
+    document.getElementById("searchBar")?.addEventListener("keydown", handleFilterEnter);
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", wireFAltPhoneLayout);
+} else {
+    wireFAltPhoneLayout();
 }
