@@ -3714,3 +3714,889 @@ body:not(.project-c-page) .table-container,
 .jobcard-dialog-actions button:last-child { color:#cbd5e1; background:#1e293b; border-color:#475569; }
 .jobcard-shared-toast { position:fixed; z-index:10000; left:50%; bottom:24px; transform:translateX(-50%); box-sizing:border-box; width:max-content; max-width:calc(100vw - 24px); padding:12px 16px; color:#d1fae5; background:#064e3b; border:1px solid #059669; border-radius:10px; font-size:.85rem; opacity:0; pointer-events:none; }
 .jobcard-shared-toast.is-visible { opacity:1; }
+
+/* ===================================================== */
+/* F ALT TAB + TYRES TINDER — PHONES AND TABLETS         */
+/* ===================================================== */
+
+/* Everything here is scoped to body.price-checker-page (index.html) and
+   body.tinder-page (Tyrestinder.html), plus .falt-toast, which only
+   F_alt_tab.js creates. Desktop keeps the table; 740px and narrower get
+   result cards, and F Alt Tab keeps its search card at the top of the
+   screen. FALT_BAR_QUERY in F_alt_tab.js must match the sticky search card
+   media query below. */
+
+/* The results table is at least 700px wide. Without an explicit column
+   the shell grows to fit it and the whole page is wider than a phone. */
+body.price-checker-page .app-shell,
+body.tinder-page .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+/* --falt-gutter is the side padding of the page (same values as the
+   shared compact rules). The sticky search card uses it to reach the
+   screen edges, so both are set from the one variable. */
+body.price-checker-page,
+body.tinder-page {
+    --falt-gutter: 16px;
+
+    padding-right: var(--falt-gutter);
+    padding-left: var(--falt-gutter);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+/* ---------- Result rows (were inline styles) ---------- */
+
+body.price-checker-page #resultsTable a.falt-model-link,
+body.price-checker-page #resultsTable a.falt-manual-link {
+    color: #93c5fd;
+}
+
+body.price-checker-page #resultsTable a.falt-model-link {
+    text-decoration: none;
+}
+
+body.price-checker-page .falt-stock {
+    opacity: 0.8;
+    font-size: 0.9em;
+}
+
+body.price-checker-page .falt-price-was {
+    text-decoration: line-through;
+    opacity: 0.55;
+}
+
+body.price-checker-page .falt-price-hidden {
+    font-weight: 700;
+}
+
+body.price-checker-page .falt-pending {
+    font-size: 0.75em;
+    opacity: 0.7;
+}
+
+body.price-checker-page #resultsTable td.falt-sku-copy {
+    cursor: pointer;
+    color: #60a5fa;
+}
+
+/* "SKU unavailable" and JINA-N/A: same colour, nothing to copy. */
+body.price-checker-page #resultsTable td.falt-sku-none {
+    color: #60a5fa;
+}
+
+body.price-checker-page #resultsTable td.falt-sku.is-pending {
+    opacity: 0.7;
+}
+
+/* Add Tyre waits for the SKU: make that visible. */
+body.price-checker-page #resultsTable button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+/* Available Only is a toggle. The tick badge sits on the corner, so the
+   button keeps its size and nothing around it moves. */
+body.price-checker-page #availableOnlyButton {
+    position: relative;
+}
+
+body.price-checker-page #availableOnlyButton[aria-pressed="true"] {
+    border-color: rgba(52, 211, 153, 0.6);
+    color: #d1fae5;
+    background: rgba(6, 78, 59, 0.9);
+}
+
+body.price-checker-page #availableOnlyButton[aria-pressed="true"]::after {
+    content: "\2713";
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    color: #052e1b;
+    background: #34d399;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 17px;
+    text-align: center;
+}
+
+/* ---------- Toasts ---------- */
+
+/* SKU and link copies (F_alt_tab.js). Taps go through to the row below. */
+.falt-toast {
+    position: fixed;
+    right: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    z-index: 9999;
+    padding: 8px 12px;
+    border-radius: 6px;
+    color: white;
+    background: #16a34a;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.falt-toast.is-visible {
+    opacity: 1;
+}
+
+body.price-checker-page .jobcard-shared-toast {
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---------- Job Card dialog ---------- */
+
+/* The shared page rules outrank the dialog's own sizes; restore them. */
+body.price-checker-page .jobcard-dialog h2 {
+    margin: 0 0 18px;
+    color: #e2e8f0;
+    font-size: 1.1rem;
+    line-height: 1.4;
+}
+
+body.price-checker-page .jobcard-dialog input[type="text"] {
+    min-height: 44px;
+    padding: 10px;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    color: #e2e8f0;
+    background: #080d13;
+    font-size: 16px;
+}
+
+body.price-checker-page .jobcard-dialog-actions button {
+    min-height: 44px;
+    padding: 10px;
+    border-color: #0e7490;
+    border-radius: 8px;
+    color: #e0f2fe;
+    background: #164e63;
+    font-size: 0.88rem;
+}
+
+body.price-checker-page .jobcard-dialog-actions button:last-child {
+    border-color: #475569;
+    color: #cbd5e1;
+    background: #1e293b;
+}
+
+/* ---------- Touch screens: no zoom on focus, 44px targets ---------- */
+
+@media (pointer: coarse) {
+    /* iOS Safari zooms into any field under 16px when it gets focus. */
+    body.price-checker-page input[type="text"],
+    body.price-checker-page .navbar select,
+    body.tinder-page input[type="text"],
+    body.tinder-page .navbar select {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    body.price-checker-page button,
+    body.tinder-page button {
+        min-height: 44px;
+    }
+
+    body.price-checker-page .navbar a,
+    body.tinder-page .navbar a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+
+    /* Taller hit area for links in the table (iPad), same look. */
+    body.price-checker-page #resultsTable a.falt-model-link,
+    body.tinder-page #resultsTable td a {
+        display: inline-block;
+        margin: -12px 0;
+        padding: 12px 0;
+    }
+
+    body.price-checker-page #resultsTable a.falt-manual-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+
+    body.tinder-page #resultsTable td[onclick] {
+        height: 44px;
+    }
+
+    /* Taps show on the controls themselves (see :active below). */
+    body.price-checker-page #resultsTable td.falt-sku-copy,
+    body.price-checker-page #resultsTable td.falt-action button,
+    body.tinder-page #resultsTable td.tinder-sku {
+        -webkit-tap-highlight-color: transparent;
+    }
+}
+
+@media (max-width: 900px) {
+    body.price-checker-page,
+    body.tinder-page {
+        --falt-gutter: 10px;
+    }
+}
+
+/* ---------- Between the cards and the iPad: tighter table ---------- */
+
+/* 741-767px: no 700px minimum, and headers and buttons do not wrap. */
+@media (min-width: 741px) and (max-width: 767px) {
+    body.price-checker-page #resultsTable,
+    body.tinder-page #resultsTable {
+        min-width: 0;
+    }
+
+    body.price-checker-page #resultsTable th,
+    body.price-checker-page #resultsTable td,
+    body.tinder-page #resultsTable th,
+    body.tinder-page #resultsTable td {
+        padding: 9px 8px;
+    }
+
+    body.price-checker-page #resultsTable th,
+    body.price-checker-page #resultsTable button,
+    body.price-checker-page #resultsTable .falt-stock,
+    body.tinder-page #resultsTable th {
+        white-space: nowrap;
+    }
+
+    body.price-checker-page #resultsTable td.falt-sku {
+        overflow-wrap: anywhere;
+    }
+}
+
+/* ---------- Sticky search card (phones, short touch screens) ---------- */
+
+@media (max-width: 740px), (max-height: 500px) and (pointer: coarse) {
+    body.price-checker-page,
+    body.tinder-page {
+        padding-top: 8px;
+    }
+
+    body.price-checker-page .navbar,
+    body.tinder-page .navbar {
+        margin-bottom: 8px;
+    }
+
+    /* The menu already names the page. Title and headings (and the Tinder
+       filter label; its placeholder says the same) stay for screen readers
+       only. */
+    body.price-checker-page .app-hero,
+    body.price-checker-page .section-heading,
+    body.tinder-page .app-hero,
+    body.tinder-page .section-heading,
+    body.tinder-page .search-filter-row label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        border: 0;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    /* Full-width bar that stays at the top while the results scroll. */
+    body.price-checker-page .controls-card {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "size   search"
+            "filter only";
+        gap: 8px;
+        margin: 0 calc(-1 * var(--falt-gutter));
+        padding: 8px var(--falt-gutter) 9px;
+        border-width: 0 0 1px;
+        border-color: var(--app-line-strong);
+        border-radius: 0;
+        background: #0b1119;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    body.price-checker-page .controls-card .button-group {
+        display: contents;
+    }
+
+    body.price-checker-page #skuInput,
+    body.price-checker-page #searchBar {
+        min-height: 44px;
+        padding: 9px 12px;
+        border-radius: 11px;
+        font-size: 16px;
+    }
+
+    body.price-checker-page #skuInput {
+        grid-area: size;
+    }
+
+    body.price-checker-page #searchBar {
+        grid-area: filter;
+    }
+
+    body.price-checker-page .controls-card button {
+        min-height: 44px;
+        padding: 4px 14px;
+        border-radius: 11px;
+        font-size: 0.9rem;
+        line-height: 1.15;
+        white-space: nowrap;
+    }
+
+    body.price-checker-page .controls-card .primary-action {
+        grid-area: search;
+    }
+
+    body.price-checker-page #availableOnlyButton {
+        grid-area: only;
+    }
+
+    /* Moved here from the results heading by F_alt_tab.js. Sits on its
+       own row, so the bar is no taller before the first search. */
+    body.price-checker-page .controls-card .status-chip {
+        grid-column: 1 / -1;
+        justify-self: start;
+        max-width: 100%;
+        min-height: 26px;
+        margin-top: -1px;
+        padding: 3px 10px;
+        font-size: 0.75rem;
+        white-space: normal;
+    }
+}
+
+/* Landscape phones: fewer rows, so most of the screen is results. The
+   width test keeps a portrait phone as it is if a keyboard shortens it. */
+@media (max-height: 500px) and (min-width: 560px) and (pointer: coarse) {
+    body.price-checker-page .controls-card {
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+        grid-template-areas: "size search filter only";
+    }
+
+    /* Tyres Tinder: sizes + Match Tyres, then filter + Available Only. */
+    body.tinder-page .controls-card {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+    }
+
+    body.tinder-page .controls-card .two-column-form {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        grid-auto-flow: column;
+        gap: 5px 8px;
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    body.tinder-page .controls-card .search-filter-row {
+        grid-template-columns: minmax(0, 1fr);
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    body.tinder-page .controls-card .button-group {
+        display: contents;
+    }
+
+    body.tinder-page .controls-card .button-group button {
+        min-width: 132px;
+        white-space: nowrap;
+    }
+
+    body.tinder-page .controls-card .primary-action {
+        grid-column: 2;
+        grid-row: 1;
+    }
+}
+
+/* ---------- Result cards (phones) ---------- */
+
+@media (max-width: 740px) {
+    body.price-checker-page .results-card,
+    body.tinder-page .results-card {
+        padding: 0;
+        border: 0;
+        background: none;
+        box-shadow: none;
+    }
+
+    body.price-checker-page .results-card .table-container,
+    body.tinder-page .results-card .table-container {
+        overflow: visible;
+        border: 0;
+        border-radius: 0;
+        background: none;
+    }
+
+    body.price-checker-page #resultsTable,
+    body.tinder-page #resultsTable {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        overflow: visible;
+        font-size: 1rem;
+    }
+
+    body.price-checker-page #resultsTable thead,
+    body.tinder-page #resultsTable thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+    }
+
+    /* Two columns of cards once there is room (landscape phones). */
+    body.price-checker-page #resultsTable tbody,
+    body.tinder-page #resultsTable tbody {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+        gap: 8px;
+    }
+
+    body.price-checker-page #resultsTable tbody:empty::before,
+    body.tinder-page #resultsTable tbody:empty::before,
+    body.price-checker-page #resultsTable tr[data-message],
+    body.tinder-page #resultsTable tbody tr:not(.tinder-row) {
+        grid-column: 1 / -1;
+    }
+
+    body.price-checker-page #resultsTable tbody:empty::before,
+    body.tinder-page #resultsTable tbody:empty::before {
+        display: block;
+        padding: 22px 16px;
+        border: 1px dashed var(--app-line-strong);
+        border-radius: 12px;
+        color: var(--app-muted);
+        font-size: 0.9rem;
+        line-height: 1.5;
+        text-align: center;
+    }
+
+    body.price-checker-page #resultsTable tbody:empty::before {
+        content: "Type a tyre size such as 2656517, then tap Search. Prices show here, cheapest first.";
+    }
+
+    body.tinder-page #resultsTable tbody:empty::before {
+        content: "Enter the front and rear sizes, then tap Match Tyres.";
+    }
+
+    /* One card per tyre:
+       MAKE [stock]                 $was
+       size Model                   $price
+       [copy SKU]               [Add Tyre]
+       The stock column never goes below the pill's longest word, so the
+       pill wraps inside itself rather than being cut off. */
+    body.price-checker-page #resultsTable tr.falt-row {
+        display: grid;
+        grid-template-columns: auto minmax(min-content, 1fr) auto;
+        grid-template-areas:
+            "make  stock price"
+            "model model price"
+            "foot  foot  foot";
+        align-items: center;
+        gap: 4px 8px;
+        padding: 12px 12px 10px 14px;
+        border: 1px solid var(--app-line-strong);
+        border-radius: 13px;
+    }
+
+    body.price-checker-page #resultsTable tr.falt-row td {
+        display: block;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+    }
+
+    body.price-checker-page #resultsTable tr.falt-row td.falt-make {
+        grid-area: make;
+        color: #cbd5e1;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    /* The link and the stock pill are placed in the card directly. */
+    body.price-checker-page #resultsTable tr.falt-row td.falt-model {
+        display: contents;
+    }
+
+    /* Only the words are a link: the space beside and below the model
+       name opens nothing, so a slightly missed SKU or Add Tyre tap does
+       not leave the page. */
+    body.price-checker-page #resultsTable a.falt-model-link {
+        grid-area: model;
+        justify-self: start;
+        align-self: start;
+        margin: 0;
+        padding: 0;
+        font-size: 1rem;
+        font-weight: 750;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+
+    /* The size repeats on every card; the pattern is what differs. */
+    body.price-checker-page #resultsTable .falt-size {
+        color: #94a3b8;
+        font-size: 0.8em;
+        font-weight: 600;
+    }
+
+    body.price-checker-page #resultsTable .falt-stock {
+        grid-area: stock;
+        justify-self: start;
+        max-width: 100%;
+        padding: 1px 7px;
+        border-radius: 9px;
+        color: #e2e8f0;
+        background: rgba(255, 255, 255, 0.1);
+        font-size: 0.74rem;
+        font-weight: 700;
+        line-height: 1.35;
+        opacity: 1;
+    }
+
+    body.price-checker-page #resultsTable .falt-paren {
+        display: none;
+    }
+
+    body.price-checker-page #resultsTable tr.falt-row td.falt-price {
+        grid-area: price;
+        align-self: start;
+        color: #f8fafc;
+        line-height: 1.2;
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    body.price-checker-page #resultsTable .falt-price-now {
+        display: block;
+        font-size: 1.2rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+    }
+
+    body.price-checker-page #resultsTable .falt-price-was {
+        font-size: 0.8rem;
+    }
+
+    body.price-checker-page #resultsTable .falt-pending {
+        margin-top: 2px;
+        color: var(--app-warning);
+        font-size: 0.72rem;
+        font-weight: 700;
+        opacity: 1;
+    }
+
+    /* Bottom row: SKU on the left, Add Tyre on the right, across the whole
+       card. The SKU chip stops short of the button and wraps a long SKU. */
+    body.price-checker-page #resultsTable tr.falt-row td.falt-sku {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        grid-area: foot;
+        justify-self: start;
+        min-width: 44px;
+        max-width: calc(100% - 120px);
+        min-height: 44px;
+        margin-top: 6px;
+        padding: 4px 13px;
+        border: 1px solid rgba(96, 165, 250, 0.45);
+        border-radius: 11px;
+        background: rgba(2, 6, 23, 0.4);
+        font-size: 0.92rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    body.price-checker-page #resultsTable tr.falt-row td.falt-sku-copy:active {
+        background: rgba(96, 165, 250, 0.22);
+    }
+
+    body.price-checker-page #resultsTable tr.falt-row td.falt-sku-copy::before,
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-sku:not(.tinder-sku-none)::before {
+        content: "";
+        flex: none;
+        width: 15px;
+        height: 15px;
+        background: currentColor;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='12' height='12' rx='2'/%3E%3Cpath d='M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1'/%3E%3C/svg%3E") center / contain no-repeat;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='12' height='12' rx='2'/%3E%3Cpath d='M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+
+    /* Waiting for the SKU, or there is none: dashed, nothing to copy. */
+    body.price-checker-page #resultsTable tr.falt-row td.falt-sku.is-pending,
+    body.price-checker-page #resultsTable tr.falt-row td.falt-sku-none {
+        border-style: dashed;
+        border-color: var(--app-line-strong);
+        color: var(--app-muted);
+        background: none;
+        font-weight: 600;
+        opacity: 1;
+    }
+
+    body.price-checker-page #resultsTable tr.falt-row td.falt-action {
+        grid-area: foot;
+        justify-self: end;
+        margin-top: 6px;
+    }
+
+    body.price-checker-page #resultsTable td.falt-action button {
+        min-width: 112px;
+        min-height: 44px;
+        padding: 4px 16px;
+        border-color: rgba(56, 189, 248, 0.45);
+        border-radius: 11px;
+        color: #e0f2fe;
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.92), rgba(14, 165, 233, 0.72));
+        font-size: 0.92rem;
+        white-space: nowrap;
+    }
+
+    body.price-checker-page #resultsTable td.falt-action button:active:not(:disabled) {
+        background: #0369a1;
+    }
+
+    body.price-checker-page #resultsTable td.falt-action button:disabled {
+        border-color: var(--app-line-strong);
+        color: #cbd5e1;
+        background: rgba(30, 41, 59, 0.72);
+    }
+
+    /* Searching…, invalid input, no results, load failed. */
+    body.price-checker-page #resultsTable tr[data-message] {
+        display: block;
+        padding: 14px;
+        border: 1px solid var(--app-line-strong);
+        border-radius: 13px;
+        background: rgba(15, 23, 42, 0.6);
+    }
+
+    body.price-checker-page #resultsTable tr[data-message="error"] {
+        border-color: rgba(251, 113, 133, 0.45);
+    }
+
+    body.price-checker-page #resultsTable tr[data-message] td {
+        display: block;
+        padding: 0;
+        border: 0;
+        line-height: 1.5;
+    }
+
+    body.price-checker-page #resultsTable a.falt-manual-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        margin-top: 8px;
+        padding: 0 14px;
+        border: 1px solid rgba(56, 189, 248, 0.45);
+        border-radius: 11px;
+        background: rgba(14, 165, 233, 0.12);
+        text-decoration: none;
+    }
+
+    .falt-toast {
+        right: auto;
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        left: 50%;
+        width: max-content;
+        max-width: calc(100vw - 32px);
+        padding: 11px 16px;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 650;
+        transform: translateX(-50%);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+
+    /* ---------- Tyres Tinder ---------- */
+
+    body.tinder-page .two-column-form {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        grid-auto-flow: column;
+        gap: 5px 8px;
+    }
+
+    body.tinder-page #skuInput,
+    body.tinder-page #skuInput2,
+    body.tinder-page #searchBar {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    body.tinder-page .button-group button {
+        flex: 1 1 0;
+        min-height: 44px;
+        font-size: 0.9rem;
+    }
+
+    /* One card per front/rear pair, brand on every card. */
+    body.tinder-page #resultsTable tr.tinder-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-areas:
+            "brand brand"
+            "front rear"
+            "fsku  rsku";
+        gap: 6px 8px;
+        padding: 10px;
+        border: 1px solid var(--app-line-strong);
+        border-radius: 13px;
+        background: rgba(15, 23, 42, 0.5);
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row::before {
+        content: attr(data-brand);
+        grid-area: brand;
+        color: var(--app-accent);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td {
+        display: block;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-brand {
+        display: none;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-front,
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-rear {
+        padding: 8px 9px;
+        border-radius: 9px;
+        font-size: 0.86rem;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+
+    /* As on F Alt Tab cards, only the words are a link. */
+    body.tinder-page #resultsTable tr.tinder-row td a {
+        display: inline;
+        margin: 0;
+        padding: 0;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-front {
+        grid-area: front;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-rear {
+        grid-area: rear;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-front::before,
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-rear::before {
+        display: block;
+        margin-bottom: 2px;
+        color: var(--app-muted);
+        font-size: 0.64rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-front::before {
+        content: "Front";
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-rear::before {
+        content: "Rear";
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-sku {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 44px;
+        padding: 4px 11px;
+        border: 1px solid rgba(96, 165, 250, 0.45);
+        border-radius: 11px;
+        background: rgba(2, 6, 23, 0.4);
+        font-size: 0.9rem;
+        font-weight: 700;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-sku:not(.tinder-sku-none):active {
+        background: rgba(96, 165, 250, 0.22);
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-sku-none {
+        border-style: dashed;
+        border-color: var(--app-line-strong);
+        color: var(--app-muted);
+        background: none;
+        font-weight: 600;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-front-sku {
+        grid-area: fsku;
+    }
+
+    body.tinder-page #resultsTable tr.tinder-row td.tinder-rear-sku {
+        grid-area: rsku;
+    }
+
+    body.tinder-page #resultsTable tbody tr:not(.tinder-row) {
+        display: block;
+        padding: 14px;
+        border: 1px solid var(--app-line-strong);
+        border-radius: 13px;
+    }
+
+    body.tinder-page #resultsTable tbody tr:not(.tinder-row) td {
+        display: block;
+        padding: 0;
+        border: 0;
+    }
+}
+
+/* Small phones (320-360px): a little tighter so more cards fit. */
+@media (max-width: 360px) {
+    body.price-checker-page .controls-card button {
+        padding: 4px 11px;
+    }
+
+    body.price-checker-page #resultsTable tr.falt-row {
+        gap: 3px 6px;
+        padding: 10px 10px 9px 11px;
+    }
+
+    body.price-checker-page #resultsTable .falt-price-now {
+        font-size: 1.12rem;
+    }
+
+    body.price-checker-page #resultsTable tr.falt-row td.falt-sku {
+        max-width: calc(100% - 110px);
+        padding: 4px 10px;
+    }
+
+    body.price-checker-page #resultsTable td.falt-action button {
+        min-width: 104px;
+        padding: 4px 12px;
+    }
+}

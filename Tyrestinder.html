@@ -45,17 +45,20 @@
 
             <div class="form-row two-column-form">
                 <label for="skuInput">Front Size</label>
-                <input type="text" id="skuInput" placeholder="Example: 2353519"
+                <input type="text" id="skuInput" placeholder="Example: 2353519" data-phone-placeholder="e.g. 2353519"
+                    inputmode="numeric" pattern="[0-9]*" enterkeyhint="search" autocomplete="off"
                     onkeydown="if(event.key==='Enter'){event.preventDefault(); Tinder();}">
 
                 <label for="skuInput2">Rear Size</label>
-                <input type="text" id="skuInput2" placeholder="Example: 2653519"
+                <input type="text" id="skuInput2" placeholder="Example: 2653519" data-phone-placeholder="e.g. 2653519"
+                    inputmode="numeric" pattern="[0-9]*" enterkeyhint="search" autocomplete="off"
                     onkeydown="if(event.key==='Enter'){event.preventDefault(); Tinder();}">
             </div>
 
             <div class="form-row search-filter-row">
                 <label for="searchBar">Filter results</label>
                 <input type="text" id="searchBar" placeholder="Brand, pattern or SKU..."
+                    enterkeyhint="done" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
                     oninput="filterTable()">
             </div>
 
