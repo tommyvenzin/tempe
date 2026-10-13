@@ -34,11 +34,19 @@
             const controller = new AbortController();
             const timer = env.setTimeout(() => controller.abort(), 8000);
             try {
-                const response = await env.fetch(config.baseUrl + "/api/mobile/v1" + path, {
-                    method, signal: controller.signal, mode: "cors", credentials: "omit", cache: "no-store", redirect: "error",
-                    headers: { Authorization: "Bearer " + config.token, ...(body ? { "Content-Type": "application/json" } : {}) },
-                    ...(body ? { body: JSON.stringify(body) } : {})
-                });
+                let response;
+                try {
+                    response = await env.fetch(config.baseUrl + "/api/mobile/v1" + path, {
+                        method, signal: controller.signal, mode: "cors", credentials: "omit", cache: "no-store", redirect: "error",
+                        headers: { Authorization: "Bearer " + config.token, ...(body ? { "Content-Type": "application/json" } : {}) },
+                        ...(body ? { body: JSON.stringify(body) } : {})
+                    });
+                } catch (error) {
+                    // Browsers only say "Load failed"; name the PC. Still a TypeError, so callers can tell it was the connection.
+                    if (error && error.name === "AbortError") throw new Error("The PC helper did not answer within 8 seconds.");
+                    if (error instanceof TypeError) throw new TypeError("Could not reach the PC helper at " + new URL(config.baseUrl).host + ".");
+                    throw error;
+                }
                 if (response.status === 404 && path.startsWith("/jobs/")) return null;
                 if (response.status === 401) throw new Error("Pair this phone with the PC helper again.");
                 if (!response.ok) {

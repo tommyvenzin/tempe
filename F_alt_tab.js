@@ -135,11 +135,11 @@ function usesPcReceiver() {
     return !!window.TempeCostarClient?.isPaired();
 }
 
-// Where the phone is paired to, for error messages ("10.145.20.103:8790").
-function pcReceiverHost() {
+// The paired PC helper's address, e.g. "https://10.145.20.103:8790".
+function pcReceiverBaseUrl() {
     try {
         const pairing = JSON.parse(window.localStorage.getItem("tempe:costar-pairing:v1") || "null");
-        return pairing?.baseUrl ? new URL(pairing.baseUrl).host : "";
+        return pairing?.baseUrl ? new URL(pairing.baseUrl).origin : "";
     } catch {
         return "";
     }
@@ -152,7 +152,7 @@ async function fetchViaPcReceiver(targetUrl) {
     try {
         return await window.TempeCostarClient.fetchTyres(targetUrl);
     } catch (error) {
-        if (!(error instanceof TypeError)) throw describePcError(error);
+        if (!(error instanceof TypeError)) throw await describePcError(error);
     }
 
     await new Promise((resolve) => window.setTimeout(resolve, 600));
@@ -160,25 +160,75 @@ async function fetchViaPcReceiver(targetUrl) {
     try {
         return await window.TempeCostarClient.fetchTyres(targetUrl);
     } catch (error) {
-        throw describePcError(error);
+        throw await describePcError(error);
     }
 }
 
-// Says why the PC helper could not be used, in words staff can act on.
-function describePcError(error) {
-    const host = pcReceiverHost();
+let fAltPcDiagnosis = null;
+
+// Why this page could not reach the PC helper. Two requests that need no
+// pairing key tell the cases apart:
+// - a plain request, which the helper answers with 401 (pairing key
+//   missing); this page can read that answer only if the helper accepts
+//   this website;
+// - the same request in "no-cors" mode, which completes whenever the
+//   browser reaches the PC at all, whatever the helper answers.
+// Remembered for 15 seconds, so a failed search checks once.
+function diagnosePcConnection(baseUrl) {
+    if (fAltPcDiagnosis && Date.now() - fAltPcDiagnosis.at < 15000) return fAltPcDiagnosis.result;
+
+    const reaches = async (mode) => {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 5000);
+        try {
+            await fetch(`${baseUrl}/api/mobile/v1/health`, {
+                mode, cache: "no-store", credentials: "omit", signal: controller.signal,
+            });
+            return true;
+        } catch {
+            return false;
+        } finally {
+            window.clearTimeout(timer);
+        }
+    };
+
+    const result = (async () => {
+        if (await reaches("cors")) return "key-check";
+        if (await reaches("no-cors")) return "website-refused";
+        return "unreachable";
+    })();
+
+    fAltPcDiagnosis = { at: Date.now(), result };
+    return result;
+}
+
+// Says why the PC helper could not be used, in words staff can act on. When
+// this page is not the PC's own copy, the error also carries a link to that
+// copy (error.pcCopyUrl), which talks to the helper from its own address.
+async function describePcError(error) {
+    const baseUrl = pcReceiverBaseUrl();
+    const host = baseUrl ? new URL(baseUrl).host : "";
     const pc = host ? `the PC helper at ${host}` : "the PC helper";
 
-    if (error?.name === "AbortError") {
-        return new Error(`${pc[0].toUpperCase()}${pc.slice(1)} did not answer within 8 seconds.`);
+    if (!(error instanceof TypeError)) {
+        const message = error?.message || "request failed";
+        return new Error(/PC helper/.test(message) ? message : `PC helper: ${message}`);
     }
 
-    if (error instanceof TypeError) {
-        return new Error(`Could not connect to ${pc}. Check it is receiving, this phone is on the shop Wi-Fi and the PC certificate is still trusted.`);
+    if (!baseUrl || window.location.origin === baseUrl) {
+        return new Error(`Could not connect to ${pc}. Check it is open and receiving, and that this phone is on the shop Wi-Fi.`);
     }
 
-    const message = error?.message || "request failed";
-    return new Error(/PC helper/.test(message) ? message : `PC helper: ${message}`);
+    const site = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, "")}`;
+    const reasons = {
+        "unreachable": `This website cannot reach ${pc}. If the PC's own copy (link below) works, Safari or the network is blocking this website from the PC.`,
+        "website-refused": `${pc[0].toUpperCase()}${pc.slice(1)} does not accept ${window.location.host}. On the PC, enter ${site} under "GitHub Pages website" and press Save website.`,
+        "key-check": `${pc[0].toUpperCase()}${pc.slice(1)} answers this website but refused its paired request. Scan the GitHub Job Card QR on the PC again, or use the PC's own copy (link below).`,
+    };
+
+    const described = new Error(reasons[await diagnosePcConnection(baseUrl)]);
+    described.pcCopyUrl = `${baseUrl}/index.html`;
+    return described;
 }
 
 async function fetchTextWithFallback(targetUrl) {
@@ -901,6 +951,7 @@ async function searchTyreSize(size, onUpdate = () => {}) {
     let savedAt = base.length ? saved.t : 0;
     let loading = !base.length || savedAge >= LISTING_FRESH_MS;
     let error = "";
+    let errorLink = "";
     const details = new Map();
 
     const snapshot = () => {
@@ -917,6 +968,7 @@ async function searchTyreSize(size, onUpdate = () => {}) {
             products,
             manualUrl,
             error: error || (!loading && !products.length ? "No products parsed" : ""),
+            errorLink,
             loading,
             pending: products.filter((item) => item.detailPending).length,
             savedAt,
@@ -970,6 +1022,7 @@ async function searchTyreSize(size, onUpdate = () => {}) {
         } catch (err) {
             console.error(`Failed to fetch tyre size ${size}:`, err);
             error = err.message || "Failed to fetch";
+            errorLink = err.pcCopyUrl || "";
         }
 
         loading = false;
@@ -1045,11 +1098,12 @@ async function fetchTyreProductsBySize(size) {
     };
 }
 
-function renderManualFallbackRow(query, manualUrl, message = "Could not load results automatically", reason = "") {
+function renderManualFallbackRow(query, manualUrl, message = "Could not load results automatically", reason = "", pcCopyUrl = "") {
     return `<tr data-message="error">
         <td colspan="5">
             ${escapeHtml(message)} for <strong>${escapeHtml(query)}</strong>.<br>
             ${reason ? `<span class="falt-error-reason">${escapeHtml(reason)}</span><br>` : ""}
+            ${pcCopyUrl ? `PC copy: <a class="falt-manual-link" href="${escapeHtml(pcCopyUrl)}">Open F Alt Tab on the PC</a><br>` : ""}
             Manual link: <a class="falt-manual-link" href="${manualUrl}" target="_blank">Open Tempe Tyres search</a>
         </td>
     </tr>`;
@@ -1359,6 +1413,7 @@ async function checkPrices({ copyLink = true } = {}) {
                 products: [],
                 manualUrl: buildTempeTyreSearchUrl(query),
                 error: "",
+                errorLink: "",
                 loading: !invalid,
                 pending: 0,
                 savedAt: 0,
@@ -1452,7 +1507,8 @@ function renderFAltResults() {
                 query,
                 section.manualUrl,
                 section.error === "No products parsed" ? "Tempe listed no tyres" : "Could not load results",
-                describeFAltLoadError(section.error)
+                describeFAltLoadError(section.error),
+                section.errorLink
             )]);
         }
     }
