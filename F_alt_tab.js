@@ -620,169 +620,394 @@ function extractProductAnalytics(html) {
     };
 }
 
-async function mapWithSmallConcurrency(items, concurrency, worker) {
-    const safeConcurrency = Math.max(
-        1,
-        Math.min(concurrency, items.length || 1)
-    );
+/* =========================
+   Speed layer
+   Saved results show instantly and are then refreshed, identical requests
+   are shared, and sizes start loading while they are still being typed.
+   ========================= */
 
-    const results = new Array(items.length);
-    let index = 0;
+const FALT_CACHE_KEY = "tempe:falt-cache:v1";
+const LISTING_FRESH_MS = 90 * 1000;              // reused as-is, no request
+const LISTING_KEEP_MS = 12 * 60 * 60 * 1000;     // shown instantly, then refreshed
+const DETAIL_FRESH_MS = 10 * 60 * 1000;          // Bridgestone hidden price reused as-is
+const DETAIL_KEEP_MS = 30 * 24 * 60 * 60 * 1000; // a product link's SKU never changes
+const MAX_SAVED_LISTINGS = 30;
+const MAX_SAVED_DETAILS = 600;
+const DETAIL_CONCURRENCY = 8;                    // product pages in flight across all searches
 
-    async function runWorker() {
-        while (index < items.length) {
-            const current = index++;
-            results[current] = await worker(items[current], current);
+const MISSING_SKUS = new Set(["", "No SKU", "No SKU available", "JINA-N/A"]);
+
+let fAltCache = null;
+let fAltCacheSaveTimer = 0;
+const fAltListingLoads = new Map();
+const fAltDetailLoads = new Map();
+const fAltDetailQueue = [];
+let fAltDetailActive = 0;
+
+function getFAltCache() {
+    if (fAltCache) return fAltCache;
+
+    fAltCache = { listings: {}, details: {} };
+
+    try {
+        const saved = JSON.parse(window.localStorage.getItem(FALT_CACHE_KEY) || "null");
+        if (saved && typeof saved === "object") {
+            fAltCache.listings = saved.listings || {};
+            fAltCache.details = saved.details || {};
         }
-    }
+    } catch {}
 
-    await Promise.all(
-        Array.from({ length: safeConcurrency }, () => runWorker())
-    );
-
-    return results;
+    return fAltCache;
 }
 
-async function enrichProductDetails(products) {
-    const jobs = products
-        .map((item, index) => ({ item, index }))
-        .filter(({ item }) => {
-            const make = String(item?.make || item?.brand || "")
-                .trim()
-                .toLowerCase();
+function keepNewestEntries(entries, keepMs, max) {
+    const now = Date.now();
 
-            const needsBridgestonePrice = make === "bridgestone";
-            const needsSku =
-                !item?.sku ||
-                item.sku === "No SKU" ||
-                item.sku === "No SKU available" ||
-                item.sku === "JINA-N/A";
+    return Object.fromEntries(
+        Object.entries(entries || {})
+            .filter(([, entry]) => entry && now - entry.t < keepMs)
+            .sort((a, b) => b[1].t - a[1].t)
+            .slice(0, max)
+    );
+}
 
-            return (
-                item?.link &&
-                item.link !== "#" &&
-                (needsBridgestonePrice || needsSku)
-            );
-        });
+function mergeNewestEntries(stored, current) {
+    const merged = { ...(stored || {}) };
 
-    if (!jobs.length) {
+    for (const [key, entry] of Object.entries(current || {})) {
+        if (!(merged[key]?.t >= entry.t)) merged[key] = entry;
+    }
+
+    return merged;
+}
+
+function saveFAltCacheSoon() {
+    if (fAltCacheSaveTimer) return;
+    fAltCacheSaveTimer = window.setTimeout(saveFAltCacheNow, 400);
+}
+
+function saveFAltCacheNow() {
+    window.clearTimeout(fAltCacheSaveTimer);
+    fAltCacheSaveTimer = 0;
+    if (!fAltCache) return;
+
+    // Other open pages (Tinder, a second F Alt Tab) save here too: keep the
+    // newest copy of every entry instead of overwriting theirs.
+    try {
+        const stored = JSON.parse(window.localStorage.getItem(FALT_CACHE_KEY) || "null");
+        if (stored && typeof stored === "object") {
+            fAltCache.listings = mergeNewestEntries(stored.listings, fAltCache.listings);
+            fAltCache.details = mergeNewestEntries(stored.details, fAltCache.details);
+        }
+    } catch {}
+
+    fAltCache.listings = keepNewestEntries(fAltCache.listings, LISTING_KEEP_MS, MAX_SAVED_LISTINGS);
+    fAltCache.details = keepNewestEntries(fAltCache.details, DETAIL_KEEP_MS, MAX_SAVED_DETAILS);
+
+    try {
+        window.localStorage.setItem(FALT_CACHE_KEY, JSON.stringify(fAltCache));
+    } catch {
+        // Storage is shared with the other pages: if it is full, keep only
+        // the newest few sizes rather than failing every save.
+        try {
+            fAltCache.listings = keepNewestEntries(fAltCache.listings, LISTING_KEEP_MS, 8);
+            window.localStorage.setItem(FALT_CACHE_KEY, JSON.stringify(fAltCache));
+        } catch {}
+    }
+}
+
+function compactProduct(item) {
+    const { make, model, pattern, price, stock, sku, link, source } = item;
+    return { make, model, pattern, price, stock, sku, link, source };
+}
+
+function reviveProduct(item) {
+    return { ...item, brand: item.make };
+}
+
+function needsSkuLookup(item) {
+    return MISSING_SKUS.has(String(item?.sku || ""));
+}
+
+function isBridgestone(item) {
+    return String(item?.make || item?.brand || "").trim().toLowerCase() === "bridgestone";
+}
+
+function wantsProductDetail(item) {
+    return !!item?.link && item.link !== "#" && (isBridgestone(item) || needsSkuLookup(item));
+}
+
+function savedDetailIsEnough(item, detail) {
+    if (!detail) return false;
+    if (Date.now() - detail.t < DETAIL_FRESH_MS) return true;
+
+    // Only Bridgestone prices go stale; a found SKU is good for as long as it is kept.
+    return !isBridgestone(item) && !!detail.sku;
+}
+
+function applyProductDetail(item, detail, { final = false } = {}) {
+    const updated = { ...item };
+
+    // Recover SKU from ecomm_prodid whenever the listing page did not expose
+    // one. If analytics does not contain it, keep the URL-derived SKU as the
+    // next fallback.
+    if (needsSkuLookup(item)) {
+        updated.sku =
+            detail?.sku ||
+            extractSkuFromProductUrl(item.link) ||
+            (final ? "SKU unavailable" : item.sku);
+    }
+
+    // For Bridgestone, always preserve the public/listing price and override
+    // the working price with ecomm_totalvalue when found.
+    if (isBridgestone(item) && Number.isFinite(detail?.hiddenPrice)) {
+        updated.originalPrice = Number(item.price || 0);
+        updated.price = detail.hiddenPrice;
+        updated.bridgestoneHiddenPrice = true;
+    }
+
+    return updated;
+}
+
+function runDetailLimited(task) {
+    return new Promise((resolve, reject) => {
+        fAltDetailQueue.push({ task, resolve, reject });
+        pumpDetailQueue();
+    });
+}
+
+function pumpDetailQueue() {
+    while (fAltDetailActive < DETAIL_CONCURRENCY && fAltDetailQueue.length) {
+        const { task, resolve, reject } = fAltDetailQueue.shift();
+        fAltDetailActive++;
+
+        Promise.resolve()
+            .then(task)
+            .then(resolve, reject)
+            .finally(() => {
+                fAltDetailActive--;
+                pumpDetailQueue();
+            });
+    }
+}
+
+function loadListing(size) {
+    if (fAltListingLoads.has(size)) return fAltListingLoads.get(size);
+
+    const load = (async () => {
+        const result = await fetchTextWithFallback(buildTempeTyreSearchUrl(size));
+        const htmlProducts = parseTempetyresHtmlProducts(result.text);
+        const products = htmlProducts.length
+            ? htmlProducts
+            : parseJinaMarkdownProducts(result.text);
+
+        if (products.length) {
+            getFAltCache().listings[size] = {
+                t: Date.now(),
+                products: products.map(compactProduct),
+            };
+            saveFAltCacheSoon();
+        }
+
         return products;
-    }
+    })().finally(() => fAltListingLoads.delete(size));
 
-    await mapWithSmallConcurrency(
-        jobs,
-        4,
-        async ({ item, index }) => {
-            try {
-                const productHtml = await fetchHtmlWithFallback(item.link);
-                const analytics = extractProductAnalytics(productHtml);
-
-                const make = String(item?.make || item?.brand || "")
-                    .trim()
-                    .toLowerCase();
-
-                const updated = { ...item };
-
-                // Recover SKU from ecomm_prodid whenever the listing page did
-                // not expose one. If analytics does not contain it, keep the
-                // URL-derived SKU as the next fallback.
-                if (
-                    !updated.sku ||
-                    updated.sku === "No SKU" ||
-                    updated.sku === "No SKU available" ||
-                    updated.sku === "JINA-N/A"
-                ) {
-                    const urlSku = extractSkuFromProductUrl(updated.link);
-                    updated.sku =
-                        analytics.sku ||
-                        urlSku ||
-                        "SKU unavailable";
-                }
-
-                // For Bridgestone, always preserve the public/listing price and
-                // override the working price with ecomm_totalvalue when found.
-                if (
-                    make === "bridgestone" &&
-                    Number.isFinite(analytics.hiddenPrice)
-                ) {
-                    updated.originalPrice = Number(item.price || 0);
-                    updated.price = analytics.hiddenPrice;
-                    updated.bridgestoneHiddenPrice = true;
-                }
-
-                products[index] = updated;
-            } catch (error) {
-                console.warn(
-                    `Could not enrich product details for ${item.sku || item.link}:`,
-                    error
-                );
-
-                // Even if the product-page request fails, use a URL-derived SKU
-                // rather than leaving "No SKU" on screen when possible.
-                if (
-                    !item.sku ||
-                    item.sku === "No SKU" ||
-                    item.sku === "No SKU available" ||
-                    item.sku === "JINA-N/A"
-                ) {
-                    const urlSku = extractSkuFromProductUrl(item.link);
-                    if (urlSku) {
-                        products[index] = {
-                            ...item,
-                            sku: urlSku,
-                        };
-                    }
-                }
-            }
-        }
-    );
-
-    return products;
+    fAltListingLoads.set(size, load);
+    return load;
 }
 
-async function fetchTyreProductsBySize(size) {
-    if (!size || ![5, 7].includes(size.length)) {
-        return {
+function loadProductDetail(link) {
+    if (fAltDetailLoads.has(link)) return fAltDetailLoads.get(link);
+
+    const load = runDetailLimited(async () => {
+        const analytics = extractProductAnalytics(await fetchHtmlWithFallback(link));
+        const detail = {
+            t: Date.now(),
+            sku: analytics.sku,
+            hiddenPrice: analytics.hiddenPrice,
+        };
+
+        getFAltCache().details[link] = detail;
+        saveFAltCacheSoon();
+        return detail;
+    }).finally(() => fAltDetailLoads.delete(link));
+
+    fAltDetailLoads.set(link, load);
+    return load;
+}
+
+// Loads one size and reports every improvement through onUpdate: saved
+// results first (if any), then the live listing, then each product page as it
+// lands. Product pages for saved results are requested alongside the live
+// listing instead of after it. Never rejects; resolves with the final state.
+async function searchTyreSize(size, onUpdate = () => {}) {
+    const manualUrl = buildTempeTyreSearchUrl(size);
+
+    if (!manualUrl) {
+        const result = {
             products: [],
             manualUrl: "",
             error: "Invalid size",
+            loading: false,
+            pending: 0,
+            savedAt: 0,
         };
+        onUpdate(result);
+        return result;
     }
 
-    const targetUrl = buildTempeTyreSearchUrl(size);
+    const saved = getFAltCache().listings[size];
+    const savedAge = saved ? Date.now() - saved.t : Infinity;
 
-    try {
-        const result = await fetchTextWithFallback(targetUrl);
-        const products = result.isJina
-            ? parseJinaMarkdownProducts(result.text)
-            : parseTempetyresHtmlProducts(result.text);
+    let base = savedAge < LISTING_KEEP_MS && Array.isArray(saved.products)
+        ? saved.products.map(reviveProduct)
+        : [];
+    let savedAt = base.length ? saved.t : 0;
+    let loading = !base.length || savedAge >= LISTING_FRESH_MS;
+    let error = "";
+    const details = new Map();
 
-        const finalProducts = products.length
-            ? products
-            : parseJinaMarkdownProducts(result.text);
+    const snapshot = () => {
+        const products = base.map((item) => {
+            if (!wantsProductDetail(item)) return item;
 
-        // Bridgestone public/listing prices can be hidden (0) or intentionally
-        // different from the product analytics value. For Bridgestone only,
-        // load each product page and override with ecomm_totalvalue.
-        await enrichProductDetails(finalProducts);
+            const state = details.get(item.link);
+            const updated = applyProductDetail(item, state?.detail, { final: state?.final });
+            updated.detailPending = !!state?.pending;
+            return updated;
+        });
 
         return {
-            products: finalProducts,
-            manualUrl: targetUrl,
-            error: finalProducts.length ? "" : "No products parsed",
+            products,
+            manualUrl,
+            error: error || (!loading && !products.length ? "No products parsed" : ""),
+            loading,
+            pending: products.filter((item) => item.detailPending).length,
+            savedAt,
         };
-    } catch (err) {
-        console.error(`Failed to fetch tyre size ${size}:`, err);
-        return {
-            products: [],
-            manualUrl: targetUrl,
-            error: err.message || "Failed to fetch",
+    };
+
+    const emit = () => {
+        const result = snapshot();
+        onUpdate(result);
+        return result;
+    };
+
+    const resolveDetails = () => Promise.all(base.filter(wantsProductDetail).map((item) => {
+        if (details.has(item.link)) return details.get(item.link).done;
+
+        const cached = getFAltCache().details[item.link];
+        const usable = cached && Date.now() - cached.t < DETAIL_KEEP_MS ? cached : null;
+        const state = {
+            detail: usable,
+            final: !!usable,
+            pending: !savedDetailIsEnough(item, usable),
+            done: null,
         };
+        details.set(item.link, state);
+
+        if (!state.pending) return null;
+
+        state.done = loadProductDetail(item.link)
+            .then((detail) => {
+                state.detail = detail;
+                state.final = true;
+            })
+            .catch((err) => {
+                console.warn(`Could not enrich product details for ${item.sku || item.link}:`, err);
+            })
+            .finally(() => {
+                state.pending = false;
+                emit();
+            });
+
+        return state.done;
+    }));
+
+    let detailWork = resolveDetails();
+    emit();
+
+    if (loading) {
+        try {
+            base = await loadListing(size);
+            savedAt = 0;
+        } catch (err) {
+            console.error(`Failed to fetch tyre size ${size}:`, err);
+            error = err.message || "Failed to fetch";
+        }
+
+        loading = false;
+        detailWork = resolveDetails();
+        emit();
     }
+
+    await detailWork;
+    return snapshot();
+}
+
+// Starts a size in the background so pressing Enter finds it ready.
+function prefetchTyreSize(size) {
+    if (!buildTempeTyreSearchUrl(size)) return;
+
+    const saved = getFAltCache().listings[size];
+    if (saved && Date.now() - saved.t < LISTING_FRESH_MS) return;
+
+    searchTyreSize(size).catch(() => {});
+}
+
+const fAltPrefetchTimers = new Map();
+
+function handleSizeTyping(event) {
+    const input = event.currentTarget || event.target;
+    const shortSizesAllowed = !document.body.classList.contains("tinder-page");
+
+    window.clearTimeout(fAltPrefetchTimers.get(input));
+
+    const sizes = String(input.value || "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((size) =>
+            /^\d+$/.test(size) &&
+            (size.length === 7 || (size.length === 5 && shortSizesAllowed))
+        );
+
+    if (!sizes.length) return;
+
+    // A 5-digit width+rim search is also the start of a 7-digit size, so
+    // only fetch it once typing has paused.
+    const delay = sizes.some((size) => size.length === 5) ? 700 : 120;
+
+    fAltPrefetchTimers.set(input, window.setTimeout(() => {
+        sizes.forEach(prefetchTyreSize);
+    }, delay));
+}
+
+function wireTyreSizePrefetch() {
+    ["skuInput", "skuInput2"].forEach((id) => {
+        document.getElementById(id)?.addEventListener("input", handleSizeTyping);
+    });
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", wireTyreSizePrefetch);
+} else {
+    wireTyreSizePrefetch();
+}
+
+window.addEventListener("pagehide", saveFAltCacheNow);
+
+async function fetchTyreProductsBySize(size) {
+    const result = await searchTyreSize(size);
+
+    return {
+        products: result.products,
+        manualUrl: result.manualUrl,
+        error: result.products.length ? "" : result.error,
+    };
 }
 
 function renderManualFallbackRow(query, manualUrl, message = "Could not load results automatically") {
-    return `<tr>
+    return `<tr data-message="error">
         <td colspan="5">
             ${escapeHtml(message)} for <strong>${escapeHtml(query)}</strong>.<br>
             Manual link: <a href="${manualUrl}" target="_blank" style="color:#93c5fd;">Open Tempe Tyres search</a>
@@ -801,9 +1026,11 @@ function renderFAltProductRow(item) {
 
     const safeStockAttr = escapeHtml(stock);
     const safeSku = escapeJsSingle(sku);
-    const safeMake = escapeJsSingle(make);
-    const safeModel = escapeJsSingle(model);
-    const safeLink = escapeJsSingle(link);
+
+    // Rows are shown before their product page has loaded; say what is
+    // still on its way rather than showing a price or SKU that may change.
+    const pricePending = item.detailPending && isBridgestone(item);
+    const skuPending = item.detailPending && needsSkuLookup(item);
 
     const skuDisplay = sku === "JINA-N/A"
         ? `<span title="Jina result does not expose the exact hidden SKU">JINA-N/A</span>`
@@ -827,15 +1054,21 @@ function renderFAltProductRow(item) {
                 ? `<div style="text-decoration:line-through; opacity:0.55;">$${originalPrice.toFixed(2)}</div>
                    <div style="font-weight:700;">$${price.toFixed(2)}</div>`
                 : `$${price.toFixed(2)}`}
+            ${pricePending
+                ? `<div style="font-size:0.75em; opacity:0.7;">checking…</div>`
+                : ""}
         </td>
 
-        <td onclick="copySKU('${safeSku}')" style="cursor:pointer; color:#60a5fa;">
+        ${skuPending
+            ? `<td style="opacity:0.7;">looking up…</td>`
+            : `<td onclick="copySKU('${safeSku}')" style="cursor:pointer; color:#60a5fa;">
             ${skuDisplay}
-        </td>
+        </td>`}
 
         <td>
             <button
                 type="button"
+                ${skuPending ? "disabled" : ""}
                 data-jobcard-product="${escapeHtml(JSON.stringify({ sku, make, model }))}"
                 onclick="selectTyreForFitment(JSON.parse(this.dataset.jobcardProduct));"
             >
@@ -851,6 +1084,7 @@ function renderFAltProductRow(item) {
 
 let savedTinderResults = {};
 let activeTinderResults = {};
+let tinderSearchCounter = 0;
 
 function cloneTinderResults(data) {
     return Object.fromEntries(
@@ -912,6 +1146,7 @@ function applyTinderTextFilter(keyword) {
 }
 
 async function Tinder() {
+    const searchId = ++tinderSearchCounter;
     const skuInput = document.getElementById("skuInput").value.trim();
     const skuInput2 = document.getElementById("skuInput2").value.trim();
     const resultsTable = document.querySelector("#resultsTable tbody");
@@ -936,6 +1171,9 @@ async function Tinder() {
         fetchTyreDetails(skuInput2),
     ]);
 
+    // A newer search was started while this one loaded.
+    if (searchId !== tinderSearchCounter) return;
+
     const grouped = {};
     savedTinderResults = {};
 
@@ -953,7 +1191,7 @@ async function Tinder() {
 
 function renderTinderResults(data) {
     const resultsTable = document.querySelector("#resultsTable tbody");
-    resultsTable.innerHTML = "";
+    const rows = [];
 
     const sorted = Object.keys(data).sort();
     sorted.forEach((brand) => {
@@ -985,13 +1223,13 @@ function renderTinderResults(data) {
                     ${escapeHtml(r.sku || "No SKU")}
                 </td>
             </tr>`;
-            resultsTable.innerHTML += row;
+            rows.push(row);
         }
     });
 
-    if (sorted.length === 0) {
-        resultsTable.innerHTML = `<tr><td colspan="5">No matching tyres found.</td></tr>`;
-    }
+    resultsTable.innerHTML = sorted.length
+        ? rows.join("")
+        : `<tr><td colspan="5">No matching tyres found.</td></tr>`;
 }
 
 function removeOutOfStockTinder() {
@@ -1019,9 +1257,13 @@ function removeOutOfStockTinder() {
    F ALT TAB
    ========================= */
 
+let fAltSearch = null;
+let fAltAvailableOnly = false;
+let fAltRenderQueued = false;
+let fAltRowElements = new Map();
+
 async function checkPrices({ copyLink = true } = {}) {
     const skuInput = document.getElementById("skuInput").value.trim().split("\n");
-    const resultsTable = document.querySelector("#resultsTable tbody");
 
     // Search button clicks still copy automatically.
     // Enter-key searches already copied directly inside handleSkuInputEnter().
@@ -1029,46 +1271,203 @@ async function checkPrices({ copyLink = true } = {}) {
         copyCurrentTempeSearchLinksImmediate();
     }
 
-    resultsTable.innerHTML = `<tr><td colspan="5">Searching...</td></tr>`;
+    const queries = [...new Set(skuInput.map((line) => line.trim()).filter(Boolean))];
 
-    const rows = await Promise.all(skuInput.map(async (line) => {
-        const query = line.trim();
-        if (!query) return "";
+    const search = {
+        startedAt: Date.now(),
+        finishedAt: 0,
+        sections: queries.map((query) => {
+            const invalid = ![5, 7].includes(query.length);
 
-        if (![5, 7].includes(query.length)) {
-            return `<tr><td colspan="5">Invalid input: ${escapeHtml(query)}</td></tr>`;
-        }
-
-        const result = await fetchTyreProductsBySize(query);
-
-        if (!result.products.length) {
-            return renderManualFallbackRow(
+            return {
                 query,
-                result.manualUrl,
-                "Could not load results. Check the PC receiver connection or desktop Chrome Fetch Bridge"
-            );
-        }
+                invalid,
+                products: [],
+                manualUrl: buildTempeTyreSearchUrl(query),
+                error: "",
+                loading: !invalid,
+                pending: 0,
+                savedAt: 0,
+            };
+        }),
+    };
 
-        return result.products.map(renderFAltProductRow).join("\n");
-    }));
+    fAltSearch = search;
+    fAltAvailableOnly = false;
 
-    const rendered = rows.flat().join("\n").trim();
-    resultsTable.innerHTML = rendered || `<tr><td colspan="5">No results returned.</td></tr>`;
-    sortTableByPrice();
+    // Results stream into the table as they arrive: saved results first,
+    // then the live listing, then each Bridgestone price / missing SKU.
+    const work = Promise.all(
+        search.sections
+            .filter((section) => !section.invalid)
+            .map((section) => searchTyreSize(section.query, (update) => {
+                if (fAltSearch !== search) return;
+                Object.assign(section, update);
+                queueFAltRender();
+            }))
+    );
+
+    // Saved results were applied synchronously above, so the first paint
+    // already shows them.
+    renderFAltResults();
+
+    await work;
+
+    if (fAltSearch === search) {
+        search.finishedAt = Date.now();
+        queueFAltRender();
+    }
 }
 
-function sortTableByPrice() {
-    const tbody = document.querySelector("#resultsTable tbody");
-    const rows = Array.from(tbody.querySelectorAll("tr"));
+function queueFAltRender() {
+    if (fAltRenderQueued) return;
+    fAltRenderQueued = true;
 
-    rows.sort((a, b) => {
-        const aPrice = parseFloat((a.cells[2]?.textContent || "").replace("$", "")) || 0;
-        const bPrice = parseFloat((b.cells[2]?.textContent || "").replace("$", "")) || 0;
-        return aPrice - bPrice;
+    const run = () => {
+        fAltRenderQueued = false;
+        renderFAltResults();
+    };
+
+    // Coalesce bursts of product-page updates into one paint.
+    if (!document.hidden && window.requestAnimationFrame) {
+        window.requestAnimationFrame(run);
+    } else {
+        window.setTimeout(run, 50);
+    }
+}
+
+function renderFAltMessageRow(html) {
+    return `<tr data-message="info"><td colspan="5">${html}</td></tr>`;
+}
+
+function renderFAltResults() {
+    const tbody = document.querySelector("#resultsTable tbody");
+    const search = fAltSearch;
+    if (!tbody || !search) return;
+
+    const rows = [];
+    const products = [];
+
+    for (const section of search.sections) {
+        const query = section.query;
+
+        if (section.invalid) {
+            rows.push([`invalid|${query}`, renderFAltMessageRow(`Invalid input: ${escapeHtml(query)}`)]);
+        } else if (section.products.length) {
+            section.products.forEach((item) => products.push({ query, item }));
+        } else if (section.loading) {
+            rows.push([`loading|${query}`, renderFAltMessageRow(`Searching ${escapeHtml(query)}…`)]);
+        } else {
+            rows.push([`error|${query}`, renderManualFallbackRow(
+                query,
+                section.manualUrl,
+                "Could not load results. Check the PC receiver connection or desktop Chrome Fetch Bridge"
+            )]);
+        }
+    }
+
+    // Cheapest first by the working price (the Bridgestone hidden price once known).
+    products.sort((a, b) => Number(a.item.price || 0) - Number(b.item.price || 0));
+
+    const seen = new Map();
+
+    products.forEach(({ query, item }) => {
+        const id = `${query}|${item.link && item.link !== "#" ? item.link : `${item.make}|${item.model}`}`;
+        const count = (seen.get(id) || 0) + 1;
+        seen.set(id, count);
+        rows.push([`${id}|${count}`, renderFAltProductRow(item)]);
     });
 
-    tbody.innerHTML = "";
-    rows.forEach((r) => tbody.appendChild(r));
+    if (!rows.length) {
+        rows.push(["empty", renderFAltMessageRow("No results returned.")]);
+    }
+
+    reconcileFAltRows(tbody, rows);
+    applyFAltRowFilters();
+    updateFAltStatus(search);
+
+    // Saved rows stay dimmed until the live listing has replaced them.
+    tbody.style.opacity = search.sections.some((section) => section.loading && section.products.length)
+        ? "0.65"
+        : "";
+}
+
+// Rows whose HTML is unchanged keep their element, so a row being clicked or
+// hovered is not replaced while later results stream in.
+function reconcileFAltRows(tbody, rows) {
+    const next = new Map();
+    const template = document.createElement("template");
+
+    const elements = rows.map(([key, html]) => {
+        const previous = fAltRowElements.get(key);
+        let element = previous?.html === html ? previous.element : null;
+
+        if (!element) {
+            template.innerHTML = html.trim();
+            element = template.content.firstElementChild;
+        }
+
+        next.set(key, { html, element });
+        return element;
+    });
+
+    const keep = new Set(elements);
+    Array.from(tbody.children).forEach((row) => {
+        if (!keep.has(row)) row.remove();
+    });
+
+    elements.forEach((element, index) => {
+        if (tbody.children[index] !== element) {
+            tbody.insertBefore(element, tbody.children[index] || null);
+        }
+    });
+
+    fAltRowElements = next;
+}
+
+function formatSavedAge(time) {
+    const minutes = Math.round((Date.now() - time) / 60000);
+    if (!Number.isFinite(minutes) || minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes} min ago`;
+    return `${Math.round(minutes / 60)} h ago`;
+}
+
+function describeFAltStatus(search) {
+    const sections = search.sections.filter((section) => !section.invalid);
+    if (!sections.length) return "";
+
+    const count = sections.reduce((sum, section) => sum + section.products.length, 0);
+    const pending = sections.reduce((sum, section) => sum + (section.pending || 0), 0);
+    const loading = sections.some((section) => section.loading);
+    const savedAt = Math.min(
+        ...sections
+            .filter((section) => section.savedAt && section.products.length)
+            .map((section) => section.savedAt)
+    );
+    const tyres = `${count} tyre${count === 1 ? "" : "s"}`;
+
+    if (loading && !count) return "Searching…";
+    if (loading) return `${tyres} · saved ${formatSavedAge(savedAt)} · refreshing…`;
+    if (pending) return `${tyres} · checking ${pending} more…`;
+
+    if (sections.some((section) => section.error && section.products.length)) {
+        return `${tyres} · saved ${formatSavedAge(savedAt)} · live refresh failed`;
+    }
+
+    if (search.finishedAt) {
+        return `${tyres} · ${((search.finishedAt - search.startedAt) / 1000).toFixed(1)}s`;
+    }
+
+    return tyres;
+}
+
+function updateFAltStatus(search) {
+    const status = document.getElementById("resultsStatus");
+    if (!status) return;
+
+    const text = describeFAltStatus(search);
+    status.textContent = text;
+    status.style.display = text ? "" : "none";
 }
 
 /* =========================
@@ -1076,12 +1475,9 @@ function sortTableByPrice() {
    ========================= */
 
 function removeOutOfStock() {
-    const rows = document.querySelectorAll("#resultsTable tbody tr");
-
-    rows.forEach((row) => {
-        const stock = row.dataset.stock || "";
-        row.style.display = isAvailableStock(stock) ? "" : "none";
-    });
+    // Remembered so rows that stream in afterwards are filtered too.
+    fAltAvailableOnly = true;
+    applyFAltRowFilters();
 }
 
 function filterTable() {
@@ -1099,19 +1495,27 @@ function filterTable() {
     }
 
     // Standard row filtering for F Alt Tab.
+    applyFAltRowFilters();
+}
+
+// Applies both the text filter and Available Only, so neither undoes the other.
+function applyFAltRowFilters() {
+    const keyword = (document.getElementById("searchBar")?.value || "").toLowerCase().trim();
     const rows = document.querySelectorAll("#resultsTable tbody tr");
 
     rows.forEach((row) => {
-        if (!keyword) {
+        if (row.dataset.message) {
             row.style.display = "";
             return;
         }
 
         const brand = (row.dataset.brand || "").toLowerCase();
-        const matchInCells = [...row.cells].some((cell) =>
-            cell.textContent.toLowerCase().includes(keyword)
-        );
+        const matchesKeyword =
+            !keyword ||
+            brand.includes(keyword) ||
+            [...row.cells].some((cell) => cell.textContent.toLowerCase().includes(keyword));
+        const inStock = !fAltAvailableOnly || isAvailableStock(row.dataset.stock || "");
 
-        row.style.display = matchInCells || brand.includes(keyword) ? "" : "none";
+        row.style.display = matchesKeyword && inStock ? "" : "none";
     });
 }
