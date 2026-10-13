@@ -236,8 +236,11 @@ function showFAltToast(message) {
     }, 800);
 }
 
+// SKU placeholders shown when Tempe gives none: nothing to copy or tap.
+const NO_COPY_SKUS = ["No SKU", "No SKU available", "SKU unavailable", "JINA-N/A"];
+
 function copySKU(sku) {
-    if (!sku || sku === "No SKU" || sku === "No SKU available" || sku === "SKU unavailable" || sku === "JINA-N/A") return;
+    if (!sku || NO_COPY_SKUS.includes(sku)) return;
 
     navigator.clipboard.writeText(sku)
         .then(() => showFAltToast(`Copied: ${sku}`))
@@ -279,10 +282,10 @@ function handleSkuInputEnter(e) {
 
         // Keep keyboard focus on the tyre-size box after Enter.
         // Tab then follows the browser's normal/native tab order.
-        // On a touch screen checkPrices() has closed the keyboard instead,
-        // so the results are not hidden behind it.
+        // On a phone checkPrices() has closed the keyboard instead, so the
+        // results are not hidden behind it.
         const tyreInput = e.currentTarget;
-        if (isFAltTouchScreen()) return;
+        if (closesFAltKeyboard()) return;
 
         if (tyreInput && typeof tyreInput.focus === "function") {
             try {
@@ -1022,7 +1025,7 @@ function renderFAltProductRow(item) {
     const skuDisplay = sku === "JINA-N/A"
         ? `<span title="Jina result does not expose the exact hidden SKU">JINA-N/A</span>`
         : escapeHtml(sku);
-    const hasSku = sku !== "SKU unavailable" && sku !== "JINA-N/A";
+    const hasSku = !NO_COPY_SKUS.includes(sku);
 
     // Classes, not inline styles, so allaround.css can turn the row into a
     // card on phones. The stock brackets are separate so cards can drop them.
@@ -1146,7 +1149,7 @@ async function Tinder() {
     const skuInput = document.getElementById("skuInput").value.trim();
     const skuInput2 = document.getElementById("skuInput2").value.trim();
     const resultsTable = document.querySelector("#resultsTable tbody");
-    resultsTable.innerHTML = "";
+    resultsTable.innerHTML = `<tr data-message="loading"><td colspan="5">Matching ${escapeHtml(skuInput)} and ${escapeHtml(skuInput2)}…</td></tr>`;
     tinderLastSearchKey = `${skuInput}|${skuInput2}`;
     closeFAltKeyboard();
 
@@ -1217,11 +1220,11 @@ function renderTinderResults(data) {
                 <td class="tinder-rear" style="background:${getStockColor(r.stock)};" data-stock="${escapeHtml(r.stock || "")}">
                     ${r.pattern ? `<a href="${r.link}" target="_blank">${escapeHtml(r.pattern)}</a>` : "No data"}${r.price ? ` - $${escapeHtml(r.price)}` : ""} (${escapeHtml(r.stock || "No stock")})</td>
 
-                <td class="tinder-sku tinder-front-sku${frontSkuClass}" onclick="copySKU('${safeFrontSku}')" style="cursor:pointer; color:#60a5fa;">
+                <td class="tinder-sku tinder-front-sku${frontSkuClass}" onclick="copySKU('${safeFrontSku}')">
                     ${escapeHtml(f.sku || "No SKU")}
                 </td>
 
-                <td class="tinder-sku tinder-rear-sku${rearSkuClass}" onclick="copySKU('${safeRearSku}')" style="cursor:pointer; color:#60a5fa;">
+                <td class="tinder-sku tinder-rear-sku${rearSkuClass}" onclick="copySKU('${safeRearSku}')">
                     ${escapeHtml(r.sku || "No SKU")}
                 </td>
             </tr>`;
@@ -1235,7 +1238,7 @@ function renderTinderResults(data) {
 }
 
 function hasTinderSku(item) {
-    return !!item.sku && item.sku !== "No SKU available";
+    return !!item.sku && !NO_COPY_SKUS.includes(item.sku);
 }
 
 function removeOutOfStockTinder() {
@@ -1488,7 +1491,7 @@ function updateFAltStatus(search) {
     if (!status || !search) return;
 
     const text = describeFAltStatus(search, countShownFAltProducts());
-    status.textContent = text;
+    if (status.textContent !== text) status.textContent = text;
     status.style.display = text ? "" : "none";
 }
 
@@ -1507,7 +1510,11 @@ function countShownFAltProducts() {
    SHARED FILTERS
    ========================= */
 
-function removeOutOfStock() {
+function removeOutOfStock(event) {
+    // The second click of a desktop double-click would turn it straight
+    // off again.
+    if (event?.detail > 1 && !isFAltTouchScreen()) return;
+
     // A toggle: tap again to show every tyre. Remembered so rows that
     // stream in afterwards are filtered too.
     fAltAvailableOnly = !fAltAvailableOnly;
@@ -1568,7 +1575,7 @@ function applyFAltRowFilters() {
    the screen for FALT_BAR_QUERY. Keep the two in step.
    ========================= */
 
-const FALT_BAR_QUERY = "(max-width: 740px), (max-height: 500px) and (pointer: coarse)";
+const FALT_BAR_QUERY = "screen and (max-width: 740px), (max-height: 500px) and (pointer: coarse)";
 const FALT_SIZE_INPUT_IDS = ["skuInput", "skuInput2"];
 
 // Where the last tap landed (see keyboardClosedByTap).
@@ -1586,11 +1593,16 @@ function usesFAltPhoneBar() {
     return matchesFAltMedia(FALT_BAR_QUERY);
 }
 
-// After a search on a touch screen, close the keyboard so it does not cover
-// the results.
+// Phones close the keyboard after a search so it does not cover the
+// results. Wider touch screens (an iPad, maybe with a keyboard case) keep
+// focus in the size box, as desktop does.
+function closesFAltKeyboard() {
+    return isFAltTouchScreen() && usesFAltPhoneBar();
+}
+
 function closeFAltKeyboard() {
     const active = document.activeElement;
-    if (isFAltTouchScreen() && FALT_SIZE_INPUT_IDS.includes(active?.id)) {
+    if (closesFAltKeyboard() && FALT_SIZE_INPUT_IDS.includes(active?.id)) {
         active.blur();
     }
 }
@@ -1640,13 +1652,19 @@ function keyboardClosedByTap(input) {
     return !!target.closest?.("#resultsTable, button, a, input, select, textarea, label, [onclick]");
 }
 
-// iPhone number pads have no return key: Done only closes the keyboard, which
-// fires "change". Search then, unless Enter or the Search button already did.
-function handleSkuInputChange(event) {
+// iPhone number pads have no return key: Done only closes the keyboard, so
+// the size box losing focus is the cue to search. Nothing happens if focus
+// has come back to the box (or the whole page lost focus), or if the text
+// is what was last searched (Enter, Search or an earlier Done). Every blur
+// counts, not just "change", which only fires for a box edited since it was
+// last focused.
+function handleSkuInputBlur(event) {
     const input = event.currentTarget;
     if (!isFAltTouchScreen() || keyboardClosedByTap(input)) return;
 
     window.setTimeout(() => {
+        if (document.activeElement === input || !document.hasFocus()) return;
+
         const text = input.value.trim();
         if (text && text !== fAltLastSearchText) checkPrices({ copyLink: false });
     }, 150);
@@ -1654,11 +1672,11 @@ function handleSkuInputChange(event) {
 
 // Tyres Tinder: the same for the two size boxes, once both sizes are filled
 // in. Moving on to the other size box is not a search.
-function handleTinderSizeChange(event) {
+function handleTinderSizeBlur(event) {
     if (!isFAltTouchScreen() || keyboardClosedByTap(event.currentTarget)) return;
 
     window.setTimeout(() => {
-        if (FALT_SIZE_INPUT_IDS.includes(document.activeElement?.id)) return;
+        if (FALT_SIZE_INPUT_IDS.includes(document.activeElement?.id) || !document.hasFocus()) return;
 
         const front = document.getElementById("skuInput")?.value.trim() || "";
         const rear = document.getElementById("skuInput2")?.value.trim() || "";
@@ -1684,8 +1702,13 @@ function wireFAltPhoneLayout() {
         fAltLastTap = { target: event.target, at: Date.now() };
     }, true);
 
+    // A touch that turns into a scroll was not a tap on anything.
+    document.addEventListener("pointercancel", () => {
+        fAltLastTap = { target: null, at: 0 };
+    }, true);
+
     if (document.body.classList.contains("price-checker-page")) {
-        document.getElementById("skuInput")?.addEventListener("change", handleSkuInputChange);
+        document.getElementById("skuInput")?.addEventListener("blur", handleSkuInputBlur);
 
         placeFAltStatusChip();
         onFAltMediaChange(FALT_BAR_QUERY, placeFAltStatusChip);
@@ -1693,7 +1716,7 @@ function wireFAltPhoneLayout() {
 
     if (document.body.classList.contains("tinder-page")) {
         FALT_SIZE_INPUT_IDS.forEach((id) => {
-            document.getElementById(id)?.addEventListener("change", handleTinderSizeChange);
+            document.getElementById(id)?.addEventListener("blur", handleTinderSizeBlur);
         });
     }
 
