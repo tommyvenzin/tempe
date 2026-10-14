@@ -3723,14 +3723,19 @@ body:not(.project-c-page) .table-container,
    body.tinder-page (Tyrestinder.html), plus .falt-toast, which only
    F_alt_tab.js creates. Desktop keeps the table; 740px and narrower get
    result cards, and F Alt Tab keeps its search card at the top of the
-   screen. FALT_BAR_QUERY in F_alt_tab.js must match the sticky search card
-   media query below. */
+   screen. The phone layouts are for screens only, so printing still gives
+   the table. FALT_BAR_QUERY in F_alt_tab.js must match the sticky search
+   card media query below. */
 
 /* The results table is at least 700px wide. Without an explicit column
-   the shell grows to fit it and the whole page is wider than a phone. */
-body.price-checker-page .app-shell,
-body.tinder-page .app-shell {
-    grid-template-columns: minmax(0, 1fr);
+   the shell grows to fit it and the whole page is wider than a phone.
+   Screens only: in print the wider shell lets Chrome shrink the page to
+   fit, so the whole table prints. */
+@media screen {
+    body.price-checker-page .app-shell,
+    body.tinder-page .app-shell {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 /* --falt-gutter is the side padding of the page (same values as the
@@ -3810,6 +3815,7 @@ body.price-checker-page #availableOnlyButton[aria-pressed="true"] {
 
 body.price-checker-page #availableOnlyButton[aria-pressed="true"]::after {
     content: "\2713";
+    content: "\2713" / "";
     position: absolute;
     top: -6px;
     right: -6px;
@@ -3822,6 +3828,17 @@ body.price-checker-page #availableOnlyButton[aria-pressed="true"]::after {
     font-weight: 900;
     line-height: 17px;
     text-align: center;
+}
+
+/* Tyres Tinder SKU cells (were inline styles). A cell with no SKU has
+   nothing to copy. */
+body.tinder-page #resultsTable td.tinder-sku {
+    cursor: pointer;
+    color: #60a5fa;
+}
+
+body.tinder-page #resultsTable td.tinder-sku-none {
+    cursor: default;
 }
 
 /* ---------- Toasts ---------- */
@@ -3852,38 +3869,42 @@ body.price-checker-page .jobcard-shared-toast {
 
 /* ---------- Job Card dialog ---------- */
 
-/* The shared page rules outrank the dialog's own sizes; restore them. */
-body.price-checker-page .jobcard-dialog h2 {
-    margin: 0 0 18px;
-    color: #e2e8f0;
-    font-size: 1.1rem;
-    line-height: 1.4;
-}
+/* On touch screens and phones the shared page rules outrank the dialog's
+   own sizes; restore them. Desktop keeps the compact shared look (and its
+   hover), the same as on the Job Card page. */
+@media (pointer: coarse), screen and (max-width: 740px) {
+    body.price-checker-page .jobcard-dialog h2 {
+        margin: 0 0 18px;
+        color: #e2e8f0;
+        font-size: 1.1rem;
+        line-height: 1.4;
+    }
 
-body.price-checker-page .jobcard-dialog input[type="text"] {
-    min-height: 44px;
-    padding: 10px;
-    border: 1px solid #475569;
-    border-radius: 8px;
-    color: #e2e8f0;
-    background: #080d13;
-    font-size: 16px;
-}
+    body.price-checker-page .jobcard-dialog input[type="text"] {
+        min-height: 44px;
+        padding: 10px;
+        border: 1px solid #475569;
+        border-radius: 8px;
+        color: #e2e8f0;
+        background: #080d13;
+        font-size: 16px;
+    }
 
-body.price-checker-page .jobcard-dialog-actions button {
-    min-height: 44px;
-    padding: 10px;
-    border-color: #0e7490;
-    border-radius: 8px;
-    color: #e0f2fe;
-    background: #164e63;
-    font-size: 0.88rem;
-}
+    body.price-checker-page .jobcard-dialog-actions button {
+        min-height: 44px;
+        padding: 10px;
+        border-color: #0e7490;
+        border-radius: 8px;
+        color: #e0f2fe;
+        background: #164e63;
+        font-size: 0.88rem;
+    }
 
-body.price-checker-page .jobcard-dialog-actions button:last-child {
-    border-color: #475569;
-    color: #cbd5e1;
-    background: #1e293b;
+    body.price-checker-page .jobcard-dialog-actions button:last-child {
+        border-color: #475569;
+        color: #cbd5e1;
+        background: #1e293b;
+    }
 }
 
 /* ---------- Touch screens: no zoom on focus, 44px targets ---------- */
@@ -3910,12 +3931,19 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
         min-height: 44px;
     }
 
-    /* Taller hit area for links in the table (iPad), same look. */
-    body.price-checker-page #resultsTable a.falt-model-link,
-    body.tinder-page #resultsTable td a {
+    /* Taller hit area for links in the table (iPad), same look. Tinder
+       rows are one line, so its links stay inside the 9px cell padding
+       rather than reaching into the next row. */
+    body.price-checker-page #resultsTable a.falt-model-link {
         display: inline-block;
         margin: -12px 0;
         padding: 12px 0;
+    }
+
+    body.tinder-page #resultsTable td a {
+        display: inline-block;
+        margin: -8px 0;
+        padding: 8px 0;
     }
 
     body.price-checker-page #resultsTable a.falt-manual-link {
@@ -3927,8 +3955,11 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
     body.tinder-page #resultsTable td[onclick] {
         height: 44px;
     }
+}
 
-    /* Taps show on the controls themselves (see :active below). */
+/* Phone cards: taps show on the controls themselves (see :active below).
+   Wider touch screens keep the table and the browser's tap highlight. */
+@media (pointer: coarse) and (max-width: 740px) {
     body.price-checker-page #resultsTable td.falt-sku-copy,
     body.price-checker-page #resultsTable td.falt-action button,
     body.tinder-page #resultsTable td.tinder-sku {
@@ -3946,7 +3977,7 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
 /* ---------- Between the cards and the iPad: tighter table ---------- */
 
 /* 741-767px: no 700px minimum, and headers and buttons do not wrap. */
-@media (min-width: 741px) and (max-width: 767px) {
+@media screen and (min-width: 741px) and (max-width: 767px) {
     body.price-checker-page #resultsTable,
     body.tinder-page #resultsTable {
         min-width: 0;
@@ -3966,14 +3997,15 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
         white-space: nowrap;
     }
 
+    /* Only an SKU too long for the column breaks; the rest stay whole. */
     body.price-checker-page #resultsTable td.falt-sku {
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
     }
 }
 
 /* ---------- Sticky search card (phones, short touch screens) ---------- */
 
-@media (max-width: 740px), (max-height: 500px) and (pointer: coarse) {
+@media screen and (max-width: 740px), screen and (max-height: 500px) and (pointer: coarse) {
     body.price-checker-page,
     body.tinder-page {
         padding-top: 8px;
@@ -4076,7 +4108,7 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
 
 /* Landscape phones: fewer rows, so most of the screen is results. The
    width test keeps a portrait phone as it is if a keyboard shortens it. */
-@media (max-height: 500px) and (min-width: 560px) and (pointer: coarse) {
+@media screen and (max-height: 500px) and (min-width: 560px) and (pointer: coarse) {
     body.price-checker-page .controls-card {
         grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
         grid-template-areas: "size search filter only";
@@ -4120,7 +4152,7 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
 
 /* ---------- Result cards (phones) ---------- */
 
-@media (max-width: 740px) {
+@media screen and (max-width: 740px) {
     body.price-checker-page .results-card,
     body.tinder-page .results-card {
         padding: 0;
@@ -4157,11 +4189,18 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
         clip-path: inset(50%);
     }
 
+    /* Tinder cards label Front and Rear themselves and draw the brand
+       outside the cells, so its column headers would be read against the
+       wrong cells. */
+    body.tinder-page #resultsTable thead {
+        display: none;
+    }
+
     /* Two columns of cards once there is room (landscape phones). */
     body.price-checker-page #resultsTable tbody,
     body.tinder-page #resultsTable tbody {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 18.75rem), 1fr));
         gap: 8px;
     }
 
@@ -4196,11 +4235,13 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
        MAKE [stock]                 $was
        size Model                   $price
        [copy SKU]               [Add Tyre]
-       The stock column never goes below the pill's longest word, so the
-       pill wraps inside itself rather than being cut off. */
+       The make wraps between words past 40% of the card, the stock pill
+       wraps between words, and the price keeps its full width. Narrower
+       than that (for the text size), the pill gets its own line: see
+       max-width: 18em below. */
     body.price-checker-page #resultsTable tr.falt-row {
         display: grid;
-        grid-template-columns: auto minmax(min-content, 1fr) auto;
+        grid-template-columns: fit-content(40%) minmax(min-content, 1fr) auto;
         grid-template-areas:
             "make  stock price"
             "model model price"
@@ -4221,6 +4262,7 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
 
     body.price-checker-page #resultsTable tr.falt-row td.falt-make {
         grid-area: make;
+        min-width: min-content;
         color: #cbd5e1;
         font-size: 0.72rem;
         font-weight: 800;
@@ -4266,6 +4308,7 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
         font-size: 0.74rem;
         font-weight: 700;
         line-height: 1.35;
+        overflow-wrap: break-word;
         opacity: 1;
     }
 
@@ -4276,6 +4319,7 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
     body.price-checker-page #resultsTable tr.falt-row td.falt-price {
         grid-area: price;
         align-self: start;
+        min-width: max-content;
         color: #f8fafc;
         line-height: 1.2;
         text-align: right;
@@ -4363,14 +4407,14 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
         padding: 4px 16px;
         border-color: rgba(56, 189, 248, 0.45);
         border-radius: 11px;
-        color: #e0f2fe;
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.92), rgba(14, 165, 233, 0.72));
+        color: #f0f9ff;
+        background: linear-gradient(135deg, #075985, #0369a1);
         font-size: 0.92rem;
         white-space: nowrap;
     }
 
     body.price-checker-page #resultsTable td.falt-action button:active:not(:disabled) {
-        background: #0369a1;
+        background: #0c4a6e;
     }
 
     body.price-checker-page #resultsTable td.falt-action button:disabled {
@@ -4423,6 +4467,12 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
         font-weight: 650;
         transform: translateX(-50%);
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+
+    /* Both toasts are centred here: an SKU copied while "added on the Job
+       Card" is showing goes above it rather than behind it. */
+    body:has(> .jobcard-shared-toast.is-visible) .falt-toast {
+        bottom: calc(100px + env(safe-area-inset-bottom, 0px));
     }
 
     /* ---------- Tyres Tinder ---------- */
@@ -4576,9 +4626,16 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
 }
 
 /* Small phones (320-360px): a little tighter so more cards fit. */
-@media (max-width: 360px) {
+@media screen and (max-width: 360px) {
     body.price-checker-page .controls-card button {
         padding: 4px 11px;
+    }
+
+    /* Keeps even "7 of 10 tyres · saved 59 min ago · live refresh failed"
+       on one line, so the bar does not grow as the filter changes. */
+    body.price-checker-page .controls-card .status-chip {
+        padding: 3px 8px;
+        font-size: 0.68rem;
     }
 
     body.price-checker-page #resultsTable tr.falt-row {
@@ -4598,5 +4655,18 @@ body.price-checker-page .jobcard-dialog-actions button:last-child {
     body.price-checker-page #resultsTable td.falt-action button {
         min-width: 104px;
         padding: 4px 12px;
+    }
+}
+
+/* Too narrow for the text size (about 288px at a 16px default font; more
+   with a larger font or zoom): the stock pill moves under the make. */
+@media screen and (max-width: 18em) {
+    body.price-checker-page #resultsTable tr.falt-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "make  price"
+            "stock price"
+            "model model"
+            "foot  foot";
     }
 }

@@ -131,12 +131,112 @@ function looksLikeJinaResponse(text) {
     );
 }
 
+function usesPcReceiver() {
+    return !!window.TempeCostarClient?.isPaired();
+}
+
+// The paired PC helper's address, e.g. "https://10.145.20.103:8790".
+function pcReceiverBaseUrl() {
+    try {
+        const pairing = JSON.parse(window.localStorage.getItem("tempe:costar-pairing:v1") || "null");
+        return pairing?.baseUrl ? new URL(pairing.baseUrl).origin : "";
+    } catch {
+        return "";
+    }
+}
+
+// The desk PC helper serves 12 connections at a time and closes any more
+// straight away, which the browser reports as a failed connection. Such a
+// request is tried once more before giving up.
+async function fetchViaPcReceiver(targetUrl) {
+    try {
+        return await window.TempeCostarClient.fetchTyres(targetUrl);
+    } catch (error) {
+        if (!(error instanceof TypeError)) throw await describePcError(error);
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 600));
+
+    try {
+        return await window.TempeCostarClient.fetchTyres(targetUrl);
+    } catch (error) {
+        throw await describePcError(error);
+    }
+}
+
+let fAltPcDiagnosis = null;
+
+// Why this page could not reach the PC helper. Two requests that need no
+// pairing key tell the cases apart:
+// - a plain request, which the helper answers with 401 (pairing key
+//   missing); this page can read that answer only if the helper accepts
+//   this website;
+// - the same request in "no-cors" mode, which completes whenever the
+//   browser reaches the PC at all, whatever the helper answers.
+// Remembered for 15 seconds, so a failed search checks once.
+function diagnosePcConnection(baseUrl) {
+    if (fAltPcDiagnosis && Date.now() - fAltPcDiagnosis.at < 15000) return fAltPcDiagnosis.result;
+
+    const reaches = async (mode) => {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 5000);
+        try {
+            await fetch(`${baseUrl}/api/mobile/v1/health`, {
+                mode, cache: "no-store", credentials: "omit", signal: controller.signal,
+            });
+            return true;
+        } catch {
+            return false;
+        } finally {
+            window.clearTimeout(timer);
+        }
+    };
+
+    const result = (async () => {
+        if (await reaches("cors")) return "key-check";
+        if (await reaches("no-cors")) return "website-refused";
+        return "unreachable";
+    })();
+
+    fAltPcDiagnosis = { at: Date.now(), result };
+    return result;
+}
+
+// Says why the PC helper could not be used, in words staff can act on. When
+// this page is not the PC's own copy, the error also carries a link to that
+// copy (error.pcCopyUrl), which talks to the helper from its own address.
+async function describePcError(error) {
+    const baseUrl = pcReceiverBaseUrl();
+    const host = baseUrl ? new URL(baseUrl).host : "";
+    const pc = host ? `the PC helper at ${host}` : "the PC helper";
+
+    if (!(error instanceof TypeError)) {
+        const message = error?.message || "request failed";
+        return new Error(/PC helper/.test(message) ? message : `PC helper: ${message}`);
+    }
+
+    if (!baseUrl || window.location.origin === baseUrl) {
+        return new Error(`Could not connect to ${pc}. Check it is open and receiving, and that this phone is on the shop Wi-Fi.`);
+    }
+
+    const site = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, "")}`;
+    const reasons = {
+        "unreachable": `This website cannot reach ${pc}. If the PC's own copy (link below) works, Safari or the network is blocking this website from the PC.`,
+        "website-refused": `${pc[0].toUpperCase()}${pc.slice(1)} does not accept ${window.location.host}. On the PC, enter ${site} under "GitHub Pages website" and press Save website.`,
+        "key-check": `${pc[0].toUpperCase()}${pc.slice(1)} answers this website but refused its paired request. Scan the GitHub Job Card QR on the PC again, or use the PC's own copy (link below).`,
+    };
+
+    const described = new Error(reasons[await diagnosePcConnection(baseUrl)]);
+    described.pcCopyUrl = `${baseUrl}/index.html`;
+    return described;
+}
+
 async function fetchTextWithFallback(targetUrl) {
-    const viaPc = window.TempeCostarClient?.isPaired();
+    const viaPc = usesPcReceiver();
     console.log(viaPc ? "Fetching through paired PC receiver:" : "Fetching through Chrome extension:", targetUrl);
 
     const result = viaPc
-        ? await window.TempeCostarClient.fetchTyres(targetUrl)
+        ? await fetchViaPcReceiver(targetUrl)
         : await fetchViaExtension(targetUrl, { method: "GET", cache: "no-store" });
 
     const text = String(result.text || "");
@@ -236,8 +336,11 @@ function showFAltToast(message) {
     }, 800);
 }
 
+// SKU placeholders shown when Tempe gives none: nothing to copy or tap.
+const NO_COPY_SKUS = ["No SKU", "No SKU available", "SKU unavailable", "JINA-N/A"];
+
 function copySKU(sku) {
-    if (!sku || sku === "No SKU" || sku === "No SKU available" || sku === "SKU unavailable" || sku === "JINA-N/A") return;
+    if (!sku || NO_COPY_SKUS.includes(sku)) return;
 
     navigator.clipboard.writeText(sku)
         .then(() => showFAltToast(`Copied: ${sku}`))
@@ -279,10 +382,10 @@ function handleSkuInputEnter(e) {
 
         // Keep keyboard focus on the tyre-size box after Enter.
         // Tab then follows the browser's normal/native tab order.
-        // On a touch screen checkPrices() has closed the keyboard instead,
-        // so the results are not hidden behind it.
+        // On a phone checkPrices() has closed the keyboard instead, so the
+        // results are not hidden behind it.
         const tyreInput = e.currentTarget;
-        if (isFAltTouchScreen()) return;
+        if (closesFAltKeyboard()) return;
 
         if (tyreInput && typeof tyreInput.focus === "function") {
             try {
@@ -609,9 +712,13 @@ const LISTING_FRESH_MS = 90 * 1000;              // reused as-is, no request
 const LISTING_KEEP_MS = 12 * 60 * 60 * 1000;     // shown instantly, then refreshed
 const DETAIL_FRESH_MS = 10 * 60 * 1000;          // Bridgestone hidden price reused as-is
 const DETAIL_KEEP_MS = 30 * 24 * 60 * 60 * 1000; // a product link's SKU never changes
-const MAX_SAVED_LISTINGS = 30;
-const MAX_SAVED_DETAILS = 600;
+// localStorage on this website is shared with Project C, Order Check and the
+// PC pairing, so saved results stay small.
+const MAX_SAVED_LISTINGS = 12;
+const MAX_SAVED_DETAILS = 300;
+const MAX_SAVED_CHARS = 400 * 1024;
 const DETAIL_CONCURRENCY = 8;                    // product pages in flight across all searches
+const PC_DETAIL_CONCURRENCY = 2;                 // the PC helper fetches 2 Tempe pages at a time
 
 const MISSING_SKUS = new Set(["", "No SKU", "No SKU available", "JINA-N/A"]);
 
@@ -683,14 +790,19 @@ function saveFAltCacheNow() {
     fAltCache.details = keepNewestEntries(fAltCache.details, DETAIL_KEEP_MS, MAX_SAVED_DETAILS);
 
     try {
-        window.localStorage.setItem(FALT_CACHE_KEY, JSON.stringify(fAltCache));
+        const json = JSON.stringify(fAltCache);
+        if (json.length > MAX_SAVED_CHARS) throw new Error("Saved results too large");
+        window.localStorage.setItem(FALT_CACHE_KEY, json);
     } catch {
-        // Storage is shared with the other pages: if it is full, keep only
-        // the newest few sizes rather than failing every save.
+        // Too big, or storage is full: keep only the newest few sizes, and if
+        // even that fails save nothing, so the room stays with the pairing
+        // and the other pages.
         try {
-            fAltCache.listings = keepNewestEntries(fAltCache.listings, LISTING_KEEP_MS, 8);
+            fAltCache.listings = keepNewestEntries(fAltCache.listings, LISTING_KEEP_MS, 4);
             window.localStorage.setItem(FALT_CACHE_KEY, JSON.stringify(fAltCache));
-        } catch {}
+        } catch {
+            try { window.localStorage.removeItem(FALT_CACHE_KEY); } catch {}
+        }
     }
 }
 
@@ -755,7 +867,11 @@ function runDetailLimited(task) {
 }
 
 function pumpDetailQueue() {
-    while (fAltDetailActive < DETAIL_CONCURRENCY && fAltDetailQueue.length) {
+    // More than the PC helper can fetch at once would only hold its
+    // connections and lock out the next search.
+    const limit = usesPcReceiver() ? PC_DETAIL_CONCURRENCY : DETAIL_CONCURRENCY;
+
+    while (fAltDetailActive < limit && fAltDetailQueue.length) {
         const { task, resolve, reject } = fAltDetailQueue.shift();
         fAltDetailActive++;
 
@@ -843,6 +959,7 @@ async function searchTyreSize(size, onUpdate = () => {}) {
     let savedAt = base.length ? saved.t : 0;
     let loading = !base.length || savedAge >= LISTING_FRESH_MS;
     let error = "";
+    let errorLink = "";
     const details = new Map();
 
     const snapshot = () => {
@@ -859,6 +976,7 @@ async function searchTyreSize(size, onUpdate = () => {}) {
             products,
             manualUrl,
             error: error || (!loading && !products.length ? "No products parsed" : ""),
+            errorLink,
             loading,
             pending: products.filter((item) => item.detailPending).length,
             savedAt,
@@ -912,6 +1030,7 @@ async function searchTyreSize(size, onUpdate = () => {}) {
         } catch (err) {
             console.error(`Failed to fetch tyre size ${size}:`, err);
             error = err.message || "Failed to fetch";
+            errorLink = err.pcCopyUrl || "";
         }
 
         loading = false;
@@ -924,13 +1043,16 @@ async function searchTyreSize(size, onUpdate = () => {}) {
 }
 
 // Starts a size in the background so pressing Enter finds it ready.
+// Through the PC helper only the listing is fetched early: product pages
+// for a size that is still being typed would keep the PC busy.
 function prefetchTyreSize(size) {
     if (!buildTempeTyreSearchUrl(size)) return;
 
     const saved = getFAltCache().listings[size];
     if (saved && Date.now() - saved.t < LISTING_FRESH_MS) return;
 
-    searchTyreSize(size).catch(() => {});
+    if (usesPcReceiver()) loadListing(size).catch(() => {});
+    else searchTyreSize(size).catch(() => {});
 }
 
 const fAltPrefetchTimers = new Map();
@@ -984,10 +1106,13 @@ async function fetchTyreProductsBySize(size) {
     };
 }
 
-function renderManualFallbackRow(query, manualUrl, message = "Could not load results automatically") {
+function renderManualFallbackRow(query, manualUrl, message = "Could not load results automatically", reason = "", pcCopyUrl = "") {
     return `<tr data-message="error">
         <td colspan="5">
             ${escapeHtml(message)} for <strong>${escapeHtml(query)}</strong>.<br>
+            ${reason ? `<span class="falt-error-reason">${escapeHtml(reason)}</span><br>` : ""}
+            ${pcCopyUrl ? `PC copy: <a class="falt-manual-link" href="${escapeHtml(pcCopyUrl)}">Open F Alt Tab on the PC</a><br>
+            Details: <a class="falt-manual-link" href="pc-check.html">Run the PC connection check</a><br>` : ""}
             Manual link: <a class="falt-manual-link" href="${manualUrl}" target="_blank">Open Tempe Tyres search</a>
         </td>
     </tr>`;
@@ -1022,7 +1147,7 @@ function renderFAltProductRow(item) {
     const skuDisplay = sku === "JINA-N/A"
         ? `<span title="Jina result does not expose the exact hidden SKU">JINA-N/A</span>`
         : escapeHtml(sku);
-    const hasSku = sku !== "SKU unavailable" && sku !== "JINA-N/A";
+    const hasSku = !NO_COPY_SKUS.includes(sku);
 
     // Classes, not inline styles, so allaround.css can turn the row into a
     // card on phones. The stock brackets are separate so cards can drop them.
@@ -1146,7 +1271,9 @@ async function Tinder() {
     const skuInput = document.getElementById("skuInput").value.trim();
     const skuInput2 = document.getElementById("skuInput2").value.trim();
     const resultsTable = document.querySelector("#resultsTable tbody");
-    resultsTable.innerHTML = "";
+    // Only sizes that are looked up (7 digits, see fetchTyreDetails).
+    const sizesText = [skuInput, skuInput2].filter((size) => size.length === 7).map(escapeHtml).join(" and ");
+    resultsTable.innerHTML = `<tr data-message="loading"><td colspan="5">Matching ${sizesText || "tyres"}…</td></tr>`;
     tinderLastSearchKey = `${skuInput}|${skuInput2}`;
     closeFAltKeyboard();
 
@@ -1217,11 +1344,11 @@ function renderTinderResults(data) {
                 <td class="tinder-rear" style="background:${getStockColor(r.stock)};" data-stock="${escapeHtml(r.stock || "")}">
                     ${r.pattern ? `<a href="${r.link}" target="_blank">${escapeHtml(r.pattern)}</a>` : "No data"}${r.price ? ` - $${escapeHtml(r.price)}` : ""} (${escapeHtml(r.stock || "No stock")})</td>
 
-                <td class="tinder-sku tinder-front-sku${frontSkuClass}" onclick="copySKU('${safeFrontSku}')" style="cursor:pointer; color:#60a5fa;">
+                <td class="tinder-sku tinder-front-sku${frontSkuClass}" onclick="copySKU('${safeFrontSku}')">
                     ${escapeHtml(f.sku || "No SKU")}
                 </td>
 
-                <td class="tinder-sku tinder-rear-sku${rearSkuClass}" onclick="copySKU('${safeRearSku}')" style="cursor:pointer; color:#60a5fa;">
+                <td class="tinder-sku tinder-rear-sku${rearSkuClass}" onclick="copySKU('${safeRearSku}')">
                     ${escapeHtml(r.sku || "No SKU")}
                 </td>
             </tr>`;
@@ -1235,7 +1362,7 @@ function renderTinderResults(data) {
 }
 
 function hasTinderSku(item) {
-    return !!item.sku && item.sku !== "No SKU available";
+    return !!item.sku && !NO_COPY_SKUS.includes(item.sku);
 }
 
 function removeOutOfStockTinder() {
@@ -1295,6 +1422,7 @@ async function checkPrices({ copyLink = true } = {}) {
                 products: [],
                 manualUrl: buildTempeTyreSearchUrl(query),
                 error: "",
+                errorLink: "",
                 loading: !invalid,
                 pending: 0,
                 savedAt: 0,
@@ -1348,6 +1476,20 @@ function queueFAltRender() {
     }
 }
 
+// The reason a size did not load, as shown under "Could not load results".
+function describeFAltLoadError(error) {
+    switch (error) {
+        case "No products parsed":
+            return "";
+        case "empty-response":
+            return "Tempe sent back an empty page.";
+        case "captcha-or-blocked-response":
+            return "Tempe asked for a captcha or blocked the request. Open the search below once, then try again.";
+        default:
+            return error || "";
+    }
+}
+
 function renderFAltMessageRow(html) {
     return `<tr data-message="info"><td colspan="5">${html}</td></tr>`;
 }
@@ -1373,7 +1515,9 @@ function renderFAltResults() {
             rows.push([`error|${query}`, renderManualFallbackRow(
                 query,
                 section.manualUrl,
-                "Could not load results. Check the PC receiver connection or desktop Chrome Fetch Bridge"
+                section.error === "No products parsed" ? "Tempe listed no tyres" : "Could not load results",
+                describeFAltLoadError(section.error),
+                section.errorLink
             )]);
         }
     }
@@ -1488,7 +1632,7 @@ function updateFAltStatus(search) {
     if (!status || !search) return;
 
     const text = describeFAltStatus(search, countShownFAltProducts());
-    status.textContent = text;
+    if (status.textContent !== text) status.textContent = text;
     status.style.display = text ? "" : "none";
 }
 
@@ -1507,7 +1651,11 @@ function countShownFAltProducts() {
    SHARED FILTERS
    ========================= */
 
-function removeOutOfStock() {
+function removeOutOfStock(event) {
+    // The second click of a desktop double-click would turn it straight
+    // off again.
+    if (event?.detail > 1 && !isFAltTouchScreen()) return;
+
     // A toggle: tap again to show every tyre. Remembered so rows that
     // stream in afterwards are filtered too.
     fAltAvailableOnly = !fAltAvailableOnly;
@@ -1568,7 +1716,7 @@ function applyFAltRowFilters() {
    the screen for FALT_BAR_QUERY. Keep the two in step.
    ========================= */
 
-const FALT_BAR_QUERY = "(max-width: 740px), (max-height: 500px) and (pointer: coarse)";
+const FALT_BAR_QUERY = "screen and (max-width: 740px), screen and (max-height: 500px) and (pointer: coarse)";
 const FALT_SIZE_INPUT_IDS = ["skuInput", "skuInput2"];
 
 // Where the last tap landed (see keyboardClosedByTap).
@@ -1586,11 +1734,16 @@ function usesFAltPhoneBar() {
     return matchesFAltMedia(FALT_BAR_QUERY);
 }
 
-// After a search on a touch screen, close the keyboard so it does not cover
-// the results.
+// Phones close the keyboard after a search so it does not cover the
+// results. Wider touch screens (an iPad, maybe with a keyboard case) keep
+// focus in the size box, as desktop does.
+function closesFAltKeyboard() {
+    return isFAltTouchScreen() && usesFAltPhoneBar();
+}
+
 function closeFAltKeyboard() {
     const active = document.activeElement;
-    if (isFAltTouchScreen() && FALT_SIZE_INPUT_IDS.includes(active?.id)) {
+    if (closesFAltKeyboard() && FALT_SIZE_INPUT_IDS.includes(active?.id)) {
         active.blur();
     }
 }
@@ -1637,16 +1790,25 @@ function keyboardClosedByTap(input) {
     const { target, at } = fAltLastTap;
     if (!target || input.contains(target) || Date.now() - at > 800) return false;
 
+    // Moving between the Tinder size boxes keeps the keyboard open.
+    if (FALT_SIZE_INPUT_IDS.includes(target.id)) return false;
+
     return !!target.closest?.("#resultsTable, button, a, input, select, textarea, label, [onclick]");
 }
 
-// iPhone number pads have no return key: Done only closes the keyboard, which
-// fires "change". Search then, unless Enter or the Search button already did.
-function handleSkuInputChange(event) {
+// iPhone number pads have no return key: Done only closes the keyboard, so
+// the size box losing focus is the cue to search. Nothing happens if focus
+// has come back to the box (or the whole page lost focus), or if the text
+// is what was last searched (Enter, Search or an earlier Done). Every blur
+// counts, not just "change", which only fires for a box edited since it was
+// last focused.
+function handleSkuInputBlur(event) {
     const input = event.currentTarget;
     if (!isFAltTouchScreen() || keyboardClosedByTap(input)) return;
 
     window.setTimeout(() => {
+        if (document.activeElement === input || !document.hasFocus()) return;
+
         const text = input.value.trim();
         if (text && text !== fAltLastSearchText) checkPrices({ copyLink: false });
     }, 150);
@@ -1654,11 +1816,11 @@ function handleSkuInputChange(event) {
 
 // Tyres Tinder: the same for the two size boxes, once both sizes are filled
 // in. Moving on to the other size box is not a search.
-function handleTinderSizeChange(event) {
+function handleTinderSizeBlur(event) {
     if (!isFAltTouchScreen() || keyboardClosedByTap(event.currentTarget)) return;
 
     window.setTimeout(() => {
-        if (FALT_SIZE_INPUT_IDS.includes(document.activeElement?.id)) return;
+        if (FALT_SIZE_INPUT_IDS.includes(document.activeElement?.id) || !document.hasFocus()) return;
 
         const front = document.getElementById("skuInput")?.value.trim() || "";
         const rear = document.getElementById("skuInput2")?.value.trim() || "";
@@ -1666,6 +1828,21 @@ function handleTinderSizeChange(event) {
 
         if (/^\d{7}\|\d{7}$/.test(key) && key !== tinderLastSearchKey) Tinder();
     }, 150);
+}
+
+// Keyboard focus moving back up the cards would stop under the sticky
+// search card, out of sight: nudge the page so it shows below the card.
+// (scroll-padding would do this too, but it also scrolls the page every
+// time the size or filter box in the card gets focus.)
+function keepFAltFocusBelowBar(event) {
+    const bar = document.querySelector(".price-checker-page .controls-card");
+    if (!bar || !usesFAltPhoneBar()) return;
+
+    window.requestAnimationFrame(() => {
+        const barBottom = bar.getBoundingClientRect().bottom;
+        const top = event.target.getBoundingClientRect().top;
+        if (top < barBottom + 8) window.scrollBy(0, top - barBottom - 8);
+    });
 }
 
 // The filter applies as you type; its Done/Enter key just closes the keyboard.
@@ -1684,8 +1861,14 @@ function wireFAltPhoneLayout() {
         fAltLastTap = { target: event.target, at: Date.now() };
     }, true);
 
+    // A touch that turns into a scroll was not a tap on anything.
+    document.addEventListener("pointercancel", () => {
+        fAltLastTap = { target: null, at: 0 };
+    }, true);
+
     if (document.body.classList.contains("price-checker-page")) {
-        document.getElementById("skuInput")?.addEventListener("change", handleSkuInputChange);
+        document.getElementById("skuInput")?.addEventListener("blur", handleSkuInputBlur);
+        document.getElementById("resultsTable")?.addEventListener("focusin", keepFAltFocusBelowBar);
 
         placeFAltStatusChip();
         onFAltMediaChange(FALT_BAR_QUERY, placeFAltStatusChip);
@@ -1693,7 +1876,7 @@ function wireFAltPhoneLayout() {
 
     if (document.body.classList.contains("tinder-page")) {
         FALT_SIZE_INPUT_IDS.forEach((id) => {
-            document.getElementById(id)?.addEventListener("change", handleTinderSizeChange);
+            document.getElementById(id)?.addEventListener("blur", handleTinderSizeBlur);
         });
     }
 

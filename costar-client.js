@@ -23,7 +23,12 @@
         if (params.has("pc") || params.has("key")) {
             try {
                 config = pairing({ baseUrl: params.get("pc"), token: params.get("key") });
-                env.localStorage.setItem(KEY, JSON.stringify(config));
+                try { env.localStorage.setItem(KEY, JSON.stringify(config)); }
+                catch (_) {
+                    // Storage on this website is shared by all its pages; F Alt Tab's saved results give way to a pairing.
+                    try { env.localStorage.removeItem("tempe:falt-cache:v1"); env.localStorage.setItem(KEY, JSON.stringify(config)); }
+                    catch (error) { throw new Error("This website's storage on the phone is full, so the pairing could not be saved. Clear this site's data in Safari settings, then scan the QR again."); }
+                }
             } finally {
                 // A pairing key is never sent as a URL query or retained in history.
                 env.history.replaceState(null, "", env.location.pathname + env.location.search);
@@ -34,13 +39,26 @@
             const controller = new AbortController();
             const timer = env.setTimeout(() => controller.abort(), 8000);
             try {
-                const response = await env.fetch(config.baseUrl + "/api/mobile/v1" + path, {
-                    method, signal: controller.signal, mode: "cors", credentials: "omit", cache: "no-store", redirect: "error",
-                    headers: { Authorization: "Bearer " + config.token, ...(body ? { "Content-Type": "application/json" } : {}) },
-                    ...(body ? { body: JSON.stringify(body) } : {})
-                });
+                let response;
+                try {
+                    response = await env.fetch(config.baseUrl + "/api/mobile/v1" + path, {
+                        method, signal: controller.signal, mode: "cors", credentials: "omit", cache: "no-store", redirect: "error",
+                        headers: { Authorization: "Bearer " + config.token, ...(body ? { "Content-Type": "application/json" } : {}) },
+                        ...(body ? { body: JSON.stringify(body) } : {})
+                    });
+                } catch (error) {
+                    // Browsers only say "Load failed"; name the PC. Still a TypeError, so callers can tell it was the connection.
+                    if (error && error.name === "AbortError") throw new Error("The PC helper did not answer within 8 seconds.");
+                    if (error instanceof TypeError) throw new TypeError("Could not reach the PC helper at " + new URL(config.baseUrl).host + ".");
+                    throw error;
+                }
                 if (response.status === 404 && path.startsWith("/jobs/")) return null;
-                if (!response.ok) throw new Error(response.status === 401 ? "Pair this phone with the PC helper again." : `PC helper returned HTTP ${response.status}.`);
+                if (response.status === 401) throw new Error("Pair this phone with the PC helper again.");
+                if (!response.ok) {
+                    // The helper says why it refused (e.g. a website it is not paired with, or Tempe failing).
+                    const detail = await response.json().then(body => typeof body?.error === "string" ? " " + body.error : "", () => "");
+                    throw new Error(`PC helper returned HTTP ${response.status}.${detail}`);
+                }
                 const value = await response.json();
                 if (!value || typeof value !== "object") throw new Error("The PC returned an invalid response.");
                 return value;
