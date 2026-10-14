@@ -256,7 +256,7 @@ async function run() {
     } else if (keyed.ok && keyed.status === 401) {
         verdict = ["bad", "The PC answers but does not accept this phone's key: scan the GitHub Job Card QR on the PC again."];
     } else if (!reach.ok) {
-        verdict = ["bad", "This website cannot reach the PC at all, although its own address works. Something on the phone (a Safari setting, content blocker, VPN or Private Relay) or the network stops this website from connecting to the PC."];
+        verdict = ["bad", "This website cannot reach the PC. Most often the PC's certificate is no longer trusted on this phone (the PC's own address still opens after tapping through a warning): reinstall it from step 1 of the PC's QR page and turn on full trust in Settings → General → About → Certificate Trust Settings. If it is trusted, a Safari setting, content blocker, VPN or the network is blocking this website."];
     } else if (!plain.ok) {
         verdict = ["bad", "The PC is reached but refuses this website. On the PC, enter this website under \"GitHub Pages website\" and press Save website."];
     } else if (!checked.ok) {
@@ -308,7 +308,7 @@ async function reachOnly(address) {
 
     const verdict = reach.ok
         ? ["good", "Safari CAN reach the PC from a public website. So the phone and network are fine, and the GitHub site's problem is between it and the PC helper: send this result."]
-        : ["bad", "Safari CANNOT reach the PC from a public website, although the PC's own address works. Something on the phone or network blocks public websites from local addresses: send this result."];
+        : ["bad", "Safari CANNOT reach the PC from a public website. Most often the PC's certificate is no longer trusted on this phone (its own address still opens after tapping through a warning): reinstall it from step 1 of the PC's QR page and turn on full trust. Otherwise something on the phone or network blocks it: send this result."];
     verdictBox.className = `verdict ${verdict[0]}`;
     verdictBox.textContent = verdict[1];
     lines.unshift(`VERDICT: ${verdict[1]}`);

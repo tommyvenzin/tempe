@@ -221,7 +221,7 @@ async function describePcError(error) {
 
     const site = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, "")}`;
     const reasons = {
-        "unreachable": `This website cannot reach ${pc}. If the PC's own copy (link below) works, Safari or the network is blocking this website from the PC.`,
+        "unreachable": `This website cannot reach ${pc}. Most often the PC's certificate is no longer trusted on this phone: if the PC's own copy (link below) shows a certificate warning, reinstall the certificate from the PC's QR page and turn on full trust.`,
         "website-refused": `${pc[0].toUpperCase()}${pc.slice(1)} does not accept ${window.location.host}. On the PC, enter ${site} under "GitHub Pages website" and press Save website.`,
         "key-check": `${pc[0].toUpperCase()}${pc.slice(1)} answers this website but refused its paired request. Scan the GitHub Job Card QR on the PC again, or use the PC's own copy (link below).`,
     };
