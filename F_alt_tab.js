@@ -712,8 +712,11 @@ const LISTING_FRESH_MS = 90 * 1000;              // reused as-is, no request
 const LISTING_KEEP_MS = 12 * 60 * 60 * 1000;     // shown instantly, then refreshed
 const DETAIL_FRESH_MS = 10 * 60 * 1000;          // Bridgestone hidden price reused as-is
 const DETAIL_KEEP_MS = 30 * 24 * 60 * 60 * 1000; // a product link's SKU never changes
-const MAX_SAVED_LISTINGS = 30;
-const MAX_SAVED_DETAILS = 600;
+// localStorage on this website is shared with Project C, Order Check and the
+// PC pairing, so saved results stay small.
+const MAX_SAVED_LISTINGS = 12;
+const MAX_SAVED_DETAILS = 300;
+const MAX_SAVED_CHARS = 400 * 1024;
 const DETAIL_CONCURRENCY = 8;                    // product pages in flight across all searches
 const PC_DETAIL_CONCURRENCY = 2;                 // the PC helper fetches 2 Tempe pages at a time
 
@@ -787,14 +790,19 @@ function saveFAltCacheNow() {
     fAltCache.details = keepNewestEntries(fAltCache.details, DETAIL_KEEP_MS, MAX_SAVED_DETAILS);
 
     try {
-        window.localStorage.setItem(FALT_CACHE_KEY, JSON.stringify(fAltCache));
+        const json = JSON.stringify(fAltCache);
+        if (json.length > MAX_SAVED_CHARS) throw new Error("Saved results too large");
+        window.localStorage.setItem(FALT_CACHE_KEY, json);
     } catch {
-        // Storage is shared with the other pages: if it is full, keep only
-        // the newest few sizes rather than failing every save.
+        // Too big, or storage is full: keep only the newest few sizes, and if
+        // even that fails save nothing, so the room stays with the pairing
+        // and the other pages.
         try {
-            fAltCache.listings = keepNewestEntries(fAltCache.listings, LISTING_KEEP_MS, 8);
+            fAltCache.listings = keepNewestEntries(fAltCache.listings, LISTING_KEEP_MS, 4);
             window.localStorage.setItem(FALT_CACHE_KEY, JSON.stringify(fAltCache));
-        } catch {}
+        } catch {
+            try { window.localStorage.removeItem(FALT_CACHE_KEY); } catch {}
+        }
     }
 }
 
@@ -1103,7 +1111,8 @@ function renderManualFallbackRow(query, manualUrl, message = "Could not load res
         <td colspan="5">
             ${escapeHtml(message)} for <strong>${escapeHtml(query)}</strong>.<br>
             ${reason ? `<span class="falt-error-reason">${escapeHtml(reason)}</span><br>` : ""}
-            ${pcCopyUrl ? `PC copy: <a class="falt-manual-link" href="${escapeHtml(pcCopyUrl)}">Open F Alt Tab on the PC</a><br>` : ""}
+            ${pcCopyUrl ? `PC copy: <a class="falt-manual-link" href="${escapeHtml(pcCopyUrl)}">Open F Alt Tab on the PC</a><br>
+            Details: <a class="falt-manual-link" href="pc-check.html">Run the PC connection check</a><br>` : ""}
             Manual link: <a class="falt-manual-link" href="${manualUrl}" target="_blank">Open Tempe Tyres search</a>
         </td>
     </tr>`;

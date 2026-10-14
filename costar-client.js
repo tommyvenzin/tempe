@@ -23,7 +23,12 @@
         if (params.has("pc") || params.has("key")) {
             try {
                 config = pairing({ baseUrl: params.get("pc"), token: params.get("key") });
-                env.localStorage.setItem(KEY, JSON.stringify(config));
+                try { env.localStorage.setItem(KEY, JSON.stringify(config)); }
+                catch (_) {
+                    // Storage on this website is shared by all its pages; F Alt Tab's saved results give way to a pairing.
+                    try { env.localStorage.removeItem("tempe:falt-cache:v1"); env.localStorage.setItem(KEY, JSON.stringify(config)); }
+                    catch (error) { throw new Error("This website's storage on the phone is full, so the pairing could not be saved. Clear this site's data in Safari settings, then scan the QR again."); }
+                }
             } finally {
                 // A pairing key is never sent as a URL query or retained in history.
                 env.history.replaceState(null, "", env.location.pathname + env.location.search);

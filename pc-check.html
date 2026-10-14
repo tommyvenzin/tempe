@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>PC Connection Check</title>
+    <style>
+        body { margin: 0; padding: 16px; background: #070a0f; color: #f8fafc; font: 16px/1.45 system-ui, -apple-system, sans-serif; }
+        main { max-width: 760px; margin: 0 auto; }
+        h1 { margin: 4px 0 6px; font-size: 1.35rem; }
+        p { margin: 0 0 12px; color: #cbd5e1; }
+        a { color: #93c5fd; }
+        .verdict { margin: 14px 0; padding: 14px; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 12px; background: #0f172a; font-weight: 600; }
+        .verdict.bad { border-color: rgba(251, 113, 133, 0.6); }
+        .verdict.good { border-color: rgba(52, 211, 153, 0.6); }
+        ol { margin: 0; padding: 0; list-style: none; }
+        li { margin: 0 0 8px; padding: 10px 12px; border: 1px solid rgba(148, 163, 184, 0.17); border-radius: 10px; background: rgba(15, 23, 42, 0.6); }
+        li b { display: block; }
+        li span { color: #94a3b8; font-size: 0.9rem; overflow-wrap: anywhere; }
+        .ok b::before { content: "\2714  "; color: #34d399; }
+        .fail b::before { content: "\2716  "; color: #fb7185; }
+        .info b::before { content: "\2022  "; color: #38bdf8; }
+        .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+        button { min-height: 44px; padding: 8px 16px; border: 1px solid rgba(56, 189, 248, 0.45); border-radius: 11px; color: #e0f2fe; background: #075985; font: inherit; font-size: 0.95rem; }
+        button.quiet { background: #1e293b; border-color: rgba(148, 163, 184, 0.3); }
+        textarea { box-sizing: border-box; width: 100%; height: 180px; margin-top: 8px; padding: 10px; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 10px; color: #e2e8f0; background: #080d13; font: 12px/1.4 ui-monospace, Menlo, monospace; }
+    </style>
+</head>
+<body>
+<main>
+    <a href="index.html">&larr; F Alt Tab</a>
+    <h1>PC connection check</h1>
+    <p>Tests whether this website can reach the paired desk PC helper, step by step. Nothing is sent anywhere else, and the pairing key is never shown.</p>
+
+    <div id="verdict" class="verdict">Running checks…</div>
+    <ol id="results"></ol>
+
+    <div class="buttons">
+        <button type="button" id="again">Run again</button>
+        <button type="button" id="copy" class="quiet">Copy report</button>
+        <button type="button" id="clearCache" class="quiet">Remove F Alt Tab saved results</button>
+    </div>
+    <textarea id="report" readonly aria-label="Report"></textarea>
+</main>
+
+<script>
+"use strict";
+
+const PAIRING_KEY = "tempe:costar-pairing:v1";
+const FALT_CACHE_KEY = "tempe:falt-cache:v1";
+const results = document.getElementById("results");
+const verdictBox = document.getElementById("verdict");
+const reportBox = document.getElementById("report");
+let lines = [];
+
+function add(kind, title, detail = "") {
+    const item = document.createElement("li");
+    item.className = kind;
+    const heading = document.createElement("b");
+    heading.textContent = title;
+    item.appendChild(heading);
+    if (detail) {
+        const text = document.createElement("span");
+        text.textContent = detail;
+        item.appendChild(text);
+    }
+    results.appendChild(item);
+    lines.push(`[${kind}] ${title}${detail ? " — " + detail : ""}`);
+}
+
+function describeError(error) {
+    return `${error && error.name || "Error"}: ${error && error.message || String(error)}`;
+}
+
+// Same rules as costar-client.js: a private HTTPS address and a long key.
+function readPairing(value) {
+    if (!value || typeof value !== "object") return null;
+    const url = new URL(String(value.baseUrl));
+    const host = url.hostname;
+    const octets = host.split(".");
+    const ipv4 = octets.length === 4 && octets.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+    const privateIpv4 = ipv4 && (Number(octets[0]) === 10 || (Number(octets[0]) === 192 && Number(octets[1]) === 168) ||
+        (Number(octets[0]) === 172 && Number(octets[1]) >= 16 && Number(octets[1]) <= 31));
+    const local = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.endsWith(".local") || privateIpv4;
+    if (url.protocol !== "https:" || !local || !/^[A-Za-z0-9_-]{32,160}$/.test(String(value.token))) {
+        throw new Error("Not a private HTTPS address with a valid key.");
+    }
+    return { baseUrl: url.origin, token: String(value.token) };
+}
+
+async function shortHash(text) {
+    try {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+        return [...new Uint8Array(digest)].slice(0, 4).map((b) => b.toString(16).padStart(2, "0")).join("");
+    } catch {
+        return "n/a";
+    }
+}
+
+function storageReport() {
+    try {
+        const sizes = [];
+        let total = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const size = key.length + (localStorage.getItem(key) || "").length;
+            total += size;
+            sizes.push([key, size]);
+        }
+        sizes.sort((a, b) => b[1] - a[1]);
+        const top = sizes.slice(0, 5).map(([key, size]) => `${key} ${Math.round(size / 1024)} KB`).join(", ");
+        add("info", `Saved data on this website: ${Math.round(total / 1024)} KB in ${sizes.length} items`, top);
+
+        // Can anything more be saved? (A full store stops a new QR pairing from being remembered.)
+        const probe = "x".repeat(256 * 1024);
+        try {
+            localStorage.setItem("tempe:pc-check:probe", probe);
+            localStorage.removeItem("tempe:pc-check:probe");
+            add("ok", "Storage has room (a further 256 KB saved and removed)");
+        } catch (error) {
+            add("fail", "Storage is full: a new pairing may not be remembered", describeError(error));
+        }
+    } catch (error) {
+        add("fail", "Saved data cannot be read on this website", describeError(error));
+    }
+}
+
+async function probe(label, url, options) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const started = performance.now();
+    try {
+        const response = await fetch(url, { cache: "no-store", credentials: "omit", ...options, signal: controller.signal });
+        const ms = Math.round(performance.now() - started);
+        let body = "";
+        if (response.type !== "opaque") {
+            try { body = (await response.text()).slice(0, 160); } catch { /* unreadable */ }
+        }
+        return { ok: true, label, ms, status: response.status, type: response.type, body };
+    } catch (error) {
+        return { ok: false, label, ms: Math.round(performance.now() - started), error: describeError(error) };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function xhrProbe(url, token) {
+    return new Promise((resolve) => {
+        const started = performance.now();
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", url);
+        xhr.timeout = 8000;
+        xhr.setRequestHeader("Authorization", "Bearer " + token);
+        const done = (event) => resolve({ event, status: xhr.status, ms: Math.round(performance.now() - started) });
+        xhr.onload = () => done("load");
+        xhr.onerror = () => done("error");
+        xhr.ontimeout = () => done("timeout");
+        xhr.onabort = () => done("abort");
+        xhr.send();
+    });
+}
+
+async function run() {
+    results.textContent = "";
+    lines = [];
+    verdictBox.className = "verdict";
+    verdictBox.textContent = "Running checks…";
+
+    add("info", `Page: ${location.origin}${location.pathname}`, `Secure page: ${window.isSecureContext} · Online: ${navigator.onLine} · ${new Date().toString()}`);
+    add("info", "Browser", navigator.userAgent);
+
+    // Pairing: a QR link (#pc=…&key=…) or the one saved on this website.
+    // #pc=… on its own only tests whether this website can reach that PC.
+    let pairing = null;
+    const params = new URLSearchParams(location.hash.slice(1));
+    if (params.has("pc") && !params.has("key")) return reachOnly(params.get("pc"));
+    if (params.has("pc") || params.has("key")) {
+        try {
+            pairing = readPairing({ baseUrl: params.get("pc"), token: params.get("key") });
+            try {
+                localStorage.setItem(PAIRING_KEY, JSON.stringify(pairing));
+                add("ok", "Paired from the QR link and saved on this website");
+            } catch (error) {
+                add("fail", "Paired from the QR link but it could NOT be saved", describeError(error));
+            }
+        } catch (error) {
+            add("fail", "The QR link's pairing is not valid", describeError(error));
+        } finally {
+            history.replaceState(null, "", location.pathname + location.search);
+        }
+    }
+    if (!pairing) {
+        try {
+            pairing = readPairing(JSON.parse(localStorage.getItem(PAIRING_KEY) || "null"));
+        } catch (error) {
+            add("fail", "The saved pairing is not usable", describeError(error));
+        }
+    }
+
+    storageReport();
+
+    if (!pairing) {
+        add("fail", "This website is not paired with a PC", "Scan the GitHub Job Card QR on the PC, then open this page again.");
+        verdictBox.className = "verdict bad";
+        verdictBox.textContent = "Not paired on this website. Scan the GitHub Job Card QR code on the PC first.";
+        return finish();
+    }
+
+    add("info", `Paired PC: ${pairing.baseUrl}`, `Key length ${pairing.token.length}, fingerprint ${await shortHash(pairing.token)}`);
+
+    const health = `${pairing.baseUrl}/api/mobile/v1/health`;
+    const reach = await probe("reach", health, { mode: "no-cors" });
+    add(reach.ok ? "ok" : "fail", reach.ok ? `This website can reach the PC (${reach.ms} ms)` : `This website cannot reach the PC at all (${reach.ms} ms)`, reach.ok ? "" : reach.error);
+
+    const plain = await probe("plain", health, { mode: "cors" });
+    add(plain.ok ? "ok" : "fail",
+        plain.ok ? `The PC accepts this website: answered ${plain.status} without a key (${plain.ms} ms)` : `The PC's answer to this website was blocked (${plain.ms} ms)`,
+        plain.ok ? plain.body : plain.error);
+
+    const keyed = await probe("keyed", health, { mode: "cors", headers: { Authorization: "Bearer " + pairing.token } });
+    add(keyed.ok && keyed.status === 200 ? "ok" : "fail",
+        keyed.ok ? `Paired request answered ${keyed.status} (${keyed.ms} ms)` : `Paired request failed (${keyed.ms} ms)`,
+        keyed.ok ? keyed.body : keyed.error);
+
+    if (!keyed.ok) {
+        const local = await probe("local", health, { mode: "cors", headers: { Authorization: "Bearer " + pairing.token }, targetAddressSpace: "local" });
+        add(local.ok ? "ok" : "fail",
+            local.ok ? `Paired request with targetAddressSpace "local" answered ${local.status}` : `Paired request with targetAddressSpace "local" failed too`,
+            local.ok ? local.body : local.error);
+        const xhr = await xhrProbe(health, pairing.token);
+        add(xhr.event === "load" ? "ok" : "fail", `Same request as XMLHttpRequest: ${xhr.event}, status ${xhr.status} (${xhr.ms} ms)`);
+    }
+
+    let verdict;
+    if (keyed.ok && keyed.status === 200) {
+        verdict = ["good", "Everything works from this website right now. If F Alt Tab still fails, note the time and send this report."];
+    } else if (keyed.ok && keyed.status === 401) {
+        verdict = ["bad", "The PC answers but does not accept this phone's key: scan the GitHub Job Card QR on the PC again."];
+    } else if (!reach.ok) {
+        verdict = ["bad", "This website cannot reach the PC at all, although its own address works. Something on the phone (a Safari setting, content blocker, VPN or Private Relay) or the network stops this website from connecting to the PC."];
+    } else if (!plain.ok) {
+        verdict = ["bad", "The PC is reached but refuses this website. On the PC, enter this website under \"GitHub Pages website\" and press Save website."];
+    } else {
+        verdict = ["bad", "The PC accepts this website but refuses the paired request's permission check. Send this report."];
+    }
+    verdictBox.className = `verdict ${verdict[0]}`;
+    verdictBox.textContent = verdict[1];
+    lines.unshift(`VERDICT: ${verdict[1]}`);
+    finish();
+}
+
+// From any public website: can Safari connect to this PC at all? No key is
+// needed: a "no-cors" request completes whenever the PC is reached, even if
+// the helper refuses this website.
+async function reachOnly(address) {
+    let base;
+    try {
+        base = new URL(address).origin;
+    } catch (error) {
+        add("fail", "Not a valid PC address", describeError(error));
+        verdictBox.className = "verdict bad";
+        verdictBox.textContent = "Not a valid PC address.";
+        return finish();
+    }
+
+    add("info", `Testing from ${location.host} (a public website) to ${base}`);
+    const reach = await probe("reach", `${base}/api/mobile/v1/health`, { mode: "no-cors" });
+    add(reach.ok ? "ok" : "fail", reach.ok ? `Reached the PC (${reach.ms} ms)` : `Could not reach the PC (${reach.ms} ms)`, reach.ok ? "" : reach.error);
+
+    const verdict = reach.ok
+        ? ["good", "Safari CAN reach the PC from a public website. So the phone and network are fine, and the GitHub site's problem is between it and the PC helper: send this result."]
+        : ["bad", "Safari CANNOT reach the PC from a public website, although the PC's own address works. Something on the phone or network blocks public websites from local addresses: send this result."];
+    verdictBox.className = `verdict ${verdict[0]}`;
+    verdictBox.textContent = verdict[1];
+    lines.unshift(`VERDICT: ${verdict[1]}`);
+    finish();
+}
+
+function finish() {
+    reportBox.value = lines.join("\n");
+}
+
+document.getElementById("again").addEventListener("click", run);
+document.getElementById("copy").addEventListener("click", async () => {
+    try {
+        await navigator.clipboard.writeText(reportBox.value);
+        document.getElementById("copy").textContent = "Copied";
+    } catch {
+        reportBox.select();
+    }
+});
+document.getElementById("clearCache").addEventListener("click", () => {
+    try {
+        const size = (localStorage.getItem(FALT_CACHE_KEY) || "").length;
+        localStorage.removeItem(FALT_CACHE_KEY);
+        document.getElementById("clearCache").textContent = `Removed ${Math.round(size / 1024)} KB`;
+    } catch (error) {
+        document.getElementById("clearCache").textContent = describeError(error);
+    }
+});
+
+run();
+</script>
+</body>
+</html>
