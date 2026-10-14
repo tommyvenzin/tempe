@@ -53,6 +53,10 @@ const results = document.getElementById("results");
 const verdictBox = document.getElementById("verdict");
 const reportBox = document.getElementById("report");
 let lines = [];
+const violations = [];
+document.addEventListener("securitypolicyviolation", (event) => {
+    violations.push(`${event.violatedDirective} blocked ${event.blockedURI} (policy: ${String(event.originalPolicy).slice(0, 160)})`);
+});
 
 function add(kind, title, detail = "") {
     const item = document.createElement("li");
@@ -199,6 +203,7 @@ async function run() {
     }
 
     storageReport();
+    await pageEnvironment();
 
     if (!pairing) {
         add("fail", "This website is not paired with a PC", "Scan the GitHub Job Card QR on the PC, then open this page again.");
@@ -218,6 +223,13 @@ async function run() {
         plain.ok ? `The PC accepts this website: answered ${plain.status} without a key (${plain.ms} ms)` : `The PC's answer to this website was blocked (${plain.ms} ms)`,
         plain.ok ? plain.body : plain.error);
 
+    // A JSON content type needs the same permission check (preflight) as the
+    // key does, without sending the key.
+    const checked = await probe("checked", health, { mode: "cors", headers: { "Content-Type": "application/json" } });
+    add(checked.ok ? "ok" : "fail",
+        checked.ok ? `Permission check (preflight) passed without the key: answered ${checked.status} (${checked.ms} ms)` : `Permission check (preflight) failed even without the key (${checked.ms} ms)`,
+        checked.ok ? "" : checked.error);
+
     const keyed = await probe("keyed", health, { mode: "cors", headers: { Authorization: "Bearer " + pairing.token } });
     add(keyed.ok && keyed.status === 200 ? "ok" : "fail",
         keyed.ok ? `Paired request answered ${keyed.status} (${keyed.ms} ms)` : `Paired request failed (${keyed.ms} ms)`,
@@ -232,8 +244,14 @@ async function run() {
         add(xhr.event === "load" ? "ok" : "fail", `Same request as XMLHttpRequest: ${xhr.event}, status ${xhr.status} (${xhr.ms} ms)`);
     }
 
+    if (violations.length) {
+        add("fail", "Blocked by this website's security policy", violations.join(" | "));
+    }
+
     let verdict;
-    if (keyed.ok && keyed.status === 200) {
+    if (violations.length) {
+        verdict = ["bad", "This website's own security policy (sent by GitHub Pages) blocks it from contacting the PC. Send this report."];
+    } else if (keyed.ok && keyed.status === 200) {
         verdict = ["good", "Everything works from this website right now. If F Alt Tab still fails, note the time and send this report."];
     } else if (keyed.ok && keyed.status === 401) {
         verdict = ["bad", "The PC answers but does not accept this phone's key: scan the GitHub Job Card QR on the PC again."];
@@ -241,13 +259,33 @@ async function run() {
         verdict = ["bad", "This website cannot reach the PC at all, although its own address works. Something on the phone (a Safari setting, content blocker, VPN or Private Relay) or the network stops this website from connecting to the PC."];
     } else if (!plain.ok) {
         verdict = ["bad", "The PC is reached but refuses this website. On the PC, enter this website under \"GitHub Pages website\" and press Save website."];
+    } else if (!checked.ok) {
+        verdict = ["bad", "The PC accepts this website, but its permission check (preflight) fails for any request that needs one. Send this report."];
     } else {
-        verdict = ["bad", "The PC accepts this website but refuses the paired request's permission check. Send this report."];
+        verdict = ["bad", "The PC accepts this website and its permission check, but refuses requests carrying the pairing key. Send this report."];
     }
     verdictBox.className = `verdict ${verdict[0]}`;
     verdictBox.textContent = verdict[1];
     lines.unshift(`VERDICT: ${verdict[1]}`);
     finish();
+}
+
+// What this website itself imposes on its pages: security headers sent with
+// this page (re-read with a same-origin request) and any service worker.
+async function pageEnvironment() {
+    try {
+        const response = await fetch(location.href.split("#")[0], { cache: "no-store" });
+        const names = ["content-security-policy", "content-security-policy-report-only", "permissions-policy",
+            "cross-origin-opener-policy", "cross-origin-embedder-policy", "referrer-policy", "server"];
+        const found = names.filter((name) => response.headers.has(name))
+            .map((name) => `${name}: ${response.headers.get(name).slice(0, 200)}`);
+        const blocking = found.some((line) => /^(content-security-policy|cross-origin-embedder-policy):/.test(line));
+        add(blocking ? "fail" : "info", blocking ? "This website sends security headers that can restrict its pages" : "This website's security headers", found.join(" · ") || "none of note");
+    } catch (error) {
+        add("info", "Could not re-read this page's headers", describeError(error));
+    }
+    const worker = navigator.serviceWorker && navigator.serviceWorker.controller;
+    add(worker ? "fail" : "ok", worker ? "A service worker controls this page" : "No service worker controls this page", worker ? worker.scriptURL : "");
 }
 
 // From any public website: can Safari connect to this PC at all? No key is
