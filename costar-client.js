@@ -49,7 +49,7 @@
                 } catch (error) {
                     // Browsers only say "Load failed"; name the PC. Still a TypeError, so callers can tell it was the connection.
                     if (error && error.name === "AbortError") throw new Error("The PC helper did not answer within 8 seconds.");
-                    if (error instanceof TypeError) throw new TypeError("Could not reach the PC helper at " + new URL(config.baseUrl).host + ".");
+                    if (error instanceof TypeError) throw new TypeError("Could not reach the PC helper at " + new URL(config.baseUrl).host + ". If its own page shows a certificate warning, reinstall the PC's certificate on this phone.");
                     throw error;
                 }
                 if (response.status === 404 && path.startsWith("/jobs/")) return null;
