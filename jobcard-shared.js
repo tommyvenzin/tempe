@@ -5,7 +5,11 @@
     const LEGACY_KEY = "fitment:mobile-jobcard:v3";
     const CHANGE_KEY = "fitment:jobcard:changed:v1";
     const FIELDS = ["customerName", "phone", "rego", "kilometres", "vehicle", "notes"];
-    const STATUSES = ["queued", "awaiting_approval", "injecting", "failed", "ready_for_review"];
+    // "removed": taken off the queue on the desk PC (2.4.0). A job the PC no longer knows at all is
+    // marked gone on this card (operation "gone") so a new card can be started.
+    const STATUSES = ["queued", "awaiting_approval", "injecting", "failed", "ready_for_review", "removed"];
+    // The submission is finished with as far as this phone is concerned: a new card may start.
+    function settled(sub) { return !sub || sub.status === "ready_for_review" || sub.status === "removed" || sub.status === "failed" || sub.gone === true; }
     const clone = value => JSON.parse(JSON.stringify(value));
     const clean = value => String(value == null ? "" : value).trim();
     const sku = value => clean(value).toUpperCase();
@@ -112,7 +116,7 @@
             const sub = state.submission, status = action.status;
             if (!sub || status.submissionId !== sub.payload.submissionId) fail("The PC returned a status for another submission.");
             if (!STATUSES.includes(status.status) || !Number.isInteger(status.version) || status.version < 1) fail("The PC returned an unsupported job status.");
-            if (status.version <= sub.serverVersion || sub.status === "ready_for_review") return state;
+            if (status.version <= sub.serverVersion || sub.status === "ready_for_review" || sub.status === "removed") return state;
             sub.status = status.status; sub.serverVersion = status.version;
             sub.message = clean(status.message).slice(0, 1000); sub.progress = clean(status.progress).slice(0, 400);
             sub.deliveryUnknown = false;
@@ -124,8 +128,18 @@
                 state.submission.message = "Connection interrupted. The PC may already have received this order. Retry uses the same submission ID.";
             }
             break;
+        case "gone":
+            // The PC answered "unknown submission": the order was closed or removed there (or the
+            // desk's queue was reset). Nothing more can happen to it from this phone.
+            if (state.submission && state.submission.payload.submissionId === action.submissionId && state.submission.status !== "awaiting_ack") {
+                state.submission.gone = true;
+                state.submission.message = "The PC closed or removed this order. Start a new job card when ready.";
+            }
+            break;
         case "new":
-            if (state.submission && state.submission.status !== "ready_for_review") fail("Wait until this order is Ready for Review before starting a new job.");
+            // 2.4.1: allowed once the order is ready for review, removed or gone, and also after a stop
+            // (failed): the failed order stays on the desk PC for Retry / Mark done / Remove there.
+            if (!settled(state.submission)) fail("Wait until this order is Ready for Review (or stopped) before starting a new job.");
             return empty(action.newJobId);
         default: fail("Unknown Job Card operation.");
         }
@@ -237,7 +251,7 @@
         toast(`${sku(product.sku)} ${replaceId ? "replaced" : "added"} on the Job Card · quantity ${product.type === "tyre" ? 4 : 1}`);
         return result;
     }
-    const api = { FIELDS, STATUSES, validSku, ordered, empty, migrate, validation, snapshot, reduce, preview, createStore, getStore, uuid, toast, dialog, addProduct };
+    const api = { FIELDS, STATUSES, settled, validSku, ordered, empty, migrate, validation, snapshot, reduce, preview, createStore, getStore, uuid, toast, dialog, addProduct };
     root.TempeJobCard = api;
     if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

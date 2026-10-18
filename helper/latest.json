@@ -1,8 +1,8 @@
 {
-  "version": "2.4.1",
-  "name": "2.4.1 - renovation, first look",
-  "zip": "Tempe-COSTAR-Helper-v2.4.1.zip",
-  "sha256": "6788eb0ca75d5061f2bcff44a57b6828ce73107d69dea14ee4869a5e6aaa3c3e",
-  "size": 423267,
-  "notes": "First-look fixes: the desk PC sees the RDP helper as soon as it is open (mobile off shows amber, cards wait in the queue); short COSTAR names in the list; finished-order line and grey details on the Online tab; texts no longer run off the edge; taller desk window."
+  "version": "2.4.2",
+  "name": "2.4.2 - phone card unstuck",
+  "zip": "Tempe-COSTAR-Helper-v2.4.2.zip",
+  "sha256": "cebfd47880dbfd191a62019328c3e094912b5abe6d8d29481d4ae93dd835219e",
+  "size": 425262,
+  "notes": "The phone job card can start a new card after a stopped, removed or closed order (it was stuck on the last order). Upload the website files too."
 }

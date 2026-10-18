@@ -109,8 +109,8 @@ function renderPreview() {
 function renderStatus() {
     if (!$("submitBtn")) return;
     const sub = currentJob?.submission;
-    const names = { awaiting_ack: "Waiting for PC confirmation", queued: "Queued", awaiting_approval: "Waiting for approval on PC", injecting: "Filling COSTAR", failed: "Stopped — Retry available", ready_for_review: "READY FOR REVIEW" };
-    $("submissionStatus").textContent = sub ? names[sub.status] || sub.status : "Not submitted";
+    const names = { awaiting_ack: "Waiting for PC confirmation", queued: "Queued", awaiting_approval: "Waiting for approval on PC", injecting: "Filling COSTAR", failed: "Stopped — Retry on this phone, or New job", ready_for_review: "READY FOR REVIEW", removed: "Removed on the desk PC" };
+    $("submissionStatus").textContent = !sub ? "Not submitted" : sub.gone ? "Closed on the PC — start a new job" : names[sub.status] || sub.status;
     $("injectionProgress").textContent = sub?.progress || sub?.message || "";
     $("jobcardError").textContent = statusMessage;
     $("jobcardError").hidden = !statusMessage;
@@ -118,9 +118,10 @@ function renderStatus() {
     $("snapshotNotice").textContent = sub ? "The submitted order is fixed. Further edits and added products stay on this card; they will not change the order sent to COSTAR." : "";
     $("submitBtn").disabled = !currentJob || !storageHealthy || !helperReady || !!sub || sending;
     $("submitBtn").textContent = sub ? "ORDER SUBMITTED" : "SUBMIT TO COSTAR";
-    $("retryBtn").hidden = !sub || !(sub.status === "failed" || sub.status === "awaiting_ack");
+    $("retryBtn").hidden = !sub || sub.gone || !(sub.status === "failed" || sub.status === "awaiting_ack");
     $("retryBtn").disabled = !helperReady || sending;
-    $("newJobBtn").disabled = !currentJob || !storageHealthy || sending || !!(sub && sub.status !== "ready_for_review");
+    // New job: once the order is ready for review, removed, gone from the PC, or stopped (failed).
+    $("newJobBtn").disabled = !currentJob || !storageHealthy || sending || !jobCore.settled(sub);
 }
 async function poll() {
     if (polling) return;
@@ -136,14 +137,19 @@ async function poll() {
         }
         const health = await pcClient.health();
         helperReady = health.receiving === true && health.workerConnected === true;
-        $("helperConnection").textContent = helperReady ? "PC helper connected · RDP worker online" : "PC receiver connected · RDP worker unavailable or stopped";
+        // 2.4.0 receivers also say whether the RDP helper is taking jobs right now (workerAccepting);
+        // older ones only say whether it is connected.
+        const accepting = health.workerAccepting;
+        $("helperConnection").textContent = !helperReady ? "PC receiver connected · RDP helper unavailable or stopped"
+            : accepting === false ? "PC helper connected · RDP helper in touch, mobile entry off (your card will wait in the queue)"
+            : "PC helper connected · RDP helper online";
         $("queueStatus").textContent = Number.isInteger(health.pendingCount) && health.pendingCount >= 0 ? `${health.pendingCount} pending order${health.pendingCount === 1 ? "" : "s"}` : "Queue status unavailable";
         statusMessage = "";
         const sub = currentJob?.submission;
         if (sub && sub.status !== "ready_for_review") {
             const status = await pcClient.getJob(sub.payload.submissionId);
             if (status) applyState(await mutate({ type: "status", jobId: currentJob.jobId, status }));
-            else if (sub.status !== "awaiting_ack") statusMessage = "The PC no longer reports this submission. Check the helper before retrying.";
+            else if (sub.status !== "awaiting_ack" && !sub.gone) applyState(await mutate({ type: "gone", jobId: currentJob.jobId, submissionId: sub.payload.submissionId }));
         }
     } catch (error) {
         helperReady = false;
@@ -194,7 +200,11 @@ async function newJob() {
     try {
         await refreshDraft();
         const oldId = currentJob.jobId;
-        const confirmed = await jobCore.dialog("Clear this job card and start a new one?", [{ label: "Confirm", value: true }, { label: "Cancel", value: null }]);
+        const sub = currentJob.submission;
+        const question = sub && sub.status === "failed" && !sub.gone
+            ? "This order stopped on the PC. It stays there for Retry, Mark done or Remove. Clear this card and start a new one?"
+            : "Clear this job card and start a new one?";
+        const confirmed = await jobCore.dialog(question, [{ label: "Confirm", value: true }, { label: "Cancel", value: null }]);
         if (!confirmed) return;
         const state = await mutate({ type: "new", jobId: oldId, newJobId: jobCore.uuid() });
         // Old one-tyre handoffs must never repopulate the next customer's card.
