@@ -1,8 +1,8 @@
 {
-  "version": "2.3.2",
-  "name": "2.3.2 - DET first fixed",
-  "zip": "Tempe-COSTAR-Helper-v2.3.2.zip",
-  "sha256": "9ea764081ac2d2105a8d45f1dc07a5e29ff934da9ae735bcce0bd692416ef614",
-  "size": 386040,
-  "notes": "Fixes the stop after the first item with DET first (COSTAR opens the line you are on), and adds a DET first tick box: untick it for the old way, items first then DET."
+  "version": "2.4.0",
+  "name": "2.4.0 - renovation",
+  "zip": "Tempe-COSTAR-Helper-v2.4.0.zip",
+  "sha256": "bcad26a85132b7da2e2e2b94afb5edad07d6c9fd2a503110358886d815b76021",
+  "size": 421285,
+  "notes": "New window with a state chip and progress; Release job / Start this job again / Mark done so nothing gets stuck; mobile jobs start at once (held connection); Files tab with clean-up and one-click diagnostics ZIP; the desk receiver updates itself too (start it once from the new folder)."
 }
