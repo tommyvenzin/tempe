@@ -53,6 +53,12 @@
   }
   function loadSettings() { return { url: "", people: "", names: false, on: false, ...readJson(SETTINGS_KEY, {}) }; }
   function saveSettings(cfg) { writeJson(SETTINGS_KEY, { url: cfg.url || "", people: cfg.people || "", names: !!cfg.names, on: !!cfg.on }); }
+  // The board's leave-out list (people no longer at Tempe, the boss): a Set, an array or "MD ST UBH YTA".
+  function leaveOutSet(value) {
+    if (value instanceof Set) return new Set([...value].map((x) => String(x).toUpperCase()));
+    if (Array.isArray(value)) return new Set(value.map((x) => String(x).toUpperCase()));
+    return R.parseInitials(value).set;
+  }
   // msgs: Discord message id → { at, items, dirty }; active: doc → message id of its open line;
   // quiet: doc → status, for alerts whose message someone deleted (not posted again until it changes).
   function emptyState() { return { v: 1, msgs: {}, active: {}, quiet: {} }; }
@@ -136,6 +142,15 @@
     const msg = id && st.msgs[id];
     return msg ? msg.items.find((i) => i.doc === doc && !i.done) || null : null;
   }
+  // A left-out salesperson's open line comes out of its message altogether.
+  function drop(st, doc) {
+    const id = st.active[doc];
+    delete st.active[doc];
+    const msg = id && st.msgs[id];
+    if (!msg) return;
+    msg.items = msg.items.filter((i) => !(i.doc === doc && !i.done));
+    msg.dirty = true;
+  }
   function finish(st, doc, text, nowMs) {
     const id = st.active[doc];
     const item = activeItem(st, doc);
@@ -146,21 +161,29 @@
   }
 
   /* results: the board's evaluated jobs. state: from loadSent(). cfg: loadSettings().
-     ctx: { nowMs, today, shopHours, wipComplete (an unfiltered, fresh WIP read), boardUrl }.
+     ctx: { nowMs, today, shopHours, wipComplete (an unfiltered, fresh WIP read), boardUrl, leaveOut }.
+     results must include left-out people's jobs, so their open lines can be taken out of messages
+     (a job missing from results means it left Work-in-Progress).
      Returns { state, posts: [{ items, content, mentions }], patches: [message id] }.
      The board posts, then calls recordPost; after each edit it calls edited. */
   function plan(results, state, cfg, ctx) {
     const st = JSON.parse(JSON.stringify(state && state.v === 1 ? { quiet: {}, ...state } : emptyState()));
     prune(st, ctx.nowMs);
     const { people } = parsePeople(cfg.people);
+    const skip = leaveOutSet(ctx.leaveOut);
     const byDoc = new Map(results.map((r) => [String(r.row.doc), r]));
     for (const [doc, status] of Object.entries(st.quiet)) {
       const r = byDoc.get(doc);
       if (!r || r.status !== status) delete st.quiet[doc];
     }
+    for (const doc of Object.keys(st.active)) {
+      const r = byDoc.get(doc);
+      if (r && skip.has(by(r))) drop(st, doc);
+    }
     const fresh = [];
     for (const r of results) {
       if (r.status !== "red" && r.status !== "warn") continue;
+      if (skip.has(by(r))) continue;
       const now = describe(r, cfg, people);
       if (st.quiet[now.doc]) continue;
       const item = activeItem(st, now.doc);
@@ -188,7 +211,12 @@
       }
       flush();
     }
-    return { state: st, posts, patches: Object.keys(st.msgs).filter((id) => st.msgs[id].dirty) };
+    const dirty = Object.keys(st.msgs).filter((id) => st.msgs[id].dirty);
+    return {
+      state: st, posts,
+      patches: dirty.filter((id) => st.msgs[id].items.length),
+      deletes: dirty.filter((id) => !st.msgs[id].items.length),   // nothing left in it: delete the message
+    };
   }
 
   function recordPost(st, post, id, nowMs) {
@@ -196,6 +224,10 @@
     for (const i of post.items) st.active[i.doc] = id;
   }
   function edited(st, id) { if (st.msgs[id]) delete st.msgs[id].dirty; }
+  function deleted(st, id) {
+    for (const [doc, msgId] of Object.entries(st.active)) if (msgId === id) delete st.active[doc];
+    delete st.msgs[id];
+  }
   // The message is gone from Discord (someone deleted it): stop editing it, and don't post its
   // open alerts again unless the job changes.
   function forget(st, id) {
@@ -226,15 +258,17 @@
   // The Send test message: shows every tag as a name (nobody is pinged).
   function testBody(cfg, ctx) {
     const { people } = parsePeople(cfg.people);
+    const skip = leaveOutSet(ctx && ctx.leaveOut);
     const tags = Object.entries(people).map(([initials, id]) => `${md(initials)} → <@${id}>`).join(", ");
     const lines = ["✅ **Order Check alerts are connected.**", tags ? `Tags: ${tags}` : "No people listed yet, so alerts show initials without tagging anyone."];
+    if (skip.size) lines.push(`Left out: ${md([...skip].join(", "))}`);
     if (ctx && ctx.boardUrl) lines.push(`-# [Open the board](${ctx.boardUrl})`);
     return { content: lines.join("\n"), allowed_mentions: { parse: [] }, flags: SUPPRESS_EMBEDS };
   }
 
   const api = {
-    SETTINGS_KEY, SENT_KEY, LINES_PER_MESSAGE, parseWebhook, parsePeople, loadSettings, saveSettings, loadSent, saveSent,
-    emptyState, inShopHours, plan, recordPost, edited, forget, postBody, editBody, testBody, renderItems, money, md,
+    SETTINGS_KEY, SENT_KEY, LINES_PER_MESSAGE, parseWebhook, parsePeople, leaveOutSet, loadSettings, saveSettings, loadSent, saveSent,
+    emptyState, inShopHours, plan, recordPost, edited, deleted, forget, postBody, editBody, testBody, renderItems, money, md,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.OrderDiscord = api;

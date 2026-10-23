@@ -323,7 +323,17 @@
     return (a.row.orderDate || "") < (b.row.orderDate || "") ? -1 : (a.row.orderDate || "") > (b.row.orderDate || "") ? 1 : (a.row.doc < b.row.doc ? -1 : 1);
   }
 
-  const api = { GRACE_MINUTES, NOT_PICKED_MINUTES, ORDER, FIX, shortFixes, isoOf, parseIso, addDays, friendlyDate, readComment, parsePicking, docKey, evaluate, compare, slipSummary, clean, helperRef, slipTaken, slipDone, notPicked };
+  // "MD, ST UBH;YTA" → Set {MD, ST, UBH, YTA}: COSTAR "Written By" initials, for the leave-out list.
+  function parseInitials(text) {
+    const set = new Set(), bad = [];
+    for (const part of String(text || "").split(/[\s,;/]+/)) {
+      if (!part) continue;
+      if (/^[A-Za-z][A-Za-z0-9]{0,5}$/.test(part)) set.add(part.toUpperCase()); else bad.push(part);
+    }
+    return { set, bad };
+  }
+
+  const api = { GRACE_MINUTES, NOT_PICKED_MINUTES, ORDER, FIX, shortFixes, isoOf, parseIso, addDays, friendlyDate, readComment, parsePicking, docKey, evaluate, compare, slipSummary, clean, helperRef, slipTaken, slipDone, notPicked, parseInitials };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.OrderRules = api;
 })(this);

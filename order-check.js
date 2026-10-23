@@ -1,11 +1,11 @@
-/* Tempe Order Check board 1.6.0
+/* Tempe Order Check board 1.6.1
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
    as the publisher, shares the results with the team and sends Discord alerts.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.6.0";
+  const VERSION = "1.6.1";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
@@ -27,6 +27,8 @@
   const STALE_MS = 5 * 60000;          // the team view warns after this
   const STORE_KEY = "orderCheck.v1";
   const UPDATE_KEY = "orderCheck.autoUpdate";
+  const LEAVE_OUT_KEY = "orderCheck.leaveOut";
+  const LEAVE_OUT_DEFAULT = "MD ST UBH YTA";   // Tommy, 23 Oct: ST is the boss, MD, UBH and YTA have left
 
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -34,7 +36,7 @@
     slips: new Map(), recordsSeen: new Set(),
     daysLoaded: new Set(), pickingError: "", pickingAt: 0, loadingDays: false,
     searched: new Map(), searching: new Set(), rechecked: new Map(),
-    results: [], lastRed: null, expanded: new Set(), bridgeOk: null,
+    results: [], allResults: [], lastRed: null, expanded: new Set(), bridgeOk: null,
     prefs: { view: "action", by: "ALL", sound: false, me: "" },
     query: "",
     share: { started: false, note: "", user: null, role: "", error: "", otherPublisher: false, showForm: false, sending: false, lastShared: 0, lastSharedAt: 0 },
@@ -74,6 +76,22 @@
       }
       localStorage.setItem(STORE_KEY, JSON.stringify({ prefs: state.prefs, history }));
     } catch { /* storage full or blocked: the board still works */ }
+  }
+
+  // People whose jobs Order Check leaves out everywhere: this board, the team view (it only gets
+  // what this board shares) and Discord. Kept on the RDP board; the link next to the salespeople edits it.
+  function leaveOutText() {
+    try { const v = localStorage.getItem(LEAVE_OUT_KEY); return v === null ? LEAVE_OUT_DEFAULT : v; } catch { return LEAVE_OUT_DEFAULT; }
+  }
+  function leaveOut() { return R.parseInitials(leaveOutText()).set; }
+  function editLeaveOut() {
+    const answer = prompt("Leave these salespeople out of Order Check: the board, the team view and Discord.\n\nTheir initials, separated by spaces:", [...leaveOut()].join(" "));
+    if (answer === null) return;
+    const parsed = R.parseInitials(answer);
+    if (parsed.bad.length) { alert(`"${parsed.bad.join(" ")}" isn't initials, so nothing changed.`); return; }
+    try { localStorage.setItem(LEAVE_OUT_KEY, [...parsed.set].join(" ")); } catch { /* storage blocked */ }
+    evaluateAll(); render(); publish();
+    alerts.lastRun = 0; runAlerts();
   }
 
   // ------------------------------------------------------------ network
@@ -418,9 +436,9 @@
       const now = new Date(), w = state.wip;
       const ctx = {
         nowMs: now.getTime(), today: R.isoOf(now), shopHours: Discord.inShopHours(now), boardUrl: boardLink(),
-        wipComplete: w.state === "ok" && !w.filter && Array.isArray(w.rows) && w.rows.length > 0,
+        wipComplete: w.state === "ok" && !w.filter && Array.isArray(w.rows) && w.rows.length > 0, leaveOut: leaveOut(),
       };
-      const p = Discord.plan(state.results, Discord.loadSent(), cfg, ctx);
+      const p = Discord.plan(state.allResults, Discord.loadSent(), cfg, ctx);
       const st = p.state;
       Discord.saveSent(st);
       for (const post of p.posts) {
@@ -439,6 +457,15 @@
         else if (res.status === 429) { alerts.retryAt = Date.now() + 60000; break; }
         else if (res.status >= 300) throw new Error(discordProblem(res));
         else Discord.edited(st, id);
+        Discord.saveSent(st);
+        await pause(800);
+      }
+      for (const id of p.deletes || []) {   // every line in it belonged to someone now left out
+        if (Date.now() < alerts.retryAt) break;
+        const res = await discordCall("DELETE", `${hook.url}/messages/${id}`);
+        if (res.status === 429) { alerts.retryAt = Date.now() + 60000; break; }
+        if (res.status >= 300 && !(res.status === 404 && res.data && res.data.code === 10008)) throw new Error(discordProblem(res));
+        Discord.deleted(st, id);
         Discord.saveSent(st);
         await pause(800);
       }
@@ -503,7 +530,7 @@
     if (problem) { setDiscordMsg(problem); return; }
     setDiscordMsg("Sending…", true);
     try {
-      const res = await discordCall("POST", `${f.hook.url}?wait=true`, Discord.testBody(f.cfg, { boardUrl: boardLink() }));
+      const res = await discordCall("POST", `${f.hook.url}?wait=true`, Discord.testBody(f.cfg, { boardUrl: boardLink(), leaveOut: leaveOut() }));
       if (res.status >= 300) throw new Error(res.status === 429 ? "Discord is busy. Try again in a minute." : discordProblem(res));
       setDiscordMsg("Sent. In the channel every tag should show a name. \"@unknown-user\" means a wrong ID, or that person hasn't joined yet.", true);
     } catch (error) {
@@ -552,11 +579,14 @@
     const now = Date.now();
     if (isViewer()) {
       state.results = state.cloud.rows ? [...state.cloud.rows.values()].filter((d) => d && d.row).map(fromCloud).sort(R.compare) : [];
+      state.allResults = state.results;
     } else {
       for (const [key, at] of state.searched) if (now - at > SEARCH_TTL_MS) state.searched.delete(key);
       const acks = { ...(state.wip?.acks || {}), ...state.cloud.acks };
       const ctx = { today: R.isoOf(new Date()), nowMs: now, slips: state.slips, searched: state.searched, acks };
-      state.results = (state.wip?.rows || []).map((row) => R.evaluate(row, ctx)).sort(R.compare);
+      state.allResults = (state.wip?.rows || []).map((row) => R.evaluate(row, ctx)).sort(R.compare);
+      const out = leaveOut();
+      state.results = out.size ? state.allResults.filter((r) => !out.has(String(r.row.by || "").trim().toUpperCase())) : state.allResults.slice();
     }
     applyPending(now);
     const alerts = new Set(state.results.filter((r) => r.status === "red" || r.status === "warn").map((r) => `${r.status}|${r.row.doc}`));
@@ -708,7 +738,9 @@
     const totalWarn = list.reduce((n, [, p]) => n + p.warn, 0);
     const chip = (by, label, red, warn) =>
       `<button type="button" class="person" data-by="${esc(by)}" aria-pressed="${state.prefs.by === by}">${esc(label)}${red ? `<span class="person-red" aria-label="${red} not ordered">${red}</span>` : ""}${warn ? `<span class="person-warn" aria-label="${warn} not picked">${warn}</span>` : ""}</button>`;
-    nav.innerHTML = chip("ALL", "Everyone", totalRed, totalWarn) + list.map(([by, p]) => chip(by, by, p.red, p.warn)).join("");
+    const out = isSource() ? [...leaveOut()] : [];
+    const edit = isSource() ? `<button type="button" class="link people-out" id="editLeaveOut" title="Their jobs aren't shown, shared or sent to Discord">${out.length ? `Left out: ${esc(out.join(", "))}` : "Leave someone out"}</button>` : "";
+    nav.innerHTML = chip("ALL", "Everyone", totalRed, totalWarn) + list.map(([by, p]) => chip(by, by, p.red, p.warn)).join("") + edit;
   }
 
   function renderTable(mine) {
@@ -877,6 +909,7 @@
       if (t.id === "forgot") { forgotPassword(); return; }
       if (t.id === "suggest") { $("password").type = "text"; $("password").value = Share.suggestPassphrase(); $("password").focus(); return; }
       if (t.id === "openDiscord") { openDiscord(); return; }
+      if (t.id === "editLeaveOut") { editLeaveOut(); return; }
       if (t.id === "dcClose") { $("discord").hidden = true; return; }
       if (t.id === "dcTest") { testDiscord(); return; }
       if (t.matches("tr.has-slips")) toggle(t.dataset.doc);
