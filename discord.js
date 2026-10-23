@@ -1,27 +1,28 @@
 /* Tempe Order Check: Discord alerts.
-   Works out what to post and what to edit, so the same code runs in the board and in the
+   Works out what to post, edit and delete, so the same code runs in the board and in the
    Node tests. The RDP board sends it to a Discord channel webhook through the
    "Tom does it all" extension (no bot, no commands).
 
-   - A job that turns red (Not ordered) or orange (Not picked) gets one line under its
-     salesperson ("MOR :", tagging them): Doc# - Name - Amount - Comment - what's wrong.
-     Lines that appear together go in one message (at most 10 per message).
-   - When the job is fixed, its line is edited to ✅ (editing never pings anyone).
-   - New alerts only go out in shop hours (Monday to Saturday, 7:00 to 18:30); anything that
-     turns red overnight goes out together at 7:00. */
+   The channel shows only what's wrong right now, one message per salesperson. The heading is
+   their tag when their Discord ID is listed (it pings them), otherwise their initials:
+
+     DB :
+     07510297 - TAEHO CHOI - $1,560 - EDC44U - **Tick Customer Waiting**
+     07510467 - PHILIP INNESS - $30 - FFI80G - **Tick Customer Waiting**
+
+   - A new problem re-posts that salesperson's message (old one deleted), so Discord notifies.
+   - A fixed job's line is edited out (no notification); with nothing left the message is deleted.
+   - New problems only go out Monday to Saturday, 7:00 to 18:30; overnight ones go out at 7:00.
+   No links and no test messages. */
 (function (root) {
   "use strict";
   const R = typeof module !== "undefined" && module.exports ? require("./order-rules.js") : root.OrderRules;
 
   const SETTINGS_KEY = "orderCheck.discord";
   const SENT_KEY = "orderCheck.discord.sent";
-  const LINES_PER_MESSAGE = 10;
-  const POST_CHARS = 1400;            // Discord allows 2,000; ✅ lines are longer than the alerts they replace
-  const MAX_CHARS = 1990;
-  const KEEP_MS = 7 * 86400000;       // finished messages are forgotten after a week
-  const FORGET_MS = 21 * 86400000;    // anything older is forgotten too
-  const SUPPRESS_EMBEDS = 4;          // no link preview under the board link
-  const SETTLED = ["green", "ok", "amber", "grey"];
+  const MAX_CHARS = 1900;             // Discord allows 2,000 per message
+  const SUPPRESS_EMBEDS = 4;
+  const SUPPRESS_NOTIFICATIONS = 4096; // "silent" message: used once, when 1.6.3 redraws the channel
   const HOOK_RE = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/(\d{15,22})\/([A-Za-z0-9_-]{20,})\/?$/;
 
   // ------------------------------------------------------------ settings
@@ -29,18 +30,6 @@
   function parseWebhook(url) {
     const m = HOOK_RE.exec(String(url || "").trim());
     return m ? { id: m[1], url: `https://discord.com/api/webhooks/${m[1]}/${m[2]}` } : null;
-  }
-
-  // "MOR = 123456789012345678", one per line ("MOR 1234…", "MOR: <@1234…>" work too).
-  function parsePeople(text) {
-    const people = {}, bad = [];
-    for (const raw of String(text || "").split(/\r?\n/)) {
-      const line = raw.trim();
-      if (!line) continue;
-      const m = /^([A-Za-z][A-Za-z0-9]{0,5})\s*[=:,\s-]\s*<?@?!?(\d{15,22})>?$/.exec(line);
-      if (m) people[m[1].toUpperCase()] = m[2]; else bad.push(line);
-    }
-    return { people, bad };
   }
 
   function store() {
@@ -52,21 +41,31 @@
   function writeJson(key, value) {
     try { const s = store(); if (s) s.setItem(key, JSON.stringify(value)); } catch { /* storage full or blocked */ }
   }
-  function loadSettings() { const s = { url: "", people: "", on: false, ...readJson(SETTINGS_KEY, {}) }; delete s.names; return s; }
+  function loadSettings() { const s = readJson(SETTINGS_KEY, {}) || {}; return { url: String(s.url || ""), people: String(s.people || ""), on: !!s.on }; }
   function saveSettings(cfg) { writeJson(SETTINGS_KEY, { url: cfg.url || "", people: cfg.people || "", on: !!cfg.on }); }
-  // The board's leave-out list (people no longer at Tempe, the boss): a Set, an array or "MD ST UBH YTA".
-  function leaveOutSet(value) {
-    if (value instanceof Set) return new Set([...value].map((x) => String(x).toUpperCase()));
-    if (Array.isArray(value)) return new Set(value.map((x) => String(x).toUpperCase()));
-    return R.parseInitials(value).set;
+
+  // "TOG = 123456789012345678", one per line ("TOG 1234…", "TOG: <@1234…>" work too).
+  function parsePeople(text) {
+    const people = {}, bad = [];
+    for (const raw of String(text || "").split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line) continue;
+      const m = /^([A-Za-z][A-Za-z0-9]{0,5})\s*[=:,\s-]\s*<?@?!?(\d{15,22})>?$/.exec(line);
+      if (m) people[m[1].toUpperCase()] = m[2]; else bad.push(line);
+    }
+    return { people, bad };
   }
-  // msgs: Discord message id → { at, items, dirty }; active: doc → message id of its open line;
-  // quiet: doc → status, for alerts whose message someone deleted (not posted again until it changes).
-  function emptyState() { return { v: 1, msgs: {}, active: {}, quiet: {} }; }
-  function loadSent() {
-    const st = readJson(SENT_KEY, null);
-    return st && st.v === 1 && st.msgs && st.active ? { quiet: {}, ...st } : emptyState();
+
+  // persons: initials → { msgs: [{ id, content }] (what Discord shows now), docs: [...] (jobs already announced), lines }
+  // cleanup: message ids still to delete. migrated: the next posts are silent (the 1.6.3 redraw).
+  function emptyState() { return { v: 2, persons: {}, cleanup: [] }; }
+  // Messages from 1.6.0–1.6.2 (mixed salespeople, ✅ lines, old layout) are all deleted and redrawn.
+  function upgrade(st) {
+    if (st && st.v === 2 && st.persons) return { cleanup: [], ...st };
+    if (st && st.v === 1 && st.msgs) return { v: 2, persons: {}, cleanup: Object.keys(st.msgs), migrated: true };
+    return emptyState();
   }
+  function loadSent() { return upgrade(readJson(SENT_KEY, null)); }
   function saveSent(st) { writeJson(SENT_KEY, st); }
 
   function inShopHours(date) {
@@ -75,9 +74,16 @@
     return m >= 7 * 60 && m <= 18 * 60 + 30;
   }
 
+  // The board's leave-out list (people no longer at Tempe, the boss): a Set, an array or "MD ST UBH YTA".
+  function leaveOutSet(value) {
+    if (value instanceof Set) return new Set([...value].map((x) => String(x).toUpperCase()));
+    if (Array.isArray(value)) return new Set(value.map((x) => String(x).toUpperCase()));
+    return R.parseInitials(value).set;
+  }
+
   // ------------------------------------------------------------ lines
 
-  // Customer names, comments and initials go into Discord as plain text, never as formatting or mentions.
+  // Names, comments and initials go into Discord as plain text, never as formatting or mentions.
   function md(s) { return String(s || "").replace(/([\\*_~`|<>[\]])/g, "\\$1").replace(/@/g, "@\u200b"); }
   function money(value) {
     const n = Number(value);
@@ -87,198 +93,125 @@
   }
   function by(r) { return String((r.row && r.row.by) || "?").trim().toUpperCase() || "?"; }
 
-  // One job, the way Tommy wants it (23 Oct):  Doc# - Name - Amount - Comment - what's wrong
-  // under a "MOR :" line for the salesperson (a tag when their Discord ID is listed).
-  function describe(r, cfg, people) {
-    const doc = String(r.row.doc);
-    const initials = by(r);
-    const id = people[initials] || "";
+  // Doc# - Name - Amount - Comment - what's wrong
+  function jobLine(r) {
     const pick = r.status === "warn" && r.summary && r.summary.pick ? r.summary.pick : "";
     const fix = r.status === "warn" ? `Not picked${pick ? ` (${pick})` : ""}` : R.shortFixes(r).join(", ");
-    const parts = [doc, md(String(r.row.name || "").trim()), money(r.row.total), md(String(r.row.comment || "").trim())].filter(Boolean);
-    return {
-      doc, by: initials, status: r.status, mention: id, who: id ? `<@${id}>` : md(initials),
-      line: `${parts.join(" - ")} - **${md(fix)}**`,
-      plain: `${parts.join(" - ")} - ${md(fix)}`,
-    };
+    const parts = [String(r.row.doc), md(String(r.row.name || "").trim()), money(r.row.total), md(String(r.row.comment || "").trim())].filter(Boolean);
+    return `${parts.join(" - ")} - **${md(fix)}**`;
   }
 
-  function newestClock(r, today) {
-    const newest = (r.slips || []).reduce((max, s) => (String(s.time) > max ? String(s.time) : max), "");
-    if (!newest) return "";
-    const day = newest.slice(0, 10);
-    return day === today ? newest.slice(11, 16) : R.friendlyDate(day, today);
-  }
-
-  // What the ✅ line says once the job no longer needs anyone.
-  function resolution(item, r, today) {
-    if (!r) return "no longer in Work-in-Progress";
-    if (r.status === "green" || r.status === "warn") {
-      if (item.status === "warn" && r.status === "green") return (r.summary && r.summary.pick) || "picked";
-      const at = newestClock(r, today);
-      return at ? `ordered ${at}` : "ordered";
+  // "DB :" (or their tag) and that salesperson's lines; more messages only past Discord's limit.
+  function heading(initials, people) { return people[initials] ? `<@${people[initials]}>` : md(initials); }
+  function messagesFor(initials, lines, people) {
+    const head = `${heading(initials, people || {})} :`;
+    const out = [];
+    let cur = [];
+    for (const line of lines) {
+      if (cur.length && [head, ...cur, line].join("\n").length > MAX_CHARS) { out.push([head, ...cur].join("\n")); cur = []; }
+      cur.push(line);
     }
-    if (r.status === "ok") return r.label === "Marked OK" ? `marked OK by ${(r.ack && r.ack.by) || "?"}` : `cleared: ${r.reason || "no order needed"}`;
-    if (r.status === "red") return "see the newer alert";
-    return r.reason || r.label || "cleared";
-  }
-
-  function doneLine(item, short) { return short ? `✅ ~~${item.doc}~~ ${md(item.done)}` : `✅ ~~${item.plain}~~ ${md(item.done)}`; }
-  // Grouped by salesperson, in the order they first appear:
-  //   MOR :
-  //   07460101 - CUSTOMER - $1,260 - R28688 - **Not picked (printed 09:52)**
-  function renderItems(items) {
-    for (const short of [false, true]) {
-      const groups = new Map();
-      for (const i of items) {
-        const who = String(i.who || i.by || "?").replace(/\*/g, "");   // lines from before 1.6.2 had bold initials
-        if (!groups.has(who)) groups.set(who, []);
-        groups.get(who).push(i.done ? doneLine(i, short) : i.line);
-      }
-      const text = [...groups.entries()].flatMap(([who, lines]) => [`${who} :`, ...lines]).join("\n");
-      if (text.length <= MAX_CHARS || short) return text.slice(0, MAX_CHARS);
-    }
-    return "";
+    if (cur.length) out.push([head, ...cur].join("\n").slice(0, MAX_CHARS));
+    return out;
   }
 
   // ------------------------------------------------------------ planning
 
-  function activeItem(st, doc) {
-    const id = st.active[doc];
-    const msg = id && st.msgs[id];
-    return msg ? msg.items.find((i) => i.doc === doc && !i.done) || null : null;
-  }
-  // A left-out salesperson's open line comes out of its message altogether.
-  function drop(st, doc) {
-    const id = st.active[doc];
-    delete st.active[doc];
-    const msg = id && st.msgs[id];
-    if (!msg) return;
-    msg.items = msg.items.filter((i) => !(i.doc === doc && !i.done));
-    msg.dirty = true;
-  }
-  function finish(st, doc, text, nowMs) {
-    const id = st.active[doc];
-    const item = activeItem(st, doc);
-    delete st.active[doc];
-    if (!item) return;
-    item.done = text; item.doneAt = nowMs;
-    st.msgs[id].dirty = true;
-  }
-
-  /* results: the board's evaluated jobs. state: from loadSent(). cfg: loadSettings().
-     ctx: { nowMs, today, shopHours, wipComplete (an unfiltered, fresh WIP read), boardUrl, leaveOut }.
-     results must include left-out people's jobs, so their open lines can be taken out of messages
-     (a job missing from results means it left Work-in-Progress).
-     Returns { state, posts: [{ items, content, mentions }], patches: [message id] }.
-     The board posts, then calls recordPost; after each edit it calls edited. */
+  /* results: every evaluated job, left-out people included (a job missing from results has
+     left Work-in-Progress). state: from loadSent(). ctx: { shopHours, wipComplete (an
+     unfiltered, fresh WIP read), leaveOut }.
+     Returns { state, deletes: [id], edits: [{ person, index, id, content }],
+               posts: [{ person, docs, lines, contents, silent, mention }] }.
+     The board deletes, then edits, then posts, and records each step with done / edited / recordPost. */
   function plan(results, state, cfg, ctx) {
-    const st = JSON.parse(JSON.stringify(state && state.v === 1 ? { quiet: {}, ...state } : emptyState()));
-    prune(st, ctx.nowMs);
-    const { people } = parsePeople(cfg.people);
+    const st = JSON.parse(JSON.stringify(upgrade(state)));
     const skip = leaveOutSet(ctx.leaveOut);
-    const byDoc = new Map(results.map((r) => [String(r.row.doc), r]));
-    for (const [doc, status] of Object.entries(st.quiet)) {
-      const r = byDoc.get(doc);
-      if (!r || r.status !== status) delete st.quiet[doc];
-    }
-    for (const doc of Object.keys(st.active)) {
-      const r = byDoc.get(doc);
-      if (r && skip.has(by(r))) drop(st, doc);
-    }
-    const fresh = [];
+    const { people: tags } = parsePeople(cfg.people);
+    const inWip = new Set(results.map((r) => String(r.row.doc)));
+    const open = new Map();
     for (const r of results) {
       if (r.status !== "red" && r.status !== "warn") continue;
-      if (skip.has(by(r))) continue;
-      const now = describe(r, cfg, people);
-      if (st.quiet[now.doc]) continue;
-      const item = activeItem(st, now.doc);
-      if (item && item.status === r.status) {
-        if (item.line !== now.line) { Object.assign(item, now); st.msgs[st.active[now.doc]].dirty = true; }
+      const initials = by(r);
+      if (skip.has(initials)) continue;
+      if (!open.has(initials)) open.set(initials, []);
+      open.get(initials).push({ doc: String(r.row.doc), line: jobLine(r) });
+    }
+    // A WIP read that's filtered or stale never removes a job that merely went missing.
+    if (!ctx.wipComplete) {
+      for (const [initials, p] of Object.entries(st.persons)) {
+        if (skip.has(initials)) continue;
+        for (const doc of p.docs) {
+          if (inWip.has(doc) || !p.lines[doc]) continue;
+          if (!open.has(initials)) open.set(initials, []);
+          if (!open.get(initials).some((x) => x.doc === doc)) open.get(initials).push({ doc, line: p.lines[doc] });
+        }
+      }
+    }
+    const edits = [], posts = [];
+    const people = [...new Set([...Object.keys(st.persons), ...open.keys()])].sort();
+    for (const initials of people) {
+      const prev = st.persons[initials] || { msgs: [], docs: [], lines: {} };
+      const now = open.get(initials) || [];
+      const fresh = now.filter((x) => !prev.docs.includes(x.doc));
+      const lines = Object.fromEntries(now.map((x) => [x.doc, x.line]));
+      if (fresh.length && ctx.shopHours) {
+        // Something new: the old message goes and the whole list is posted again, so Discord notifies.
+        st.cleanup.push(...prev.msgs.map((m) => m.id));
+        st.persons[initials] = { msgs: [], docs: prev.docs.filter((d) => lines[d]), lines };
+        posts.push({ person: initials, docs: now.map((x) => x.doc), lines, contents: messagesFor(initials, now.map((x) => x.line), tags), silent: !!st.migrated, mention: tags[initials] || "" });
         continue;
       }
-      if (item) finish(st, now.doc, resolution(item, r, ctx.today), ctx.nowMs);
-      fresh.push(now);
-    }
-    for (const doc of Object.keys(st.active)) {
-      const r = byDoc.get(doc);
-      if (!r ? ctx.wipComplete : SETTLED.includes(r.status)) finish(st, doc, resolution(activeItem(st, doc) || {}, r, ctx.today), ctx.nowMs);
-    }
-    const posts = [];
-    if (ctx.shopHours) {
-      // Keep each salesperson's jobs together, then fill messages up to 10 jobs / 1,400 characters.
-      const order = [];
-      for (const item of fresh) if (!order.includes(item.by)) order.push(item.by);
-      const sorted = order.flatMap((initials) => fresh.filter((i) => i.by === initials));
-      let items = [];
-      const flush = () => {
-        if (items.length) posts.push({ items, content: renderItems(items), mentions: [...new Set(items.map((x) => x.mention).filter(Boolean))] });
-        items = [];
-      };
-      for (const item of sorted) {
-        if (items.length && (items.length >= LINES_PER_MESSAGE || renderItems([...items, item]).length > POST_CHARS)) flush();
-        items.push(item);
+      const shown = now.filter((x) => prev.docs.includes(x.doc));   // new ones wait for shop hours
+      if (!shown.length) {
+        st.cleanup.push(...prev.msgs.map((m) => m.id));
+        if (fresh.length) st.persons[initials] = { msgs: [], docs: [], lines: {} };
+        else delete st.persons[initials];
+        continue;
       }
-      flush();
-    }
-    const dirty = Object.keys(st.msgs).filter((id) => st.msgs[id].dirty);
-    return {
-      state: st, posts,
-      patches: dirty.filter((id) => st.msgs[id].items.length),
-      deletes: dirty.filter((id) => !st.msgs[id].items.length),   // nothing left in it: delete the message
-    };
-  }
-
-  function recordPost(st, post, id, nowMs) {
-    st.msgs[id] = { at: nowMs, items: post.items.map((i) => ({ ...i, done: "" })) };
-    for (const i of post.items) st.active[i.doc] = id;
-  }
-  function edited(st, id) { if (st.msgs[id]) delete st.msgs[id].dirty; }
-  function deleted(st, id) {
-    for (const [doc, msgId] of Object.entries(st.active)) if (msgId === id) delete st.active[doc];
-    delete st.msgs[id];
-  }
-  // The message is gone from Discord (someone deleted it): stop editing it, and don't post its
-  // open alerts again unless the job changes.
-  function forget(st, id) {
-    if (!st.quiet) st.quiet = {};
-    const msg = st.msgs[id];
-    for (const [doc, msgId] of Object.entries(st.active)) {
-      if (msgId !== id) continue;
-      const item = msg && msg.items.find((i) => i.doc === doc && !i.done);
-      if (item) st.quiet[doc] = item.status;
-      delete st.active[doc];
-    }
-    delete st.msgs[id];
-  }
-  function prune(st, nowMs) {
-    for (const [id, msg] of Object.entries(st.msgs)) {
-      const finished = msg.items.every((i) => i.done) && !msg.dirty;
-      if (finished && nowMs - msg.at > KEEP_MS) delete st.msgs[id];
-      else if (nowMs - msg.at > FORGET_MS) {   // three weeks on: post it again as a reminder
-        for (const [doc, msgId] of Object.entries(st.active)) if (msgId === id) delete st.active[doc];
-        delete st.msgs[id];
+      const contents = messagesFor(initials, shown.map((x) => x.line), tags);
+      const keep = { msgs: prev.msgs.slice(), docs: shown.map((x) => x.doc), lines: Object.fromEntries(shown.map((x) => [x.doc, x.line])) };
+      if (!prev.msgs.length) { st.persons[initials] = keep; continue; }   // someone deleted it in Discord: wait for something new
+      if (contents.length > prev.msgs.length) {                          // a longer list than fits: post it again, quietly
+        st.cleanup.push(...prev.msgs.map((m) => m.id));
+        st.persons[initials] = { msgs: [], docs: [], lines: {} };
+        posts.push({ person: initials, docs: keep.docs, lines: keep.lines, contents, silent: true, mention: tags[initials] || "" });
+        continue;
       }
+      prev.msgs.forEach((m, i) => {
+        if (i >= contents.length) st.cleanup.push(m.id);
+        else if (m.content !== contents[i]) edits.push({ person: initials, index: i, id: m.id, content: contents[i] });
+      });
+      keep.msgs = prev.msgs.slice(0, contents.length);
+      st.persons[initials] = keep;
     }
+    st.cleanup = [...new Set(st.cleanup)];
+    return { state: st, deletes: st.cleanup.slice(), edits, posts };
   }
 
-  function postBody(post) { return { content: post.content, allowed_mentions: { parse: [], users: post.mentions }, flags: SUPPRESS_EMBEDS }; }
-  function editBody(st, id) { return { content: renderItems(st.msgs[id].items), allowed_mentions: { parse: [] }, flags: SUPPRESS_EMBEDS }; }
+  // Bookkeeping after each Discord call (the board saves the state after every step).
+  function done(st, id) { st.cleanup = st.cleanup.filter((x) => x !== id); }
+  function edited(st, edit) {
+    const p = st.persons[edit.person];
+    if (p && p.msgs[edit.index] && p.msgs[edit.index].id === edit.id) p.msgs[edit.index].content = edit.content;
+  }
+  // Someone deleted the message in Discord: stop editing it; the list comes back with the next new problem.
+  function gone(st, edit) {
+    const p = st.persons[edit.person];
+    if (p) p.msgs = p.msgs.filter((m) => m.id !== edit.id);
+  }
+  function recordPost(st, post, ids) {
+    st.persons[post.person] = { msgs: ids.map((id, i) => ({ id, content: post.contents[i] })), docs: post.docs.slice(), lines: { ...post.lines } };
+  }
+  function finishRound(st) { delete st.migrated; }
 
-  // The Send test message: shows every tag as a name (nobody is pinged).
-  function testBody(cfg, ctx) {
-    const { people } = parsePeople(cfg.people);
-    const skip = leaveOutSet(ctx && ctx.leaveOut);
-    const tags = Object.entries(people).map(([initials, id]) => `${md(initials)} → <@${id}>`).join(", ");
-    const lines = ["✅ **Order Check alerts are connected.**", tags ? `Tags: ${tags}` : "No people listed yet, so alerts show initials without tagging anyone."];
-    if (skip.size) lines.push(`Left out: ${md([...skip].join(", "))}`);
-    if (ctx && ctx.boardUrl) lines.push(`-# [Open the board](${ctx.boardUrl})`);
-    return { content: lines.join("\n"), allowed_mentions: { parse: [] }, flags: SUPPRESS_EMBEDS };
+  // Only a new post pings, and only the salesperson it's for. Edits never ping.
+  function body(content, silent, mention) {
+    return { content, allowed_mentions: { parse: [], users: mention ? [mention] : [] }, flags: SUPPRESS_EMBEDS | (silent ? SUPPRESS_NOTIFICATIONS : 0) };
   }
 
   const api = {
-    SETTINGS_KEY, SENT_KEY, LINES_PER_MESSAGE, parseWebhook, parsePeople, leaveOutSet, loadSettings, saveSettings, loadSent, saveSent,
-    emptyState, inShopHours, plan, recordPost, edited, deleted, forget, postBody, editBody, testBody, renderItems, money, md,
+    SETTINGS_KEY, SENT_KEY, parseWebhook, parsePeople, loadSettings, saveSettings, loadSent, saveSent, emptyState, upgrade, inShopHours,
+    leaveOutSet, jobLine, messagesFor, plan, done, edited, gone, recordPost, finishRound, body, money, md,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.OrderDiscord = api;

@@ -206,12 +206,11 @@
     <h2 id="discordTitle">Discord alerts</h2>
     <form id="discordForm">
       <label>Webhook link <input id="dcUrl" type="password" autocomplete="off" spellcheck="false" placeholder="https://discord.com/api/webhooks/…"></label>
-      <label>People <span class="label-sub">COSTAR initials = Discord user ID, one per line</span>
-        <textarea id="dcPeople" rows="6" spellcheck="false" placeholder="MOR = 123456789012345678"></textarea></label>
+      <label>People <span class="label-sub">COSTAR initials = Discord user ID, one per line. Their heading becomes their tag.</span>
+        <textarea id="dcPeople" rows="6" spellcheck="false" placeholder="TOG = 123456789012345678"></textarea></label>
       <label class="check"><input type="checkbox" id="dcOn"> Alerts on</label>
       <div class="signin-actions">
         <button type="submit" id="dcSave">Save</button>
-        <button type="button" class="link" id="dcTest">Send test</button>
         <button type="button" class="link" id="dcClose">Close</button>
       </div>
       <p id="dcMsg" class="signin-msg" role="status"></p>
@@ -259,10 +258,10 @@
   <p class="empty board-only" id="empty" hidden></p>
 </main>
 
-<script src="order-rules.js?v=1.6.2"></script>
-<script src="share-config.js?v=1.6.2"></script>
-<script src="share.js?v=1.6.2"></script>
-<script src="discord.js?v=1.6.2"></script>
-<script src="order-check.js?v=1.6.2"></script>
+<script src="order-rules.js?v=1.6.3"></script>
+<script src="share-config.js?v=1.6.3"></script>
+<script src="share.js?v=1.6.3"></script>
+<script src="discord.js?v=1.6.3"></script>
+<script src="order-check.js?v=1.6.3"></script>
 </body>
 </html>

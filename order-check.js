@@ -1,11 +1,11 @@
-/* Tempe Order Check board 1.6.2
+/* Tempe Order Check board 1.6.3
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
    as the publisher, shares the results with the team and sends Discord alerts.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.6.2";
+  const VERSION = "1.6.3";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
@@ -426,53 +426,70 @@
     return `Discord answered ${res.status}${res.data && res.data.message ? `: ${res.data.message}` : ""}.`;
   }
 
+  const unknownMessage = (res) => res.status === 404 && res.data && res.data.code === 10008;   // already deleted in Discord
+
+  // One message per salesperson (see discord.js): delete, then edit, then post, saving after every step
+  // so a reload or a failed call never posts twice or leaves a message behind.
   async function runAlerts() {
     if (!Discord || alerts.busy || Date.now() < alerts.retryAt || Date.now() - alerts.lastRun < 15000) return;
     const cfg = Discord.loadSettings();
     const hook = Discord.parseWebhook(cfg.url);
     if (!cfg.on || !hook || !alertsReady() || !holdAlertLock()) return;
     alerts.busy = true; alerts.lastRun = Date.now();
+    const busyNow = new Error("busy");
+    async function send(method, url, data) {
+      const res = await discordCall(method, url, data);
+      if (res.status === 429) { alerts.retryAt = Date.now() + 60000; throw busyNow; }
+      return res;
+    }
     try {
       const now = new Date(), w = state.wip;
       const ctx = {
-        nowMs: now.getTime(), today: R.isoOf(now), shopHours: Discord.inShopHours(now), boardUrl: boardLink(),
-        wipComplete: w.state === "ok" && !w.filter && Array.isArray(w.rows) && w.rows.length > 0, leaveOut: leaveOut(),
+        shopHours: Discord.inShopHours(now), leaveOut: leaveOut(),
+        wipComplete: w.state === "ok" && !w.filter && Array.isArray(w.rows) && w.rows.length > 0,
       };
       const p = Discord.plan(state.allResults, Discord.loadSent(), cfg, ctx);
       const st = p.state;
       Discord.saveSent(st);
+      for (const id of p.deletes) {
+        const res = await send("DELETE", `${hook.url}/messages/${id}`);
+        if (res.status < 300 || unknownMessage(res)) Discord.done(st, id);
+        else throw new Error(discordProblem(res));
+        Discord.saveSent(st);
+        await pause(700);
+      }
+      for (const edit of p.edits) {
+        const res = await send("PATCH", `${hook.url}/messages/${edit.id}`, Discord.body(edit.content, false, ""));
+        if (res.status < 300) Discord.edited(st, edit);
+        else if (unknownMessage(res)) Discord.gone(st, edit);
+        else throw new Error(discordProblem(res));
+        Discord.saveSent(st);
+        await pause(700);
+      }
       for (const post of p.posts) {
-        const res = await discordCall("POST", `${hook.url}?wait=true`, Discord.postBody(post));
-        if (res.status === 429) { alerts.retryAt = Date.now() + 60000; break; }
-        if (res.status >= 300 || !res.data || !res.data.id) throw new Error(discordProblem(res));
-        Discord.recordPost(st, post, String(res.data.id), ctx.nowMs);
-        Discord.saveSent(st);
-        alerts.lastSent = Date.now();
-        await pause(800);
+        const ids = [];
+        try {
+          for (const content of post.contents) {
+            const res = await send("POST", `${hook.url}?wait=true`, Discord.body(content, post.silent, post.mention));
+            if (res.status >= 300 || !res.data || !res.data.id) throw new Error(discordProblem(res));
+            ids.push(String(res.data.id));
+            await pause(700);
+          }
+          Discord.recordPost(st, post, ids);
+          alerts.lastSent = Date.now();
+        } catch (error) {
+          st.cleanup.push(...ids);   // half posted: tidied up next time
+          throw error;
+        } finally { Discord.saveSent(st); }
       }
-      for (const id of p.patches) {
-        if (Date.now() < alerts.retryAt) break;
-        const res = await discordCall("PATCH", `${hook.url}/messages/${id}`, Discord.editBody(st, id));
-        if (res.status === 404 && res.data && res.data.code === 10008) Discord.forget(st, id);   // someone deleted the message
-        else if (res.status === 429) { alerts.retryAt = Date.now() + 60000; break; }
-        else if (res.status >= 300) throw new Error(discordProblem(res));
-        else Discord.edited(st, id);
-        Discord.saveSent(st);
-        await pause(800);
-      }
-      for (const id of p.deletes || []) {   // every line in it belonged to someone now left out
-        if (Date.now() < alerts.retryAt) break;
-        const res = await discordCall("DELETE", `${hook.url}/messages/${id}`);
-        if (res.status === 429) { alerts.retryAt = Date.now() + 60000; break; }
-        if (res.status >= 300 && !(res.status === 404 && res.data && res.data.code === 10008)) throw new Error(discordProblem(res));
-        Discord.deleted(st, id);
-        Discord.saveSent(st);
-        await pause(800);
-      }
+      if (ctx.shopHours) Discord.finishRound(st);
+      Discord.saveSent(st);
       alerts.error = "";
     } catch (error) {
-      alerts.error = `Discord alerts: ${error.message === "bridge-timeout" ? "the extension didn't answer." : error.message}`;
-      alerts.retryAt = Date.now() + 5 * 60000;
+      if (error !== busyNow) {
+        alerts.error = `Discord alerts: ${error.message === "bridge-timeout" ? "the extension didn't answer." : error.message}`;
+        alerts.retryAt = Date.now() + 5 * 60000;
+      }
     } finally {
       alerts.busy = false;
       renderDiscordButton(); renderFeed();
@@ -510,7 +527,7 @@
     if (f.parsed.bad.length) return `Not understood: ${f.parsed.bad.slice(0, 3).join("; ")}. Write each line like MOR = 123456789012345678.`;
     return "";
   }
-  function saveDiscord() {
+  async function saveDiscord() {
     const f = discordForm();
     const problem = formProblem(f, false);
     if (problem) { setDiscordMsg(problem); return; }
@@ -518,23 +535,18 @@
     if (!before || !f.hook || before.url !== f.hook.url) Discord.saveSent(Discord.emptyState());   // another channel: start fresh
     Discord.saveSettings(f.cfg);
     alerts.error = ""; alerts.retryAt = 0; alerts.lastRun = 0;
-    const n = Object.keys(f.parsed.people).length;
-    setDiscordMsg(!f.hook ? "Saved without a webhook link, so alerts are off."
-      : f.cfg.on ? `Saved. Alerts are on${n ? `, tagging ${n} ${n === 1 ? "person" : "people"}` : ""}.` : "Saved. Alerts are off.", true);
     renderDiscordButton(); renderFeed();
-    runAlerts();
-  }
-  async function testDiscord() {
-    const f = discordForm();
-    const problem = formProblem(f, true);
-    if (problem) { setDiscordMsg(problem); return; }
-    setDiscordMsg("Sending…", true);
+    if (!f.hook) { setDiscordMsg("Saved without a webhook link, so alerts are off.", true); return; }
+    // Check the link with Discord without posting anything in the channel.
+    setDiscordMsg("Checking the link with Discord…", true);
     try {
-      const res = await discordCall("POST", `${f.hook.url}?wait=true`, Discord.testBody(f.cfg, { boardUrl: boardLink(), leaveOut: leaveOut() }));
-      if (res.status >= 300) throw new Error(res.status === 429 ? "Discord is busy. Try again in a minute." : discordProblem(res));
-      setDiscordMsg("Sent. In the channel every tag should show a name. \"@unknown-user\" means a wrong ID, or that person hasn't joined yet.", true);
+      const res = await discordCall("GET", f.hook.url);
+      if (res.status >= 300 || !res.data || !res.data.id) throw new Error(discordProblem(res));
+      const n = Object.keys(f.parsed.people).length;
+      setDiscordMsg(f.cfg.on ? `Saved. Alerts are on${n ? `, tagging ${n} ${n === 1 ? "person" : "people"}` : ""}.` : "Saved. Alerts are off.", true);
+      runAlerts();
     } catch (error) {
-      setDiscordMsg(error.message === "bridge-timeout" ? "The extension didn't answer. Reload this page and try again." : error.message);
+      setDiscordMsg(error.message === "bridge-timeout" ? "Saved, but the extension didn't answer. Reload this page." : `Saved, but: ${error.message}`);
     }
   }
 
@@ -911,7 +923,6 @@
       if (t.id === "openDiscord") { openDiscord(); return; }
       if (t.id === "editLeaveOut") { editLeaveOut(); return; }
       if (t.id === "dcClose") { $("discord").hidden = true; return; }
-      if (t.id === "dcTest") { testDiscord(); return; }
       if (t.matches("tr.has-slips")) toggle(t.dataset.doc);
     });
     document.addEventListener("keydown", (event) => {
