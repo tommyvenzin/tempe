@@ -1,11 +1,11 @@
-/* Tempe Order Check board 1.3.2
+/* Tempe Order Check board 1.5.0
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
    as the publisher, shares the results with the team.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.4.0";
+  const VERSION = "1.5.0";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
@@ -17,6 +17,8 @@
   const HISTORY_DAYS = 7;              // loaded once per day
   const SEARCH_TTL_MS = 12 * 3600000;  // a "no slip in history" answer is reused for 12 h
   const SEARCHES_PER_ROUND = 40;
+  const RECHECK_MS = 10 * 60000;       // a "not picked" slip from an earlier day is looked up again this often
+  const RECHECKS_PER_CYCLE = 10;
   const BRIDGE_TIMEOUT_MS = 25000;     // intranet pages can be slow
   const READER_TIMEOUT_MS = 5000;      // the reader answers from memory
   const BEAT_EVERY_MS = 110000;        // "still alive" note for the team view
@@ -30,7 +32,7 @@
     wip: null, wipError: "", wipAt: 0, readerOk: null,
     slips: new Map(), recordsSeen: new Set(),
     daysLoaded: new Set(), pickingError: "", pickingAt: 0, loadingDays: false,
-    searched: new Map(), searching: new Set(),
+    searched: new Map(), searching: new Set(), rechecked: new Map(),
     results: [], lastRed: null, expanded: new Set(), bridgeOk: null,
     prefs: { view: "action", by: "ALL", sound: false, me: "" },
     query: "",
@@ -213,6 +215,30 @@
     return true;
   }
 
+  // Older days' picking pages are loaded once, so a slip printed yesterday and picked today
+  // would still look unpicked. Before a job stays orange, look its slips up again.
+  async function recheckStuck(results) {
+    if (state.pickingError) return false;
+    const today = R.isoOf(new Date()), now = Date.now();
+    const newestDay = (r) => r.slips.reduce((max, s) => (s.time > max ? s.time : max), "").slice(0, 10);
+    const due = results.filter((r) => r.status === "warn" && r.slips && r.slips.length && newestDay(r) !== today
+      && !state.searching.has(r.key) && now - (state.rechecked.get(r.key) || 0) > RECHECK_MS).slice(0, RECHECKS_PER_CYCLE);
+    for (const item of due) {
+      state.searching.add(item.key);
+      try {
+        const url = `${PICKING}?day=0&month=0&year=0&q=${encodeURIComponent(item.row.doc)}&searchin=Document`;
+        const slips = await fetchPicking(url);
+        slips.filter((s) => s.docKey === item.key).forEach(updateSlip);
+        state.rechecked.set(item.key, Date.now());
+      } catch (error) {
+        state.pickingError = pickingProblem(error);
+        break;
+      } finally { state.searching.delete(item.key); }
+    }
+    if (due.length) saveStore();
+    return due.length > 0;
+  }
+
   // ------------------------------------------------------------ sharing
 
   const watchers = { status: null, acks: null, rows: null };
@@ -368,6 +394,7 @@
         evaluateAll(); render();
         if (state.results.filter((r) => r.status === "checking").length >= before) break;
       }
+      if (await recheckStuck(state.results)) { evaluateAll(); render(); }
       state.checkedOnce = true;
       await publish(true);
     } finally { busy = false; }
@@ -386,11 +413,11 @@
       state.results = (state.wip?.rows || []).map((row) => R.evaluate(row, ctx)).sort(R.compare);
     }
     applyPending(now);
-    const red = new Set(state.results.filter((r) => r.status === "red").map((r) => r.row.doc));
+    const alerts = new Set(state.results.filter((r) => r.status === "red" || r.status === "warn").map((r) => `${r.status}|${r.row.doc}`));
     if (state.lastRed && state.prefs.sound) {
-      for (const doc of red) if (!state.lastRed.has(doc)) { chime(); break; }
+      for (const key of alerts) if (!state.lastRed.has(key)) { chime(); break; }
     }
-    if (haveData()) state.lastRed = red;
+    if (haveData()) state.lastRed = alerts;
   }
 
   // Shows a Mark OK or Undo straight away while it travels to the RDP board and back.
@@ -419,7 +446,8 @@
   // ------------------------------------------------------------ rendering
 
   const VIEWS = {
-    action: (r) => r.status === "red" || r.status === "new" || r.status === "checking",
+    action: (r) => r.status === "red" || r.status === "warn" || r.status === "new" || r.status === "checking",
+    warn: (r) => r.status === "warn",
     amber: (r) => r.status === "amber",
     green: (r) => r.status === "green",
     ok: (r) => r.status === "ok",
@@ -429,6 +457,13 @@
 
   function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
   function timeOf(ms) { return new Date(ms).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }); }
+  // COSTAR's Doc Total: "$1,260", or "$29.95" when there are cents. Blank for no amount.
+  function money(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n === 0) return "";
+    const digits = Math.round(Math.abs(n) * 100) % 100 ? 2 : 0;
+    return n.toLocaleString("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: digits, maximumFractionDigits: digits });
+  }
 
   function render() {
     renderAccount();
@@ -436,19 +471,21 @@
     const people = new Map();
     for (const r of state.results) {
       const by = (r.row.by || "?").toUpperCase();
-      if (!people.has(by)) people.set(by, { red: 0, total: 0 });
-      const p = people.get(by); p.total++; if (r.status === "red") p.red++;
+      if (!people.has(by)) people.set(by, { red: 0, warn: 0, total: 0 });
+      const p = people.get(by); p.total++; if (r.status === "red") p.red++; if (r.status === "warn") p.warn++;
     }
-    if (state.prefs.by !== "ALL" && haveData() && !people.has(state.prefs.by)) people.set(state.prefs.by, { red: 0, total: 0 });
+    if (state.prefs.by !== "ALL" && haveData() && !people.has(state.prefs.by)) people.set(state.prefs.by, { red: 0, warn: 0, total: 0 });
     const mine = state.results.filter((r) => state.prefs.by === "ALL" || (r.row.by || "?").toUpperCase() === state.prefs.by);
-    const counts = { red: 0, pending: 0, amber: 0, green: 0, ok: 0, grey: 0 };
+    const counts = { red: 0, warn: 0, pending: 0, amber: 0, green: 0, ok: 0, grey: 0 };
     for (const r of mine) {
-      if (r.status === "new" || r.status === "checking") counts.pending++; else counts[r.status]++;
+      if (r.status === "new" || r.status === "checking") counts.pending++;
+      else if (r.status in counts) counts[r.status]++;
     }
     renderTally(counts);
     renderPeople(people);
     renderTable(mine);
-    document.title = counts.red ? `(${counts.red}) Order check` : "Order check";
+    const alerts = counts.red + counts.warn;
+    document.title = alerts ? `(${alerts}) Order check` : "Order check";
   }
 
   function currentProblems(forTeam) {
@@ -506,6 +543,8 @@
     main.classList.toggle("is-clear", c.red === 0 && ready);
     $("countRed").textContent = ready ? c.red : "–";
     $("capRed").textContent = !ready ? (isViewer() ? "waiting for the RDP board" : "waiting for COSTAR") : c.red === 1 ? "job not ordered" : c.red ? "jobs not ordered" : "nothing missing";
+    $("countWarn").textContent = c.warn;
+    $("tallyWarn").classList.toggle("has-warn", c.warn > 0);
     $("countPending").textContent = c.pending;
     $("countAmber").textContent = c.amber;
     $("countGreen").textContent = c.green;
@@ -516,11 +555,12 @@
 
   function renderPeople(people) {
     const nav = $("people");
-    const list = [...people.entries()].sort((a, b) => b[1].red - a[1].red || a[0].localeCompare(b[0]));
+    const list = [...people.entries()].sort((a, b) => b[1].red - a[1].red || b[1].warn - a[1].warn || a[0].localeCompare(b[0]));
     const totalRed = list.reduce((n, [, p]) => n + p.red, 0);
-    const chip = (by, label, red) =>
-      `<button type="button" class="person" data-by="${esc(by)}" aria-pressed="${state.prefs.by === by}">${esc(label)}${red ? `<span class="person-red" aria-label="${red} not ordered">${red}</span>` : ""}</button>`;
-    nav.innerHTML = chip("ALL", "Everyone", totalRed) + list.map(([by, p]) => chip(by, by, p.red)).join("");
+    const totalWarn = list.reduce((n, [, p]) => n + p.warn, 0);
+    const chip = (by, label, red, warn) =>
+      `<button type="button" class="person" data-by="${esc(by)}" aria-pressed="${state.prefs.by === by}">${esc(label)}${red ? `<span class="person-red" aria-label="${red} not ordered">${red}</span>` : ""}${warn ? `<span class="person-warn" aria-label="${warn} not picked">${warn}</span>` : ""}</button>`;
+    nav.innerHTML = chip("ALL", "Everyone", totalRed, totalWarn) + list.map(([by, p]) => chip(by, by, p.red, p.warn)).join("");
   }
 
   function renderTable(mine) {
@@ -533,6 +573,7 @@
     if (!rows.length && haveData()) {
       empty.textContent = q ? "No jobs match that search."
         : state.prefs.view === "action" ? "Every SHOP job with an amount has a picking slip or a reason in its comment."
+        : state.prefs.view === "warn" ? "Every printed slip has been picked."
         : "No jobs in this group.";
     }
   }
@@ -547,7 +588,10 @@
   function rowHtml(r) {
     const row = r.row;
     let detail = "";
-    if (r.status === "green" && r.summary) {
+    if (r.status === "warn" && r.summary) {
+      const s = r.summary;
+      detail = `<span class="slip">${esc(s.headline)}</span><span class="sub">${esc(s.pick)}${s.more ? `, plus ${s.more} more slip${s.more > 1 ? "s" : ""}` : ""}</span>`;
+    } else if (r.status === "green" && r.summary) {
       const s = r.summary;
       detail = `<span class="slip">${esc(s.headline)}</span><span class="sub">${esc(s.pick)}${s.progress && s.progress !== "Timed out" ? `, ${esc(String(s.progress).toLowerCase())}` : ""}${s.more ? `, plus ${s.more} more slip${s.more > 1 ? "s" : ""}` : ""}</span>`;
     } else if (r.status === "red") {
@@ -557,7 +601,7 @@
     }
     const canAct = isSource() || (isViewer() && Share.canAck !== false);
     let action = "";
-    if (canAct && r.status === "red") action = `<button type="button" class="act" data-ack="${esc(row.doc)}">Mark OK</button>`;
+    if (canAct && (r.status === "red" || r.status === "warn")) action = `<button type="button" class="act" data-ack="${esc(row.doc)}">Mark OK</button>`;
     if (canAct && r.status === "ok" && r.label === "Marked OK") action = `<button type="button" class="act quiet" data-unack="${esc(row.doc)}">Undo</button>`;
     const open = state.expanded.has(row.doc);
     const hasSlips = r.slips && r.slips.length;
@@ -565,16 +609,24 @@
       <td class="c-status"><span class="pill">${esc(r.label)}</span></td>
       <td class="c-doc">${esc(row.doc)}${helperTag(r)}</td>
       <td class="c-name">${esc(row.name)}</td>
+      <td class="c-total">${esc(money(row.total))}</td>
       <td class="c-comment" title="${esc(row.comment)}">${esc(row.comment)}</td>
       <td class="c-by">${esc(row.by)}</td>
       <td class="c-detail"${r.detail ? ` title="${esc(r.detail)}"` : ""}>${detail}</td>
       <td class="c-act">${action}</td>
     </tr>`;
     if (!open || !hasSlips) return main;
-    const slips = r.slips.slice().sort((a, b) => (a.time < b.time ? 1 : -1)).map((s) =>
-      `<li><strong>${esc(s.qty)} × ${esc(s.desc || s.sku)}</strong> <span>${esc(s.sku)}${s.bins ? `, bins ${esc(s.bins)}` : ""}</span>
-        <span>Slip ${esc(s.time)}${s.manual ? " (manual)" : ""}, ${s.picked ? `picked ${esc(String(s.pickedAt).slice(11))} by ${esc(String(s.picker).replace(/^\d+-/, ""))}` : "not picked yet"}, ${esc(String(s.progress).toLowerCase())}${s.driver && s.driver.length ? `, ${esc(s.driver.join(", "))}` : ""}</span></li>`).join("");
-    return main + `<tr class="slips"><td colspan="7"><ul>${slips}</ul></td></tr>`;
+    const slips = r.slips.slice().sort((a, b) => (a.time < b.time ? 1 : -1)).map((s) => {
+      const driver = Array.isArray(s.driver) && s.driver.length;
+      const parts = [`Slip ${s.time}${s.manual ? " (manual)" : ""}`];
+      if (s.picked) parts.push(`picked ${String(s.pickedAt).slice(11)} by ${String(s.picker).replace(/^\d+-/, "")}`);
+      else if (!driver) parts.push("not picked yet");
+      parts.push(String(s.progress).toLowerCase());
+      if (driver) parts.push(s.driver.join(", "));
+      return `<li><strong>${esc(s.qty)} × ${esc(s.desc || s.sku)}</strong> <span>${esc(s.sku)}${s.bins ? `, bins ${esc(s.bins)}` : ""}</span>
+        <span>${esc(parts.join(", "))}</span></li>`;
+    }).join("");
+    return main + `<tr class="slips"><td colspan="8"><ul>${slips}</ul></td></tr>`;
   }
 
   function renderAccount() {
@@ -624,7 +676,8 @@
     const result = state.results.find((r) => r.row.doc === doc);
     if (!result) return;
     let me = state.prefs.me || (state.prefs.by !== "ALL" ? state.prefs.by : "");
-    const answer = prompt(`Mark ${doc} (${result.row.name}) as not needing an order?\n\nIt alerts again if the job changes. Your initials:`, me);
+    const question = result.status === "warn" ? `Clear "Not picked" on ${doc} (${result.row.name})?` : `Mark ${doc} (${result.row.name}) as not needing an order?`;
+    const answer = prompt(`${question}\n\nIt alerts again if the job changes. Your initials:`, me);
     if (answer === null) return;
     me = answer.trim().toUpperCase().slice(0, 12) || "?";
     state.prefs.me = me; saveStore();

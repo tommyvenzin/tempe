@@ -5,6 +5,7 @@
   "use strict";
 
   const GRACE_MINUTES = 5;          // a fresh SHOP job normally gets its slip within ~2 min
+  const NOT_PICKED_MINUTES = 60;    // 9 in 10 SHOP slips are picked within 40 min of printing
   const SHOP = "SHOP";
 
   // Words in the COSTAR comment that mean this job never needs an order.
@@ -165,7 +166,7 @@
 
   // ------------------------------------------------------------ status
 
-  const ORDER = { red: 0, new: 1, checking: 2, amber: 3, ok: 4, green: 5, grey: 6 };
+  const ORDER = { red: 0, warn: 1, new: 2, checking: 3, amber: 4, ok: 5, green: 6, grey: 7 };
 
   // The fix a salesperson sees on a red job. Every board writes these itself from
   // the codes, so the wording never depends on which version the RDP board runs.
@@ -188,13 +189,54 @@
     const day = (latest.pickedAt || "").slice(0, 10);
     const when = !day || day === today ? latest.pickedAt.slice(11) : `${friendlyDate(day, today)} ${latest.pickedAt.slice(11)}`;
     const slipDay = (latest.time || "").slice(0, 10);
+    const driver = Array.isArray(latest.driver) && latest.driver.length ? String(latest.driver[0]).slice(0, 5) : "";
     const pick = latest.picked
       ? `picked ${when}${latest.picker ? " by " + latest.picker.replace(/^\d+-/, "") : ""}`
+      : driver ? `shop driver ${driver}`
       : `not picked yet${slipDay && slipDay !== today ? ` (slip printed ${friendlyDate(slipDay, today)})` : ""}`;
     return {
       headline: `${latest.qty} × ${latest.desc || latest.sku}`,
       pick,
       progress: latest.progress,
+      more: slips.length > 1 ? slips.length - 1 : 0,
+    };
+  }
+
+  // ------------------------------------------------------------ slips nobody picked
+
+  // A slip is picked when the Picked column says "Picked (n)" or the progress shows
+  // "HH:MM > Shop Driver (n)". Both mean the same: the tyres left the warehouse.
+  function slipTaken(s) { return !!s.picked || (Array.isArray(s.driver) && s.driver.length > 0); }
+  function slipDone(s) { return slipTaken(s) || s.progress === "Completed"; }
+  // Slip times are the intranet's own clock ("YYYY-MM-DD HH:MM", shop time).
+  function slipMs(s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(String(s.time || ""));
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : NaN;
+  }
+  function slipWhen(s, today) {
+    const day = String(s.time || "").slice(0, 10), clock = String(s.time || "").slice(11, 16);
+    return !day || day === today ? clock : friendlyDate(day, today);
+  }
+
+  // The newest slip (or slips printed together with it) still not picked, an hour or more
+  // after printing. An older slip a newer one replaced (a reprint, another brand) is ignored,
+  // and nothing counts once COSTAR or the picking page says the job is completed.
+  function notPicked(slips, row, nowMs) {
+    if (/^Y/i.test(String(row.completed || "").trim())) return [];
+    const timed = slips.map((s) => ({ s, at: slipMs(s) })).filter((x) => Number.isFinite(x.at));
+    if (!timed.length) return [];
+    const newest = Math.max(...timed.map((x) => x.at));
+    return timed
+      .filter((x) => x.at >= newest - 2 * 60000 && !slipDone(x.s) && nowMs - x.at >= NOT_PICKED_MINUTES * 60000)
+      .map((x) => x.s);
+  }
+
+  function stuckSummary(stuck, slips, today) {
+    const s = stuck.slice().sort((a, b) => (a.time < b.time ? 1 : -1))[0];
+    return {
+      headline: `${s.qty} × ${s.desc || s.sku}`,
+      pick: `printed ${slipWhen(s, today)}`,
+      progress: s.progress,
       more: slips.length > 1 ? slips.length - 1 : 0,
     };
   }
@@ -222,7 +264,23 @@
     if (shipVia && shipVia !== SHOP) return { ...base, status: "grey", label: "Not checked", reason: `Ship via ${row.shipVia}` };
 
     const slips = (ctx.slips && ctx.slips.get(key)) || [];
-    if (slips.length) return { ...base, status: "green", label: "Ordered", slips, summary: slipSummary(slips, today) };
+    if (slips.length) {
+      const stuck = notPicked(slips, row, ctx.nowMs);
+      if (!stuck.length) return { ...base, status: "green", label: "Ordered", slips, summary: slipSummary(slips, today) };
+      // Mark OK clears it (tyres came another way), unless the slip printed after the mark.
+      const mark = ctx.acks && ctx.acks[row.doc];
+      const markedAt = mark ? Date.parse(mark.at || "") : NaN;
+      if (mark && mark.sig === row.sig && !(markedAt < Math.max(...stuck.map(slipMs)))) {
+        return { ...base, status: "ok", label: "Marked OK", reason: `Cleared by ${mark.by}`, ack: mark, slips, summary: slipSummary(slips, today) };
+      }
+      const summary = stuckSummary(stuck, slips, today);
+      const first = stuck[0];
+      return {
+        ...base, status: "warn", label: "Not picked", slips, summary,
+        reason: `Printed ${slipWhen(first, today)}`,
+        detail: `Slip printed ${slipWhen(first, today)} (${first.qty} × ${first.desc || first.sku}) and not picked: no Picked time and no Shop Driver.`,
+      };
+    }
 
     const anchor = row.orderDate && row.orderDate < today ? row.orderDate : today;
     const note = readComment(row.comment, anchor);
@@ -265,7 +323,7 @@
     return (a.row.orderDate || "") < (b.row.orderDate || "") ? -1 : (a.row.orderDate || "") > (b.row.orderDate || "") ? 1 : (a.row.doc < b.row.doc ? -1 : 1);
   }
 
-  const api = { GRACE_MINUTES, ORDER, FIX, shortFixes, isoOf, parseIso, addDays, friendlyDate, readComment, parsePicking, docKey, evaluate, compare, slipSummary, clean, helperRef };
+  const api = { GRACE_MINUTES, NOT_PICKED_MINUTES, ORDER, FIX, shortFixes, isoOf, parseIso, addDays, friendlyDate, readComment, parsePicking, docKey, evaluate, compare, slipSummary, clean, helperRef, slipTaken, slipDone, notPicked };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.OrderRules = api;
 })(this);

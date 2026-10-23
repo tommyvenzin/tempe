@@ -88,6 +88,7 @@
       status: r.status, label: r.label, reason: r.reason || "",
       row: {
         doc: String(row.doc || ""), orderDate: row.orderDate || "", name: row.name || "",
+        total: Number(row.total) || 0,   // the amount helps spot service-only jobs ($30 repair, $70 alignment)
         comment: row.comment || "", by: row.by || "", sig: row.sig || "",
       },
     };
