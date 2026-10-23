@@ -1,11 +1,11 @@
-/* Tempe Order Check board 1.6.3
+/* Tempe Order Check board 1.6.4
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
    as the publisher, shares the results with the team and sends Discord alerts.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.6.3";
+  const VERSION = "1.6.4";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;

@@ -3,12 +3,16 @@
    Node tests. The RDP board sends it to a Discord channel webhook through the
    "Tom does it all" extension (no bot, no commands).
 
-   The channel shows only what's wrong right now, one message per salesperson. The heading is
-   their tag when their Discord ID is listed (it pings them), otherwise their initials:
+   The channel shows only what's wrong right now: one card per salesperson, easy to find at a
+   glance (Tommy, 23 Oct: "search his name quickly without squinting"). The card has their
+   initials as its title and a red bar (orange when it's only "Not picked"); their tag sits above
+   the card when their Discord ID is listed, so the post pings them:
 
-     DB :
-     07510297 - TAEHO CHOI - $1,560 - EDC44U - **Tick Customer Waiting**
-     07510467 - PHILIP INNESS - $30 - FFI80G - **Tick Customer Waiting**
+     @Pinad does it all
+     ┃ TOG
+     ┃ 07510297 - TAEHO CHOI - $1,560 - EDC44U - **Tick Customer Waiting**
+     ┃
+     ┃ 07510467 - PHILIP INNESS - $30 - FFI80G - **Tick Customer Waiting**
 
    - A new problem re-posts that salesperson's message (old one deleted), so Discord notifies.
    - A fixed job's line is edited out (no notification); with nothing left the message is deleted.
@@ -20,9 +24,9 @@
 
   const SETTINGS_KEY = "orderCheck.discord";
   const SENT_KEY = "orderCheck.discord.sent";
-  const MAX_CHARS = 1900;             // Discord allows 2,000 per message
-  const SUPPRESS_EMBEDS = 4;
-  const SUPPRESS_NOTIFICATIONS = 4096; // "silent" message: used once, when 1.6.3 redraws the channel
+  const MAX_DESC = 3800;              // a card's text allows 4,096 characters
+  const SUPPRESS_NOTIFICATIONS = 4096; // "silent" message: used once, when a new version redraws the channel
+  const RED = 0xC0161F, ORANGE = 0xC45200;   // the board's own colours
   const HOOK_RE = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/(\d{15,22})\/([A-Za-z0-9_-]{20,})\/?$/;
 
   // ------------------------------------------------------------ settings
@@ -57,12 +61,16 @@
   }
 
   // persons: initials → { msgs: [{ id, content }] (what Discord shows now), docs: [...] (jobs already announced), lines }
-  // cleanup: message ids still to delete. migrated: the next posts are silent (the 1.6.3 redraw).
-  function emptyState() { return { v: 2, persons: {}, cleanup: [] }; }
-  // Messages from 1.6.0–1.6.2 (mixed salespeople, ✅ lines, old layout) are all deleted and redrawn.
+  // cleanup: message ids still to delete. migrated: the next posts are silent (a redraw after an update).
+  function emptyState() { return { v: 3, persons: {}, cleanup: [] }; }
+  // Messages posted by 1.6.0–1.6.3 (plain text layouts) are all deleted and redrawn as cards, quietly.
   function upgrade(st) {
-    if (st && st.v === 2 && st.persons) return { cleanup: [], ...st };
-    if (st && st.v === 1 && st.msgs) return { v: 2, persons: {}, cleanup: Object.keys(st.msgs), migrated: true };
+    if (st && st.v === 3 && st.persons) return { cleanup: [], ...st };
+    if (st && st.v === 2 && st.persons) {
+      const ids = Object.values(st.persons).flatMap((p) => (p.msgs || []).map((m) => m.id));
+      return { v: 3, persons: {}, cleanup: [...(st.cleanup || []), ...ids], migrated: true };
+    }
+    if (st && st.v === 1 && st.msgs) return { v: 3, persons: {}, cleanup: Object.keys(st.msgs), migrated: true };
     return emptyState();
   }
   function loadSent() { return upgrade(readJson(SENT_KEY, null)); }
@@ -101,17 +109,19 @@
     return `${parts.join(" - ")} - **${md(fix)}**`;
   }
 
-  // "DB :" (or their tag) and that salesperson's lines; more messages only past Discord's limit.
-  function heading(initials, people) { return people[initials] ? `<@${people[initials]}>` : md(initials); }
+  // One card per salesperson: { m: their Discord ID (tag above the card), t: title, d: jobs, c: colour },
+  // kept as text so the board can tell when Discord needs an edit. Split only past the card limit.
   function messagesFor(initials, lines, people) {
-    const head = `${heading(initials, people || {})} :`;
+    const mention = (people || {})[initials] || "";
+    const color = lines.some((l) => !/ - \*\*Not picked/.test(l)) ? RED : ORANGE;
+    const card = (part) => JSON.stringify({ m: mention, t: initials, d: part.join("\n\n"), c: color });
     const out = [];
     let cur = [];
     for (const line of lines) {
-      if (cur.length && [head, ...cur, line].join("\n").length > MAX_CHARS) { out.push([head, ...cur].join("\n")); cur = []; }
+      if (cur.length && [...cur, line].join("\n\n").length > MAX_DESC) { out.push(card(cur)); cur = []; }
       cur.push(line);
     }
-    if (cur.length) out.push([head, ...cur].join("\n").slice(0, MAX_CHARS));
+    if (cur.length) out.push(card(cur));
     return out;
   }
 
@@ -204,9 +214,18 @@
   }
   function finishRound(st) { delete st.migrated; }
 
-  // Only a new post pings, and only the salesperson it's for. Edits never ping.
+  // What Discord gets for a card. Only a new post pings, and only the salesperson it's for; edits never ping.
   function body(content, silent, mention) {
-    return { content, allowed_mentions: { parse: [], users: mention ? [mention] : [] }, flags: SUPPRESS_EMBEDS | (silent ? SUPPRESS_NOTIFICATIONS : 0) };
+    let card;
+    try { card = JSON.parse(content); } catch { card = null; }
+    if (!card || typeof card !== "object") card = { m: "", t: "", d: String(content || ""), c: RED };
+    const out = {
+      content: card.m ? `<@${card.m}>` : "",
+      embeds: [{ title: String(card.t || "").slice(0, 256), description: String(card.d || "").slice(0, 4096), color: card.c }],
+      allowed_mentions: { parse: [], users: mention ? [mention] : [] },
+    };
+    if (silent) out.flags = SUPPRESS_NOTIFICATIONS;
+    return out;
   }
 
   const api = {
