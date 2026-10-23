@@ -1,11 +1,11 @@
-/* Tempe Order Check board 1.6.1
+/* Tempe Order Check board 1.6.2
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
    as the publisher, shares the results with the team and sends Discord alerts.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.6.1";
+  const VERSION = "1.6.2";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
@@ -452,7 +452,7 @@
       }
       for (const id of p.patches) {
         if (Date.now() < alerts.retryAt) break;
-        const res = await discordCall("PATCH", `${hook.url}/messages/${id}`, Discord.editBody(st, id, ctx));
+        const res = await discordCall("PATCH", `${hook.url}/messages/${id}`, Discord.editBody(st, id));
         if (res.status === 404 && res.data && res.data.code === 10008) Discord.forget(st, id);   // someone deleted the message
         else if (res.status === 429) { alerts.retryAt = Date.now() + 60000; break; }
         else if (res.status >= 300) throw new Error(discordProblem(res));
@@ -493,7 +493,7 @@
   function setDiscordMsg(text, good) { const m = $("dcMsg"); m.textContent = text || ""; m.classList.toggle("is-good", !!good); }
   function openDiscord() {
     const cfg = Discord.loadSettings();
-    $("dcUrl").value = cfg.url; $("dcPeople").value = cfg.people; $("dcNames").checked = !!cfg.names;
+    $("dcUrl").value = cfg.url; $("dcPeople").value = cfg.people;
     $("dcOn").checked = cfg.url ? !!cfg.on : true;
     setDiscordMsg(alerts.error || (alerts.lastSent ? `Last alert sent ${timeOf(alerts.lastSent)}.` : ""), !alerts.error);
     $("discord").hidden = false;
@@ -503,7 +503,7 @@
   function discordForm() {
     const url = $("dcUrl").value.trim(), people = $("dcPeople").value;
     const hook = Discord.parseWebhook(url);
-    return { cfg: { url: hook ? hook.url : url, people, names: $("dcNames").checked, on: $("dcOn").checked }, hook, parsed: Discord.parsePeople(people) };
+    return { cfg: { url: hook ? hook.url : url, people, on: $("dcOn").checked }, hook, parsed: Discord.parsePeople(people) };
   }
   function formProblem(f, needLink) {
     if ((f.cfg.url || needLink) && !f.hook) return "That isn't a Discord webhook link. Copy it again: Edit Channel, Integrations, Webhooks, Copy Webhook URL.";

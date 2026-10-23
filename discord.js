@@ -3,8 +3,9 @@
    Node tests. The RDP board sends it to a Discord channel webhook through the
    "Tom does it all" extension (no bot, no commands).
 
-   - A job that turns red (Not ordered) or orange (Not picked) gets one line, tagging the
-     salesperson. Lines that appear together go in one message (at most 10 per message).
+   - A job that turns red (Not ordered) or orange (Not picked) gets one line under its
+     salesperson ("MOR :", tagging them): Doc# - Name - Amount - Comment - what's wrong.
+     Lines that appear together go in one message (at most 10 per message).
    - When the job is fixed, its line is edited to ✅ (editing never pings anyone).
    - New alerts only go out in shop hours (Monday to Saturday, 7:00 to 18:30); anything that
      turns red overnight goes out together at 7:00. */
@@ -51,8 +52,8 @@
   function writeJson(key, value) {
     try { const s = store(); if (s) s.setItem(key, JSON.stringify(value)); } catch { /* storage full or blocked */ }
   }
-  function loadSettings() { return { url: "", people: "", names: false, on: false, ...readJson(SETTINGS_KEY, {}) }; }
-  function saveSettings(cfg) { writeJson(SETTINGS_KEY, { url: cfg.url || "", people: cfg.people || "", names: !!cfg.names, on: !!cfg.on }); }
+  function loadSettings() { const s = { url: "", people: "", on: false, ...readJson(SETTINGS_KEY, {}) }; delete s.names; return s; }
+  function saveSettings(cfg) { writeJson(SETTINGS_KEY, { url: cfg.url || "", people: cfg.people || "", on: !!cfg.on }); }
   // The board's leave-out list (people no longer at Tempe, the boss): a Set, an array or "MD ST UBH YTA".
   function leaveOutSet(value) {
     if (value instanceof Set) return new Set([...value].map((x) => String(x).toUpperCase()));
@@ -76,7 +77,7 @@
 
   // ------------------------------------------------------------ lines
 
-  // Customer names and initials go into Discord as plain text, never as formatting or mentions.
+  // Customer names, comments and initials go into Discord as plain text, never as formatting or mentions.
   function md(s) { return String(s || "").replace(/([\\*_~`|<>[\]])/g, "\\$1").replace(/@/g, "@\u200b"); }
   function money(value) {
     const n = Number(value);
@@ -86,22 +87,19 @@
   }
   function by(r) { return String((r.row && r.row.by) || "?").trim().toUpperCase() || "?"; }
 
+  // One job, the way Tommy wants it (23 Oct):  Doc# - Name - Amount - Comment - what's wrong
+  // under a "MOR :" line for the salesperson (a tag when their Discord ID is listed).
   function describe(r, cfg, people) {
     const doc = String(r.row.doc);
     const initials = by(r);
     const id = people[initials] || "";
-    const fix = r.status === "warn" ? "Not picked" : R.shortFixes(r).join(", ");
-    const extra = r.status === "warn" && r.summary && r.summary.pick ? r.summary.pick : "";
-    const parts = [doc];
-    if (cfg.names && r.row.name) parts.push(md(r.row.name));
-    const amount = money(r.row.total);
-    if (amount) parts.push(amount);
-    const who = id ? `<@${id}>` : `**${md(initials)}**`;
-    const head = [`**${doc}**`, ...parts.slice(1)].join(" · ");
+    const pick = r.status === "warn" && r.summary && r.summary.pick ? r.summary.pick : "";
+    const fix = r.status === "warn" ? `Not picked${pick ? ` (${pick})` : ""}` : R.shortFixes(r).join(", ");
+    const parts = [doc, md(String(r.row.name || "").trim()), money(r.row.total), md(String(r.row.comment || "").trim())].filter(Boolean);
     return {
-      doc, status: r.status, mention: id, who,
-      line: `${r.status === "warn" ? "🟠" : "🔴"} ${head} — **${md(fix)}**${extra ? ` (${md(extra)})` : ""} · ${who}`,
-      plain: `${parts.join(" · ")} — ${md(fix)}`,
+      doc, by: initials, status: r.status, mention: id, who: id ? `<@${id}>` : md(initials),
+      line: `${parts.join(" - ")} - **${md(fix)}**`,
+      plain: `${parts.join(" - ")} - ${md(fix)}`,
     };
   }
 
@@ -125,11 +123,19 @@
     return r.reason || r.label || "cleared";
   }
 
-  function doneLine(item, short) { return short ? `✅ ~~${item.doc}~~ ${md(item.done)}` : `✅ ~~${item.plain}~~ ${md(item.done)} · ${item.who}`; }
-  function renderItems(items, ctx) {
-    const footer = ctx && ctx.boardUrl ? [`-# [Open the board](${ctx.boardUrl})`] : [];
+  function doneLine(item, short) { return short ? `✅ ~~${item.doc}~~ ${md(item.done)}` : `✅ ~~${item.plain}~~ ${md(item.done)}`; }
+  // Grouped by salesperson, in the order they first appear:
+  //   MOR :
+  //   07460101 - CUSTOMER - $1,260 - R28688 - **Not picked (printed 09:52)**
+  function renderItems(items) {
     for (const short of [false, true]) {
-      const text = [...items.map((i) => (i.done ? doneLine(i, short) : i.line)), ...footer].join("\n");
+      const groups = new Map();
+      for (const i of items) {
+        const who = String(i.who || i.by || "?").replace(/\*/g, "");   // lines from before 1.6.2 had bold initials
+        if (!groups.has(who)) groups.set(who, []);
+        groups.get(who).push(i.done ? doneLine(i, short) : i.line);
+      }
+      const text = [...groups.entries()].flatMap(([who, lines]) => [`${who} :`, ...lines]).join("\n");
       if (text.length <= MAX_CHARS || short) return text.slice(0, MAX_CHARS);
     }
     return "";
@@ -200,14 +206,18 @@
     }
     const posts = [];
     if (ctx.shopHours) {
-      let items = [], chars = 0;
+      // Keep each salesperson's jobs together, then fill messages up to 10 jobs / 1,400 characters.
+      const order = [];
+      for (const item of fresh) if (!order.includes(item.by)) order.push(item.by);
+      const sorted = order.flatMap((initials) => fresh.filter((i) => i.by === initials));
+      let items = [];
       const flush = () => {
-        if (items.length) posts.push({ items, content: renderItems(items, ctx), mentions: [...new Set(items.map((x) => x.mention).filter(Boolean))] });
-        items = []; chars = 0;
+        if (items.length) posts.push({ items, content: renderItems(items), mentions: [...new Set(items.map((x) => x.mention).filter(Boolean))] });
+        items = [];
       };
-      for (const item of fresh) {
-        if (items.length >= LINES_PER_MESSAGE || (items.length && chars + item.line.length + 1 > POST_CHARS)) flush();
-        items.push(item); chars += item.line.length + 1;
+      for (const item of sorted) {
+        if (items.length && (items.length >= LINES_PER_MESSAGE || renderItems([...items, item]).length > POST_CHARS)) flush();
+        items.push(item);
       }
       flush();
     }
@@ -253,7 +263,7 @@
   }
 
   function postBody(post) { return { content: post.content, allowed_mentions: { parse: [], users: post.mentions }, flags: SUPPRESS_EMBEDS }; }
-  function editBody(st, id, ctx) { return { content: renderItems(st.msgs[id].items, ctx), allowed_mentions: { parse: [] }, flags: SUPPRESS_EMBEDS }; }
+  function editBody(st, id) { return { content: renderItems(st.msgs[id].items), allowed_mentions: { parse: [] }, flags: SUPPRESS_EMBEDS }; }
 
   // The Send test message: shows every tag as a name (nobody is pinged).
   function testBody(cfg, ctx) {
