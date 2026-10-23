@@ -121,6 +121,13 @@
   .signin-help { margin: 0 0 14px; color: var(--ink-soft); font-size: 14px; }
   .hint { display: inline-block; max-width: 190px; color: var(--ink-soft); font-size: 13px; line-height: 1.3; white-space: normal; text-align: right; }
   .signin-msg { min-height: 1.4em; margin: 12px 0 0; color: var(--stop); font-weight: 500; }
+  .signin-msg.is-good { color: var(--go); }
+  .signin textarea { display: block; width: 100%; margin-top: 4px; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 4px; font: 14px/1.4 Consolas, "Courier New", monospace; resize: vertical; }
+  .signin .label-sub { display: block; font-weight: 400; color: var(--ink-soft); font-size: 14px; }
+  .signin label.check { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .signin label.check input { display: inline-block; width: auto; margin: 0; }
+  #openDiscord.is-on { color: var(--go); }
+  #openDiscord.is-bad { color: var(--stop); }
   body[data-mode="signin"] .board-only { display: none; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -166,6 +173,7 @@
   <div class="actions">
     <div class="account" id="account" hidden></div>
     <label class="toggle"><input type="checkbox" id="sound"> Sound for new alerts</label>
+    <button type="button" class="link" id="openDiscord" hidden>Discord alerts</button>
     <button type="button" id="refresh">Refresh now</button>
   </div>
 </header>
@@ -191,6 +199,23 @@
       <p id="signinNoAccessText" class="signin-msg"></p>
       <button type="button" class="link" id="signOutNoAccess">Sign out</button>
     </div>
+  </section>
+
+  <section id="discord" class="signin" hidden aria-labelledby="discordTitle">
+    <h2 id="discordTitle">Discord alerts</h2>
+    <form id="discordForm">
+      <label>Webhook link <input id="dcUrl" type="password" autocomplete="off" spellcheck="false" placeholder="https://discord.com/api/webhooks/…"></label>
+      <label>People <span class="label-sub">COSTAR initials = Discord user ID, one per line</span>
+        <textarea id="dcPeople" rows="6" spellcheck="false" placeholder="MOR = 123456789012345678"></textarea></label>
+      <label class="check"><input type="checkbox" id="dcNames"> Show customer names in Discord</label>
+      <label class="check"><input type="checkbox" id="dcOn"> Alerts on</label>
+      <div class="signin-actions">
+        <button type="submit" id="dcSave">Save</button>
+        <button type="button" class="link" id="dcTest">Send test</button>
+        <button type="button" class="link" id="dcClose">Close</button>
+      </div>
+      <p id="dcMsg" class="signin-msg" role="status"></p>
+    </form>
   </section>
 
   <section class="tally board-only" aria-label="Jobs by status">
@@ -234,9 +259,10 @@
   <p class="empty board-only" id="empty" hidden></p>
 </main>
 
-<script src="order-rules.js?v=1.5.0"></script>
-<script src="share-config.js?v=1.5.0"></script>
-<script src="share.js?v=1.5.0"></script>
-<script src="order-check.js?v=1.5.0"></script>
+<script src="order-rules.js?v=1.6.0"></script>
+<script src="share-config.js?v=1.6.0"></script>
+<script src="share.js?v=1.6.0"></script>
+<script src="discord.js?v=1.6.0"></script>
+<script src="order-check.js?v=1.6.0"></script>
 </body>
 </html>

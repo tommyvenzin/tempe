@@ -1,14 +1,15 @@
-/* Tempe Order Check board 1.5.0
+/* Tempe Order Check board 1.6.0
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
-   as the publisher, shares the results with the team.
+   as the publisher, shares the results with the team and sends Discord alerts.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.5.0";
+  const VERSION = "1.6.0";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
+  const Discord = window.OrderDiscord || null;
   const params = new URLSearchParams(location.search);
   const READER = (params.get("reader") || "http://127.0.0.1:8795").replace(/\/+$/, "");
   const PICKING = "https://my.tempetyres.com.au/retailpicking/history/";
@@ -366,6 +367,150 @@
     }
   }
 
+  // ------------------------------------------------------------ Discord alerts (RDP board only)
+
+  const alerts = { busy: false, error: "", retryAt: 0, lastSent: 0, lastRun: 0 };
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Two tabs of this board in one Chrome share the same storage: only one of them sends.
+  const ALERT_LOCK_KEY = "orderCheck.discord.lock";
+  const TAB_ID = Math.random().toString(36).slice(2, 12);
+  function holdAlertLock() {
+    try {
+      const now = Date.now();
+      const lock = JSON.parse(localStorage.getItem(ALERT_LOCK_KEY) || "null");
+      if (lock && lock.tab !== TAB_ID && now - lock.at < 3 * 60000) return false;
+      localStorage.setItem(ALERT_LOCK_KEY, JSON.stringify({ tab: TAB_ID, at: now }));
+      return JSON.parse(localStorage.getItem(ALERT_LOCK_KEY)).tab === TAB_ID;
+    } catch { return true; }
+  }
+  window.addEventListener("pagehide", () => {   // closing or reloading hands over straight away
+    try { const lock = JSON.parse(localStorage.getItem(ALERT_LOCK_KEY) || "null"); if (lock && lock.tab === TAB_ID) localStorage.removeItem(ALERT_LOCK_KEY); } catch { /* ignore */ }
+  });
+  function boardLink() {
+    return location.protocol === "https:" ? location.origin + location.pathname : "https://tommyvenzin.github.io/tempe/Order_Check.html";
+  }
+  // Only the board that reads COSTAR (and shares with the team) sends, and only from fresh data:
+  // a WIP read in the last 10 minutes and picking checked in the last 6.
+  function alertsReady() {
+    const w = state.wip, now = Date.now();
+    if (!Discord || !isSource() || !state.checkedOnce || !w || state.wipError || state.pickingError || state.share.otherPublisher) return false;
+    const readAt = Date.parse(w.readAt || "");
+    return Number.isFinite(readAt) && now - readAt < 10 * 60000 && state.pickingAt > 0 && now - state.pickingAt < 6 * 60000;
+  }
+  async function discordCall(method, url, body) {
+    const result = await viaExtension(url, { method, cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    let data = null;
+    try { data = result.text ? JSON.parse(result.text) : null; } catch { /* not JSON */ }
+    return { status: result.status, data };
+  }
+  function discordProblem(res) {
+    if (res.status === 401 || res.status === 404) return "Discord refused the webhook link (deleted, or copied wrong). Paste a new one under Discord alerts.";
+    return `Discord answered ${res.status}${res.data && res.data.message ? `: ${res.data.message}` : ""}.`;
+  }
+
+  async function runAlerts() {
+    if (!Discord || alerts.busy || Date.now() < alerts.retryAt || Date.now() - alerts.lastRun < 15000) return;
+    const cfg = Discord.loadSettings();
+    const hook = Discord.parseWebhook(cfg.url);
+    if (!cfg.on || !hook || !alertsReady() || !holdAlertLock()) return;
+    alerts.busy = true; alerts.lastRun = Date.now();
+    try {
+      const now = new Date(), w = state.wip;
+      const ctx = {
+        nowMs: now.getTime(), today: R.isoOf(now), shopHours: Discord.inShopHours(now), boardUrl: boardLink(),
+        wipComplete: w.state === "ok" && !w.filter && Array.isArray(w.rows) && w.rows.length > 0,
+      };
+      const p = Discord.plan(state.results, Discord.loadSent(), cfg, ctx);
+      const st = p.state;
+      Discord.saveSent(st);
+      for (const post of p.posts) {
+        const res = await discordCall("POST", `${hook.url}?wait=true`, Discord.postBody(post));
+        if (res.status === 429) { alerts.retryAt = Date.now() + 60000; break; }
+        if (res.status >= 300 || !res.data || !res.data.id) throw new Error(discordProblem(res));
+        Discord.recordPost(st, post, String(res.data.id), ctx.nowMs);
+        Discord.saveSent(st);
+        alerts.lastSent = Date.now();
+        await pause(800);
+      }
+      for (const id of p.patches) {
+        if (Date.now() < alerts.retryAt) break;
+        const res = await discordCall("PATCH", `${hook.url}/messages/${id}`, Discord.editBody(st, id, ctx));
+        if (res.status === 404 && res.data && res.data.code === 10008) Discord.forget(st, id);   // someone deleted the message
+        else if (res.status === 429) { alerts.retryAt = Date.now() + 60000; break; }
+        else if (res.status >= 300) throw new Error(discordProblem(res));
+        else Discord.edited(st, id);
+        Discord.saveSent(st);
+        await pause(800);
+      }
+      alerts.error = "";
+    } catch (error) {
+      alerts.error = `Discord alerts: ${error.message === "bridge-timeout" ? "the extension didn't answer." : error.message}`;
+      alerts.retryAt = Date.now() + 5 * 60000;
+    } finally {
+      alerts.busy = false;
+      renderDiscordButton(); renderFeed();
+    }
+  }
+
+  function renderDiscordButton() {
+    const button = $("openDiscord");
+    const show = !!Discord && isSource();
+    button.hidden = !show;
+    if (!show) { $("discord").hidden = true; return; }
+    const cfg = Discord.loadSettings();
+    const on = cfg.on && !!Discord.parseWebhook(cfg.url);
+    button.textContent = alerts.error ? "Discord alerts: problem" : on ? "Discord alerts on" : "Discord alerts";
+    button.classList.toggle("is-on", on && !alerts.error);
+    button.classList.toggle("is-bad", !!alerts.error);
+  }
+  function setDiscordMsg(text, good) { const m = $("dcMsg"); m.textContent = text || ""; m.classList.toggle("is-good", !!good); }
+  function openDiscord() {
+    const cfg = Discord.loadSettings();
+    $("dcUrl").value = cfg.url; $("dcPeople").value = cfg.people; $("dcNames").checked = !!cfg.names;
+    $("dcOn").checked = cfg.url ? !!cfg.on : true;
+    setDiscordMsg(alerts.error || (alerts.lastSent ? `Last alert sent ${timeOf(alerts.lastSent)}.` : ""), !alerts.error);
+    $("discord").hidden = false;
+    $("discord").scrollIntoView({ block: "start" });
+    $("dcUrl").focus();
+  }
+  function discordForm() {
+    const url = $("dcUrl").value.trim(), people = $("dcPeople").value;
+    const hook = Discord.parseWebhook(url);
+    return { cfg: { url: hook ? hook.url : url, people, names: $("dcNames").checked, on: $("dcOn").checked }, hook, parsed: Discord.parsePeople(people) };
+  }
+  function formProblem(f, needLink) {
+    if ((f.cfg.url || needLink) && !f.hook) return "That isn't a Discord webhook link. Copy it again: Edit Channel, Integrations, Webhooks, Copy Webhook URL.";
+    if (f.parsed.bad.length) return `Not understood: ${f.parsed.bad.slice(0, 3).join("; ")}. Write each line like MOR = 123456789012345678.`;
+    return "";
+  }
+  function saveDiscord() {
+    const f = discordForm();
+    const problem = formProblem(f, false);
+    if (problem) { setDiscordMsg(problem); return; }
+    const before = Discord.parseWebhook(Discord.loadSettings().url);
+    if (!before || !f.hook || before.url !== f.hook.url) Discord.saveSent(Discord.emptyState());   // another channel: start fresh
+    Discord.saveSettings(f.cfg);
+    alerts.error = ""; alerts.retryAt = 0; alerts.lastRun = 0;
+    const n = Object.keys(f.parsed.people).length;
+    setDiscordMsg(!f.hook ? "Saved without a webhook link, so alerts are off."
+      : f.cfg.on ? `Saved. Alerts are on${n ? `, tagging ${n} ${n === 1 ? "person" : "people"}` : ""}.` : "Saved. Alerts are off.", true);
+    renderDiscordButton(); renderFeed();
+    runAlerts();
+  }
+  async function testDiscord() {
+    const f = discordForm();
+    const problem = formProblem(f, true);
+    if (problem) { setDiscordMsg(problem); return; }
+    setDiscordMsg("Sending…", true);
+    try {
+      const res = await discordCall("POST", `${f.hook.url}?wait=true`, Discord.testBody(f.cfg, { boardUrl: boardLink() }));
+      if (res.status >= 300) throw new Error(res.status === 429 ? "Discord is busy. Try again in a minute." : discordProblem(res));
+      setDiscordMsg("Sent. In the channel every tag should show a name. \"@unknown-user\" means a wrong ID, or that person hasn't joined yet.", true);
+    } catch (error) {
+      setDiscordMsg(error.message === "bridge-timeout" ? "The extension didn't answer. Reload this page and try again." : error.message);
+    }
+  }
+
   // ------------------------------------------------------------ main loop
 
   let busy = false;
@@ -397,6 +542,7 @@
       if (await recheckStuck(state.results)) { evaluateAll(); render(); }
       state.checkedOnce = true;
       await publish(true);
+      await runAlerts();
     } finally { busy = false; }
   }
 
@@ -468,6 +614,7 @@
   function render() {
     renderAccount();
     renderFeed();
+    renderDiscordButton();
     const people = new Map();
     for (const r of state.results) {
       const by = (r.row.by || "?").toUpperCase();
@@ -495,6 +642,7 @@
     if (w && w.state === "ok" && w.filter) problems.push(w.message);
     if (state.pickingError) problems.push(state.pickingError);
     if (!forTeam && state.updateNote) problems.push(state.updateNote);
+    if (!forTeam && alerts.error) problems.push(alerts.error);
     return problems.filter(Boolean);
   }
 
@@ -728,6 +876,9 @@
       if (t.id === "signOut" || t.id === "signOutNoAccess") { Share.signOut(); return; }
       if (t.id === "forgot") { forgotPassword(); return; }
       if (t.id === "suggest") { $("password").type = "text"; $("password").value = Share.suggestPassphrase(); $("password").focus(); return; }
+      if (t.id === "openDiscord") { openDiscord(); return; }
+      if (t.id === "dcClose") { $("discord").hidden = true; return; }
+      if (t.id === "dcTest") { testDiscord(); return; }
       if (t.matches("tr.has-slips")) toggle(t.dataset.doc);
     });
     document.addEventListener("keydown", (event) => {
@@ -748,6 +899,7 @@
       } catch (error) { message.textContent = signInMessage(error); }
       finally { button.disabled = false; }
     });
+    $("discordForm").addEventListener("submit", (event) => { event.preventDefault(); saveDiscord(); });
     $("q").addEventListener("input", (event) => { state.query = event.target.value; render(); });
     const sound = $("sound");
     sound.checked = !!state.prefs.sound;
@@ -788,7 +940,7 @@
   setInterval(() => cycle(false), WIP_EVERY_MS);
   setInterval(() => {   // grace periods and dates roll over without a fetch
     evaluateAll(); render();
-    if (isSource() && state.results.some((r) => r.status === "checking")) cycle(false); else publish();
+    if (isSource() && state.results.some((r) => r.status === "checking")) cycle(false); else { publish(); runAlerts(); }
   }, 30000);
   setTimeout(checkForUpdate, 30000);
   setInterval(checkForUpdate, 10 * 60000);
