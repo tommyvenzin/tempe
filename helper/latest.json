@@ -1,8 +1,8 @@
 {
-  "version": "2.5.1",
-  "name": "2.5.1 - notes saved",
-  "zip": "Tempe-COSTAR-Helper-v2.5.1.zip",
-  "sha256": "ba13dbfdfd1cdbad23e5db6347e24124a5984626e7e896831c581722cf4e513d",
-  "size": 509872,
-  "notes": "Notes are saved: once a note line's words are in, the helper presses A and Backspace at its end so COSTAR keeps them when the Repair Order is closed (eBay notes, DET's notes, M C, PAYING BY, phone notes). The desk hands out the certificate that signed its HTTPS certificate. Update the desk receiver too."
+  "version": "2.5.2",
+  "name": "2.5.2 - eBay RO closes",
+  "zip": "Tempe-COSTAR-Helper-v2.5.2.zip",
+  "sha256": "18ee7dc47f54478f5a25a46f94fec2c925807c9f78632ab690298e0046ca17d7",
+  "size": 513701,
+  "notes": "eBay Repair Orders close by themselves once they're in (left open when something needs checking by hand; a tick box on the eBay orders tab turns it off). The desk receiver waits for its port after an update instead of stopping. Update the desk receiver too."
 }
