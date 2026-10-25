@@ -1,8 +1,8 @@
 {
-  "version": "2.5.0",
-  "name": "2.5.0 - eBay orders",
-  "zip": "Tempe-COSTAR-Helper-v2.5.0.zip",
-  "sha256": "590b612168219c5508925748d7960907aecd859c3be0cf607ed4440504be98b2",
-  "size": 530294,
-  "notes": "eBay orders: one click on the eBay PC sends the order to the desk PC, and the RDP helper types it into a new Repair Order in COSTAR Sydney (left open for review). Update the desk receiver too."
+  "version": "2.5.1",
+  "name": "2.5.1 - notes saved",
+  "zip": "Tempe-COSTAR-Helper-v2.5.1.zip",
+  "sha256": "ba13dbfdfd1cdbad23e5db6347e24124a5984626e7e896831c581722cf4e513d",
+  "size": 509872,
+  "notes": "Notes are saved: once a note line's words are in, the helper presses A and Backspace at its end so COSTAR keeps them when the Repair Order is closed (eBay notes, DET's notes, M C, PAYING BY, phone notes). The desk hands out the certificate that signed its HTTPS certificate. Update the desk receiver too."
 }
