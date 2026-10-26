@@ -347,6 +347,37 @@ function copySKU(sku) {
         .catch((err) => console.error("Copy failed", err));
 }
 
+// The Job Card button on phones (index.html, 26 Oct) shows how many products the card holds,
+// kept up to date with every change to the card (this page, or the Job Card in another tab).
+let jobCardSwitchWatched = false;
+async function refreshJobCardSwitch() {
+    const count = document.getElementById("jobcardSwitchCount");
+    if (!count || !window.TempeJobCard) return;
+    try {
+        const store = window.TempeJobCard.getStore();
+        if (!jobCardSwitchWatched) {
+            jobCardSwitchWatched = true;
+            store.subscribe(() => { refreshJobCardSwitch(); });
+        }
+        const state = await store.read();
+        const n = state && Array.isArray(state.products) ? state.products.length : 0;
+        count.textContent = n ? String(n) : "";
+        count.hidden = !n;
+        document.getElementById("jobcardSwitch")?.setAttribute("aria-label", n ? `Job Card, ${n} product${n === 1 ? "" : "s"}` : "Job Card");
+    } catch (error) {
+        count.hidden = true;
+    }
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", refreshJobCardSwitch);
+} else {
+    refreshJobCardSwitch();
+}
+// Back from the Job Card page (or another tab): the count may have changed.
+window.addEventListener("pageshow", (event) => { if (event.persisted) refreshJobCardSwitch(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshJobCardSwitch(); });
+
 async function selectTyreForFitment(tyre) {
     try {
         // Other existing pages may also load F_alt_tab.js without the new script tag.
@@ -360,10 +391,12 @@ async function selectTyreForFitment(tyre) {
             });
             await window.tempeJobCardLoad;
         }
-        return await window.TempeJobCard.addProduct({
+        const added = await window.TempeJobCard.addProduct({
             type: "tyre", sku: tyre.sku,
             description: [tyre.make, tyre.model].filter(Boolean).join(" "),
         });
+        refreshJobCardSwitch();
+        return added;
     } catch (error) {
         if (window.TempeJobCard) window.TempeJobCard.toast(error.message);
         else alert(error.message);

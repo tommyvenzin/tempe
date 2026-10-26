@@ -1,8 +1,8 @@
 {
-  "version": "2.5.2",
-  "name": "2.5.2 - eBay RO closes",
-  "zip": "Tempe-COSTAR-Helper-v2.5.2.zip",
-  "sha256": "18ee7dc47f54478f5a25a46f94fec2c925807c9f78632ab690298e0046ca17d7",
-  "size": 513701,
-  "notes": "eBay Repair Orders close by themselves once they're in (left open when something needs checking by hand; a tick box on the eBay orders tab turns it off). The desk receiver waits for its port after an update instead of stopping. Update the desk receiver too."
+  "version": "2.5.3",
+  "name": "2.5.3 - SHOP and waiting",
+  "zip": "Tempe-COSTAR-Helper-v2.5.3.zip",
+  "sha256": "0e1f4bb79041e5f8a637000c20fb4b26ae8a3eb979518535831e095b2477b0b8",
+  "size": 518180,
+  "notes": "Phone jobs get Ship Via SHOP for every customer and Customer Waiting ticked. F Alt Tab on a phone has a Job Card button (upload the three files in website/ to the repo's top folder). Update the desk receiver too."
 }

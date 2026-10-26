@@ -4670,3 +4670,84 @@ body.price-checker-page .jobcard-shared-toast {
             "foot  foot";
     }
 }
+
+/* ===================================================== */
+/* F ALT TAB — JOB CARD BUTTON ON PHONES                 */
+/* ===================================================== */
+
+/* 26 Oct: on phones the page links sit in the drop-down menu, so the price
+   checker gets one big button straight to the Job Card, with how many
+   products the card holds. It stays bottom right; the toasts show above it. */
+.jobcard-switch {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    body.price-checker-page .jobcard-switch {
+        position: fixed;
+        right: 16px;
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        z-index: 9000;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 52px;
+        padding: 0 16px 0 20px;
+        box-sizing: border-box;
+        border: 1px solid rgba(56, 189, 248, 0.55);
+        border-radius: 999px;
+        color: #f0f9ff;
+        background: linear-gradient(135deg, #0284c7, #0ea5e9);
+        box-shadow: 0 10px 28px rgba(2, 6, 23, 0.55);
+        font-size: 1rem;
+        font-weight: 750;
+        line-height: 1;
+        text-decoration: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body.price-checker-page .jobcard-switch:active {
+        transform: translateY(1px);
+    }
+
+    body.price-checker-page .jobcard-switch:focus-visible {
+        outline: 3px solid rgba(249, 115, 22, 0.65);
+        outline-offset: 2px;
+    }
+
+    body.price-checker-page .jobcard-switch-count {
+        min-width: 24px;
+        padding: 3px 7px;
+        box-sizing: border-box;
+        border-radius: 999px;
+        color: #0c4a6e;
+        background: #e0f2fe;
+        font-size: 0.85rem;
+        font-weight: 800;
+        text-align: center;
+    }
+
+    body.price-checker-page .jobcard-switch-count[hidden] {
+        display: none;
+    }
+
+    body.price-checker-page .jobcard-switch-arrow {
+        font-size: 1.4rem;
+        line-height: 1;
+    }
+
+    /* Room under the last result so the button never covers it. */
+    body.price-checker-page .app-shell {
+        padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* The toasts show above the button (the SKU copy one above "added on the Job Card"). */
+    body.price-checker-page .falt-toast,
+    body.price-checker-page .jobcard-shared-toast {
+        bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    }
+
+    body.price-checker-page:has(> .jobcard-shared-toast.is-visible) .falt-toast {
+        bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+    }
+}
