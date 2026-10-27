@@ -1,8 +1,8 @@
 {
-  "version": "2.6.3",
-  "name": "2.6.3 - Map COSTAR",
-  "zip": "Tempe-COSTAR-Helper-v2.6.3.zip",
-  "sha256": "778734aa1aa334404d8aa3b0713c5c8883610beffa3a36ff0e56094085bbac21",
-  "size": 691602,
-  "notes": "Map COSTAR: a Map COSTAR screen button in the RDP helper. Press it, bring up the COSTAR screen within 5 s, and the helper reads it (never clicks or types): every box, button, tick box, tab, list and menu, and what can be pressed directly. The maps go with Save diagnostics. Update the RDP helper; no website files."
+  "version": "2.6.4",
+  "name": "2.6.4 - Map COSTAR, deeper",
+  "zip": "Tempe-COSTAR-Helper-v2.6.4.zip",
+  "sha256": "6747f1b756733009071e91e97ad33733f0e7fbd68c4cc0df8748fddbfef20740",
+  "size": 699849,
+  "notes": "Map COSTAR, deeper: the map now skips the parts of COSTAR's screens that don't show, so it reaches the Repair Order's toolbar and lines; it reads only the COSTAR in front; and Ctrl+Alt+F9 maps the screen in front at once (a sound when it's saved; the button counts 10 s now). Update the RDP helper; no website files."
 }
