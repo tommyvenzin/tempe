@@ -1,8 +1,8 @@
 {
-  "version": "2.6.0",
-  "name": "2.6.0 - Repair Orders on the phone",
-  "zip": "Tempe-COSTAR-Helper-v2.6.0.zip",
-  "sha256": "108cad32e83cec808f93523cbc8b51f0f4552187525f0d1bab52b779d85beb7f",
-  "size": 619295,
-  "notes": "Repair Orders on the phone: open any Repair Order in COSTAR Tempe's Work-in-Progress from the phone, change the customer, car, lines, prices, Ship Via, Date In and Customer Waiting, and the RDP helper types it in, checks it and closes it again. Update the desk receiver first, then the RDP helper, then upload the six files in website/ to the repo's top folder."
+  "version": "2.4.2",
+  "name": "2.4.2 - phone card unstuck",
+  "zip": "Tempe-COSTAR-Helper-v2.4.2.zip",
+  "sha256": "cebfd47880dbfd191a62019328c3e094912b5abe6d8d29481d4ae93dd835219e",
+  "size": 425262,
+  "notes": "The phone job card can start a new card after a stopped, removed or closed order (it was stuck on the last order). Upload the website files too."
 }
