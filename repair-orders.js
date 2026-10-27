@@ -1,4 +1,5 @@
-/* Repair Orders on the phone (helper 2.6.0). Lists COSTAR Tempe's Work-in-Progress (read by the RDP
+/* Repair Orders on the phone (helper 2.6.0; 2.6.1: shown as soon as read, list from a recent copy; 2.6.2: Order and
+   Print the Job Card ticked in the review, print with no change). Lists COSTAR Tempe's Work-in-Progress (read by the RDP
    helper through the desk PC), opens a Repair Order (the helper opens it in COSTAR, reads it and closes it
    again) and saves changes straight in. Changes stay a draft on this phone until "Save to COSTAR".
    A save is written down (its request ID and change) before it is sent and followed until it ends,
@@ -20,12 +21,13 @@
     // The most letters each box takes, as the helper checks them (it refuses longer).
     const LIMITS = { name: 100, phone: 20, email: 120, address: 100, address2: 100, suburb: 60, state: 3, postcode: 4, po: 30, comment: 80, makeModel: 60, rego: 15, odometer: 7, shipVia: 20 };
     const NOTE_MAX = 80, MAX_LINES = 25, MAX_ADDS = 8;
-    const DRAFT_KEY = "tempe:ro-draft:v1:", SNAP_KEY = "tempe:ro-snap:v1:", PENDING_KEY = "tempe:ro-pending:v1:";
+    const DRAFT_KEY = "tempe:ro-draft:v1:", SNAP_KEY = "tempe:ro-snap:v1:", PENDING_KEY = "tempe:ro-pending:v1:", LEFT_KEY = "tempe:ro-left:v1:";
     const FRESH_MS = 2 * 60 * 1000, DRAFT_MS = 24 * 3600 * 1000, PENDING_MS = 3 * 3600 * 1000;
     // sent: { sig, id } once a save of this draft was sent and nothing yet proves none of it is in COSTAR
     // (sig: the fingerprint that save was made on).
+    // canPrint (2.6.2): the RDP helper prints Job Cards (a 2.6.2 helper says so).
     const state = { rows: [], list: null, filter: "all", query: "", doc: null, row: null, base: null, readAt: 0, draft: emptyDraft(), sent: null,
-        token: 0, listBusy: false, readingToken: 0, sheetDoc: null, cameFromList: false };
+        token: 0, listBusy: false, readingToken: 0, closingToken: 0, sheetDoc: null, cameFromList: false, canPrint: false, reviewNext: null };
 
     // ---------- small helpers ----------
     const norm = v => String(v ?? "").replace(/\s+/g, " ").trim().toUpperCase();
@@ -94,10 +96,12 @@
     }
 
     // ---------- the desk PC ----------
-    async function ask(kind, doc, edit) {
+    async function ask(kind, doc, edit, fresh) {
         const body = { id: "RO-" + uuid(), kind };
         if (doc) body.doc = doc;
         if (edit) body.edit = edit;
+        // 2.6.1: a list read just now (↻), not Order Check's copy from the last few minutes.
+        if (fresh) body.fresh = true;
         return client.roAsk(body);
     }
     // Follows a request until it is done or failed. null: the desk PC no longer knows it; undefined:
@@ -105,7 +109,9 @@
     async function follow(status, onUpdate, token) {
         const started = Date.now(); let errors = 0;
         while (status && status.status !== "done" && status.status !== "failed") {
-            await sleep(document.hidden ? 2500 : Date.now() - started > 30000 ? 1500 : 900);
+            // 2.6.1: often at first (a Repair Order opens in seconds now), less after.
+            const age = Date.now() - started;
+            await sleep(document.hidden ? 2500 : age > 30000 ? 1500 : age > 10000 ? 900 : 400);
             if (token != null && token !== state.token) return undefined;
             let next;
             try { next = await client.roStatus(status.id); errors = 0; }
@@ -117,6 +123,12 @@
         }
         return status;
     }
+    // Whether the RDP helper prints Job Cards (2.6.2): the save bar and an open review follow it.
+    function setCanPrint(on) {
+        if (state.canPrint === on) return;
+        state.canPrint = on; updateSaveBar();
+        if ($("reviewSheet").open) renderAlso();
+    }
     function setHelper(kind, text) {
         $("helperLine").dataset.state = kind;
         $("helperText").textContent = text;
@@ -125,6 +137,7 @@
         if (!client || document.hidden) return;
         try {
             const h = await client.health();
+            setCanPrint(h.roPrint === true);
             if (h.ro !== true) setHelper("off", "The desk PC needs helper 2.6.0 for Repair Orders: click the yellow update line on the desk PC.");
             else if (!h.receiving) setHelper("off", "The desk PC has stopped receiving.");
             else if (!h.roConnected) setHelper("off", "The RDP helper on the COSTAR PC isn't running (or not in touch).");
@@ -180,6 +193,7 @@
         meta.textContent = n + " Repair Order" + (n === 1 ? "" : "s") + " · read " + ago(state.list.readUtc) + (state.list.source === "order-check" ? " (Order Check's copy)" : "") + (state.list.note ? " · " + state.list.note : "");
     }
     function applyList(view) {
+        if (view && view.helper) setCanPrint(view.helper.print === true);
         state.list = view && view.list ? view.list : state.list;
         state.rows = state.list && Array.isArray(state.list.rows) ? state.list.rows : [];
         renderList(); renderMeta();
@@ -193,11 +207,12 @@
         const age = state.list ? Date.now() - Date.parse(state.list.readUtc) : Infinity;
         if (force || view.refresh || !(age < 60000)) refreshList(view.refresh);
     }
-    async function refreshList(pending) {
-        if (state.listBusy) return;
+    async function refreshList(pending, fresh) {
+        // ↻ while a read is going: a fresh read follows it (2.6.1).
+        if (state.listBusy) { if (fresh) state.wantFresh = true; return; }
         state.listBusy = true; $("listBar").hidden = false; $("refreshList").classList.add("is-spinning"); renderList();
         try {
-            let status = pending || await ask("list");
+            let status = pending || await ask("list", null, null, fresh);
             const show = s => renderMeta(s.status === "queued" ? "Waiting for the RDP helper: " + (s.waiting || s.message) : "Reading COSTAR's Work-in-Progress…");
             show(status);
             status = await follow(status, s => show(s), null);
@@ -205,7 +220,10 @@
             else if (status && status.status === "failed") { renderMeta(status.message, "error"); return; }
             applyList(await client.roList());
         } catch (error) { renderMeta(error.message, "error"); }
-        finally { state.listBusy = false; $("listBar").hidden = true; $("refreshList").classList.remove("is-spinning"); renderList(); }
+        finally {
+            state.listBusy = false; $("listBar").hidden = true; $("refreshList").classList.remove("is-spinning"); renderList();
+            if (state.wantFresh) { state.wantFresh = false; refreshList(null, true); }
+        }
     }
 
     // ---------- one Repair Order ----------
@@ -234,7 +252,7 @@
     async function openDetail(doc, force) {
         const token = ++state.token;
         if (state.sheetDoc && state.sheetDoc !== doc) closeSheet();
-        state.doc = doc; state.row = state.rows.find(r => r.doc === doc) || null; state.base = null; state.draft = emptyDraft(); state.sent = null;
+        state.doc = doc; state.row = state.rows.find(r => r.doc === doc) || null; state.base = null; state.draft = emptyDraft(); state.sent = null; state.reviewNext = null;
         $("roForm").hidden = true; $("openCard").hidden = true; hideAlert(); $("readLine").textContent = "";
         showView("detail"); headerFromRow(); window.scrollTo(0, 0);
         // A save still being followed (or never seen to end) for this Repair Order: followed again first.
@@ -251,8 +269,24 @@
         if (state.readingToken === token || token !== state.token) return;
         state.readingToken = token; updateSaveBar(); hideAlert();
         showOpen(state.base ? "Reading it again from COSTAR…" : "Opening in COSTAR…", "Sent to the desk PC");
+        // 2.6.1: the helper sends the Repair Order as soon as it is read; it is shown then, while COSTAR
+        // closes it (the read ends with that close).
+        let early = null, offered = false;
         const show = s => {
             if (token !== state.token) return;
+            const left = !offered && s.status === "queued" && /Repair Order is open/i.test(s.waiting || s.message || "") ? anyLeftOpen(state.doc) : null;
+            if (left) {
+                // The helper only says that a Repair Order is open; this phone knows which one it left open.
+                offered = true;
+                showAlert("A Repair Order is open in COSTAR Tempe, so the RDP helper is waiting. Your phone left RO " + left + " open there (COSTAR didn't close it). If that's the one, close it here, or at the PC:",
+                    [{ label: "Close RO " + left + " in COSTAR", primary: true, run: () => { hideAlert(); closeInCostar(left); } }], "warn");
+            }
+            if (!early && s.status === "working" && s.snapshot && s.snapshot.doc === state.doc) {
+                early = s.snapshot.sig; state.closingToken = token;
+                $("openCard").hidden = true; setBase(s.snapshot, Date.now(), false); updateSaveBar();
+                return;
+            }
+            if (early) return;
             if (s.status === "queued") showOpen("Waiting for the RDP helper…", s.waiting || s.message);
             else if (s.status === "working") showOpen("Opening in COSTAR…", s.progress || s.message);
         };
@@ -264,14 +298,24 @@
             // Only the Repair Order this was asked for, and only while it is still the one on screen.
             if (status === undefined || token !== state.token) return;
             $("openCard").hidden = true;
-            if (status === null) showAlert("The desk PC lost track of this (it may have restarted).", [{ label: "Try again", primary: true, run: () => readFromCostar(state.token) }]);
-            else if (status.status === "done" && status.snapshot) setBase(status.snapshot, Date.now(), false);
-            else showAlert(status.message || "COSTAR couldn't open it.", [{ label: "Try again", primary: true, run: () => readFromCostar(state.token) }]);
+            const again = [{ label: "Try again", primary: true, run: () => readFromCostar(state.token) }];
+            if (status === null) { if (!early) showAlert("The desk PC lost track of this (it may have restarted).", again); }
+            else if (status.status === "done" && status.snapshot) {
+                // Shown already unless COSTAR's copy changed in between: the form isn't drawn again under the fingers.
+                if (status.snapshot.sig !== early) setBase(status.snapshot, Date.now(), false);
+                markLeft(state.doc, !!status.leftOpen); if (!status.leftOpen && offered) hideAlert();
+                if (status.leftOpen) showAlert(status.message || "COSTAR didn't close it again.", [{ label: "Close it in COSTAR", primary: true, run: () => { hideAlert(); closeInCostar(state.doc); } }], "warn");
+            }
+            else showAlert(status.message || "COSTAR couldn't open it.", again, early ? "warn" : "error");
         } catch (error) {
             if (token !== state.token) return;
             $("openCard").hidden = true;
-            showAlert(error.message, [{ label: "Try again", primary: true, run: () => readFromCostar(state.token) }]);
-        } finally { if (state.readingToken === token) state.readingToken = 0; if (token === state.token) updateSaveBar(); }
+            if (!early) showAlert(error.message, [{ label: "Try again", primary: true, run: () => readFromCostar(state.token) }]);
+        } finally {
+            if (state.readingToken === token) state.readingToken = 0;
+            if (state.closingToken === token) state.closingToken = 0;
+            if (token === state.token) { updateSaveBar(); reviewIfAsked(); }
+        }
     }
     // The Repair Order as COSTAR holds it: the form shows it, with this phone's unsaved changes on top.
     // cached: a copy from a moment ago (not proof of what COSTAR holds now).
@@ -636,9 +680,12 @@
         const bar = $("saveBar"); if (!state.base) { bar.hidden = true; document.body.classList.remove("ro-has-savebar"); return; }
         bar.hidden = $("detailView").hidden; document.body.classList.toggle("ro-has-savebar", !bar.hidden);
         const n = countChanges(), bad = invalid(), busy = saveOpen(state.base.doc);
+        // 2.6.2: with no change, the review still offers Order and Print the Job Card.
+        const extra = !n && (state.canPrint || Object.keys(orderPlan().set).length > 0);
         $("changeCount").textContent = n ? n + " change" + (n === 1 ? "" : "s") : "No changes";
-        $("changeHint").textContent = busy ? "Your last save isn't finished yet" : bad ? bad : reading() ? "Reading COSTAR…" : n ? "Not in COSTAR yet" : "Edit anything above";
-        $("review").disabled = !n || !!bad || reading() || busy;
+        $("changeHint").textContent = busy ? "Your last save isn't finished yet" : bad ? bad : reading() ? (state.closingToken === state.token ? "COSTAR is closing it…" : "Reading COSTAR…") : n ? "Not in COSTAR yet" : "Edit anything above";
+        $("review").disabled = (!n && !extra) || !!bad || reading() || busy;
+        $("review").textContent = n ? "Review & save" : state.canPrint ? "Order / print…" : "Order…";
         $("discard").hidden = !n; $("discard").disabled = busy;
         // Nothing can be changed while a save is open: what was sent is what goes in.
         $("roForm").inert = busy; $("roForm").classList.toggle("is-locked", busy);
@@ -689,12 +736,66 @@
         if (d.customerWaiting !== undefined) out.push({ what: "Customer Waiting", from: b.customerWaiting === "yes" ? "Ticked" : "Not ticked", to: d.customerWaiting === "yes" ? "Ticked" : "Not ticked" });
         return out;
     }
+    // Try again (2.6.2): the review opens as soon as the Repair Order can be reviewed.
+    function reviewIfAsked() {
+        if (!state.reviewNext || state.reviewNext !== state.doc || !here(state.doc) || !state.base || reading() || saveOpen(state.doc)) return;
+        state.reviewNext = null; if (!$("review").disabled) openReview();
+    }
     function openReview() {
         if (!state.base || saveOpen(state.base.doc)) return;
         const items = describe(), list = $("reviewList"); list.replaceChildren();
         for (const c of items) list.append(el("li", { class: c.danger ? "is-danger" : "" }, el("b", { text: c.what }), c.from !== undefined ? el("span", { class: "ro-from", text: c.from }) : null, el("span", { class: "ro-to", text: c.to })));
-        $("reviewIntro").textContent = items.length + " change" + (items.length === 1 ? "" : "s") + " to RO " + state.base.doc + (state.base.name ? " (" + state.base.name + ")" : "") + ".";
+        list.hidden = !items.length;
+        $("reviewIntro").textContent = (items.length ? items.length + " change" + (items.length === 1 ? "" : "s") + " to " : "") + "RO " + state.base.doc + (state.base.name ? " (" + state.base.name + ")" : "") + ".";
+        // 2.6.2 (Tommy, 27 Oct): both ticked each time.
+        $("alsoOrder").checked = true; $("alsoPrint").checked = true;
+        renderAlso();
         $("reviewSheet").showModal();
+    }
+    // ---------- 2.6.2: Order and Print the Job Card ----------
+    // Order (Tommy, 27 Oct): Ship Via SHOP, Customer Waiting ticked, Date In (COSTAR's Repair Date) today.
+    // Each part goes into the save only where the Repair Order isn't so already and isn't changed above by
+    // you (your own change stays, the same as Order or not); a part the phone can't change on this Repair
+    // Order is left for the PC.
+    const ORDER_WORDS = { shipVia: "Ship Via SHOP", customerWaiting: "Customer Waiting ticked", dateIn: "Date In today" };
+    function orderPlan() {
+        const plan = { set: {}, mine: [], kept: [], already: [], byHand: [] }, b = state.base, d = state.draft;
+        if (!b) return plan;
+        const cannot = b.cannot || {}, want = { shipVia: "SHOP", customerWaiting: "yes", dateIn: iso(new Date()) };
+        for (const k of Object.keys(want)) {
+            if (d[k] !== undefined) { (same(k, d[k], want[k]) ? plan.mine : plan.kept).push(k); continue; }
+            if (same(k, want[k], baseValue(b, k))) { plan.already.push(k); continue; }
+            if (cannot[k]) { plan.byHand.push(k); continue; }
+            plan.set[k] = want[k];
+        }
+        return plan;
+    }
+    // What goes: { kind: "edit", edit } (changes, maybe with print), { kind: "print" } (print alone) or { kind: null }.
+    function finalPlan() {
+        const edit = buildEdit(), print = state.canPrint && $("alsoPrint").checked;
+        if ($("alsoOrder").checked) for (const [k, v] of Object.entries(orderPlan().set)) edit[k] = v;
+        const changes = !!(edit.header || edit.lines || edit.add) || JOB_KEYS.some(k => edit[k] !== undefined);
+        if (changes) { if (print) edit.print = true; return { kind: "edit", edit, print }; }
+        return { kind: print ? "print" : null, edit: null, print };
+    }
+    function renderAlso() {
+        if (!state.base) return;
+        const plan = orderPlan(), parts = [];
+        const set = Object.keys(plan.set).map(k => ORDER_WORDS[k]);
+        if (set.length) parts.push(set.join(", "));
+        if (plan.mine.length) parts.push("in your changes: " + plan.mine.map(k => ORDER_WORDS[k]).join(", "));
+        if (plan.already.length) parts.push("already " + plan.already.map(k => ORDER_WORDS[k]).join(", "));
+        if (plan.kept.length) parts.push("your " + plan.kept.map(k => LABELS[k]).join(" and ") + " above stays");
+        if (plan.byHand.length) parts.push(plan.byHand.map(k => LABELS[k]).join(" and ") + ": at the PC (it can't be changed from the phone on this Repair Order)");
+        const hint = parts.join(" · ");
+        $("alsoOrderHint").textContent = hint ? hint.charAt(0).toUpperCase() + hint.slice(1) : "Nothing to change for it.";
+        $("alsoPrintRow").hidden = !state.canPrint;
+        const go = finalPlan(), n = countChanges();
+        $("saveNow").disabled = !go.kind || (go.kind === "edit" && !!invalid());
+        $("saveNow").textContent = go.kind === "print" ? "Print the Job Card" : go.kind === "edit" ? (go.print ? "Save and print" : "Save to COSTAR") : "Nothing to do";
+        $("reviewTitle").textContent = go.kind === "print" ? "Print the Job Card?" : n || go.kind === "edit" ? "Save to COSTAR?" : "Order or print?";
+        $("reviewHow").textContent = go.kind === "print" ? "The RDP helper opens this Repair Order in COSTAR, prints its Job Card and closes it again."
+            : "The RDP helper opens this Repair Order in COSTAR, types " + (n ? "these changes, checks them" : "the order, checks it") + (go.print ? ", prints the Job Card" : "") + " and closes it again.";
     }
     function setStep(name, mode) { const li = document.querySelector('#saveSteps [data-step="' + name + '"]'); if (li) li.dataset.mode = mode; }
     // Where a save stopped: every step before it went through.
@@ -703,7 +804,14 @@
     }
     // How far the desk PC got with it, from what the phone has seen.
     function reach(t, s) { if (s) t.reached = s.status === "working" || s.status === "done" ? "working" : t.reached || "queued"; }
-    function resetSteps() { for (const li of document.querySelectorAll("#saveSteps li")) li.dataset.mode = ""; $("saveWaiting").textContent = ""; $("saveProgress").textContent = ""; $("saveDoneText").textContent = "Checked and closed"; $("saveResult").hidden = true; $("saveActions").replaceChildren(); }
+    function resetSteps(p) {
+        for (const li of document.querySelectorAll("#saveSteps li")) li.dataset.mode = "";
+        $("saveWaiting").textContent = ""; $("saveProgress").textContent = ""; $("saveResult").hidden = true; $("saveActions").replaceChildren();
+        // 2.6.2: a print with no change prints instead of typing.
+        const print = !!(p && p.kind === "print"), working = document.querySelector('#saveSteps [data-step="working"]');
+        if (working) for (const n of working.childNodes) if (n.nodeType === 3 && n.textContent.trim()) { n.textContent = print ? "Printing in COSTAR" : "Typing into COSTAR"; break; }
+        $("saveDoneText").textContent = print ? "Printed and closed" : "Checked and closed";
+    }
     function saveActions(actions) {
         const box = $("saveActions"); box.replaceChildren();
         for (const a of actions) { const b = el("button", { type: "button", class: a.primary ? "ro-primary" : "ro-quiet", text: a.label }); b.addEventListener("click", a.run); box.append(b); }
@@ -713,8 +821,8 @@
         if (text) box.append(el("p", { text }));
         if (notes && notes.length) { const ul = el("ul"); for (const n of notes) ul.append(el("li", { text: n })); box.append(el("p", { class: "ro-check", text: "Check by hand:" }), ul); }
     }
-    function openSheet(doc) {
-        state.sheetDoc = doc; resetSteps(); $("saveTitle").textContent = "Saving to COSTAR";
+    function openSheet(doc, p) {
+        state.sheetDoc = doc; resetSteps(p); $("saveTitle").textContent = p && p.kind === "print" ? "Printing the Job Card" : "Saving to COSTAR";
         if (!$("saveSheet").open) $("saveSheet").showModal();
     }
     function closeSheet() { state.sheetDoc = null; if ($("saveSheet").open) $("saveSheet").close(); updateSaveBar(); }
@@ -723,18 +831,21 @@
     const tracks = {};
     function pendingOf(doc) {
         const p = store("local", PENDING_KEY + doc);
-        if (p && (!p.id || !p.edit || p.doc !== doc || !(Date.now() - p.at < PENDING_MS))) { store("local", PENDING_KEY + doc, null); return null; }
+        if (p && (!p.id || (!p.edit && p.kind !== "print") || p.doc !== doc || !(Date.now() - p.at < PENDING_MS))) { store("local", PENDING_KEY + doc, null); return null; }
         return p;
     }
     function save() {
-        if (!state.base || saveOpen(state.base.doc) || invalid()) return;
-        const edit = buildEdit(), p = { id: "RO-" + uuid(), doc: edit.doc, edit, at: Date.now(), gap: false };
+        // Only from the review: what goes, Order and Print included, is what the person just saw there.
+        if (!state.base || saveOpen(state.base.doc) || !$("reviewSheet").open) return;
+        const go = finalPlan(); if (!go.kind || (go.kind === "edit" && invalid())) return;
+        // kind (2.6.2): edit (changes, maybe with print) or print (the Job Card alone, nothing changed).
+        const p = { id: "RO-" + uuid(), doc: state.base.doc, kind: go.kind, edit: go.edit, print: !!go.print, at: Date.now(), gap: false };
         // Written down before it is sent: from here on only this request (by its ID) is ever asked about,
         // and the draft remembers the fingerprint this save was made on (kept until proven not in).
         store("local", PENDING_KEY + p.doc, p);
-        if (!state.sent) state.sent = { sig: edit.baseSig, id: p.id };
+        if (go.kind === "edit" && !state.sent) state.sent = { sig: go.edit.baseSig, id: p.id };
         persistDraft();
-        $("reviewSheet").close(); openSheet(p.doc);
+        $("reviewSheet").close(); openSheet(p.doc, p);
         track(p, true); updateSaveBar();
     }
     // Follows save p (send: send it first; the same ID again is never a second change) wherever the
@@ -747,7 +858,7 @@
         (async () => {
             try {
                 let status;
-                try { status = send ? await client.roAsk({ id: p.id, kind: "edit", doc: p.doc, edit: p.edit }) : await client.roStatus(p.id); }
+                try { status = send ? await client.roAsk(p.kind === "print" ? { id: p.id, kind: "print", doc: p.doc } : { id: p.id, kind: "edit", doc: p.doc, edit: p.edit }) : await client.roStatus(p.id); }
                 catch (error) {
                     // The desk PC answered and refused it: nothing was queued.
                     if (send && error.status >= 400 && error.status < 500 && error.status !== 404 && error.status !== 408) {
@@ -759,6 +870,9 @@
                     throw error;
                 }
                 if (status === null) { markGap(p); t.phase = "unknown"; return; }
+                // 2.6.2: a print joins one of this Repair Order already waiting (one print at a time): from here
+                // on that one is followed, also after a reload.
+                if (send && p.kind === "print" && status.id && status.id !== p.id) { p.id = status.id; if (pendingOf(p.doc)) store("local", PENDING_KEY + p.doc, p); }
                 t.status = status; reach(t, status); t.phase = "following"; paintSave(t);
                 status = await follow(status, (s, error) => { t.error = error || null; if (s) { t.status = s; reach(t, s); } paintSave(t); }, null);
                 if (status === null) { markGap(p); t.phase = "unknown"; return; }
@@ -768,7 +882,7 @@
             finally {
                 delete tracks[p.doc];
                 paintSave(t);
-                if (t.phase !== "ended" && t.phase !== "refused" && state.sheetDoc !== p.doc) toast("RO " + p.doc + ": " + (t.phase === "lost" ? "lost contact with the desk PC while saving: open it to check" : "the desk PC doesn't know your save any more: open it to check"));
+                if (t.phase !== "ended" && t.phase !== "refused" && state.sheetDoc !== p.doc) toast("RO " + p.doc + ": " + (t.phase === "lost" ? "lost contact with the desk PC while " + (p.kind === "print" ? "printing" : "saving") + ": open it to check" : "the desk PC doesn't know your " + (p.kind === "print" ? "print" : "save") + " any more: open it to check"));
                 if (here(p.doc)) updateSaveBar();
             }
         })();
@@ -777,12 +891,17 @@
     // The desk PC didn't have this save at some point (it restarted, or never got it): an earlier copy of it
     // may have gone in, so how this one ends can't prove the draft isn't in COSTAR.
     function markGap(p) { p.gap = true; if (pendingOf(p.doc)) store("local", PENDING_KEY + p.doc, p); }
+    // 2.6.2: the helper's words when OK went on the print form (or may have) but how it ended isn't known.
+    const MAYBE = /may have printed/i;
     // What a save that ended means for that Repair Order, whether or not the phone still shows it.
     function finishSave(p, status) {
         const doc = p.doc, changedMeanwhile = /^CHANGED:/.test(status.message || "");
+        if (status.status === "failed" && /doesn't print Job Cards now/.test(status.message || "")) setCanPrint(false);
+        if (status.leftOpen) markLeft(doc, true); else if (status.status === "done") markLeft(doc, false);
         store("local", PENDING_KEY + doc, null);
         if (status.status === "done") {
-            dropDraft(doc);
+            // A print alone changed nothing: the draft (if any was made meanwhile) stays.
+            if (p.kind !== "print") dropDraft(doc);
             if (status.snapshot) store("session", SNAP_KEY + doc, { snapshot: status.snapshot, at: Date.now() });
         } else {
             // Typed nothing, and the desk had this one copy of it all along: nothing of the draft is in COSTAR.
@@ -794,15 +913,18 @@
         delete tracks[doc];
         if (status.snapshot && state.doc === doc) setBase(status.snapshot, Date.now(), false);
         if (state.sheetDoc !== doc) {
-            if (status.status === "done") toast("RO " + doc + ": " + (status.leftOpen ? "in COSTAR, not closed yet" : "saved to COSTAR"), "ok");
+            const words = status.message || "", maybe = MAYBE.test(words);
+            const printWords = maybe ? ", the Job Card may have printed: check the printer" : /Job Card not printed/i.test(words) ? ", Job Card not printed: open it to see why" : /Job Card (printed|sent to the printer)/i.test(words) ? ", Job Card printed" : "";
+            if (p.kind === "print") toast("RO " + doc + ": " + (maybe ? "the Job Card may have printed: check the printer" : status.status === "done" ? "Job Card printed" + (status.leftOpen ? " (not closed yet: open it to close it)" : "") : "Job Card not printed: open it to see why"), status.status === "done" && !maybe ? "ok" : "");
+            else if (status.status === "done") toast("RO " + doc + ": " + (status.leftOpen ? "in COSTAR, not closed yet: open it to close it" : "saved to COSTAR") + printWords, "ok");
             else toast("RO " + doc + ": " + (changedMeanwhile ? "changed in COSTAR before your save: open it to check and save again" : status.typed ? "stopped part way: open it to check" : "not saved: open it to see why"));
         }
         if (here(doc)) { renderForm(); updateSaveBar(); }
     }
     function paintSave(t) {
-        const doc = t.p.doc;
+        const doc = t.p.doc, print = t.p.kind === "print";
         if (state.sheetDoc !== doc || !$("saveSheet").open) return;
-        resetSteps(); $("saveTitle").textContent = "Saving to COSTAR";
+        resetSteps(t.p); $("saveTitle").textContent = print ? "Printing the Job Card" : "Saving to COSTAR";
         const s = t.status, offline = t.error ? "Can't reach the desk PC right now: " + t.error.message : "";
         if (t.phase === "sending" || t.phase === "checking") {
             setStep("sent", "active");
@@ -819,6 +941,15 @@
             saveResult("warn", "Lost contact with the desk PC", "Your save may still go in. Checking again asks about this same save: it is never sent twice. (" + t.error.message + ")");
             saveActions([{ label: "Close", run: closeSheet }, { label: "Check again", primary: true, run: () => track(t.p, false) }]); return;
         }
+        if (t.phase === "unknown" && print) {
+            // A print can't be told from COSTAR afterwards: sent again only when asked, as a new print.
+            failAt(t.reached || "sent"); $("saveTitle").textContent = "Not known";
+            saveResult("warn", "The desk PC doesn't have this print", "It may have restarted, or the request never reached it, so the Job Card of " + clock(t.p.at) + " may or may not have printed. Check the printer; print again only if it didn't.");
+            saveActions([
+                { label: "Close", run: () => { store("local", PENDING_KEY + doc, null); closeSheet(); } },
+                { label: "Print again", primary: true, run: () => { store("local", PENDING_KEY + doc, null); const again = { id: "RO-" + uuid(), doc, kind: "print", edit: null, print: true, at: Date.now(), gap: false }; store("local", PENDING_KEY + doc, again); track(again, true); } }]);
+            return;
+        }
         if (t.phase === "unknown") {
             failAt(t.reached || "sent"); $("saveTitle").textContent = "Not known";
             saveResult("warn", "The desk PC doesn't have this save", "It may have restarted, or the save never reached it, so your save of " + clock(t.p.at) + " may or may not be in COSTAR. Read the Repair Order again to see, or send the same save again: it only goes in if the Repair Order is still exactly as your phone read it.");
@@ -829,17 +960,42 @@
         }
         setStep("sent", "done");
         if (s.status === "queued") { setStep("queued", "active"); $("saveWaiting").textContent = s.waiting || s.message || ""; }
+        else if (s.status === "working" && s.snapshot && !print) {
+            // 2.6.1: all of it is in and checked; COSTAR is closing the Repair Order (2.6.2: or printing first).
+            for (const x of ["queued", "working"]) setStep(x, "done");
+            setStep("done", "active"); $("saveDoneText").textContent = t.p.print ? "Checked; printing the Job Card…" : "Checked; closing it in COSTAR…";
+            $("saveTitle").textContent = "In COSTAR and checked";
+            if (s.notes && s.notes.length) saveResult("warn", "All of it is in", s.message, s.notes);
+            // The sheet can go: the save is followed to its end anyway (a toast says how it ended).
+            if (t.phase !== "ended") saveActions([{ label: "Done", primary: true, run: closeSheet }]);
+        }
         else if (s.status === "working") { setStep("queued", "done"); setStep("working", "active"); $("saveProgress").textContent = s.progress || s.message || ""; }
         if (offline) $("saveProgress").textContent = offline;
         if (t.phase !== "ended") return;
         if (s.status === "done") {
             for (const x of ["sent", "queued", "working", "done"]) setStep(x, "done");
-            $("saveTitle").textContent = s.leftOpen ? "In COSTAR, not closed" : "Saved";
-            $("saveDoneText").textContent = s.leftOpen ? "Checked, not closed yet" : "Checked and closed";
-            saveResult(s.leftOpen || (s.notes && s.notes.length) ? "warn" : "ok", s.leftOpen ? "In COSTAR, not closed yet" : "Saved to COSTAR", s.message, s.notes);
+            // 2.6.2: what the print came to is in the helper's words (the change is in either way).
+            const printing = print || t.p.print, maybe = printing && MAYBE.test(s.message || ""), notPrinted = printing && !maybe && /Job Card not printed/i.test(s.message || "");
+            if (print) {
+                $("saveTitle").textContent = maybe ? "Check the printer" : s.leftOpen ? "Printed, not closed" : "Job Card printed";
+                $("saveDoneText").textContent = maybe ? "Printed? Check the printer" : s.leftOpen ? "Printed, not closed yet" : "Printed and closed";
+                saveResult(maybe || s.leftOpen ? "warn" : "ok", maybe ? "The Job Card may have printed" : s.leftOpen ? "Printed; not closed yet" : "Job Card printed", s.message, s.notes);
+            } else {
+                $("saveTitle").textContent = s.leftOpen ? "In COSTAR, not closed" : maybe ? "Saved; check the printer" : notPrinted ? "Saved, not printed" : t.p.print ? "Saved and printed" : "Saved";
+                $("saveDoneText").textContent = s.leftOpen ? "Checked, not closed yet" : "Checked and closed";
+                saveResult(s.leftOpen || maybe || notPrinted || (s.notes && s.notes.length) ? "warn" : "ok", s.leftOpen ? "In COSTAR, not closed yet" : maybe ? "Saved to COSTAR; the Job Card may have printed" : notPrinted ? "Saved to COSTAR; Job Card not printed" : "Saved to COSTAR", s.message, s.notes);
+            }
             const actions = [{ label: "Done", primary: true, run: closeSheet }];
             if (s.leftOpen) actions.unshift({ label: "Close it in COSTAR", run: () => closeInCostar(doc) });
             saveActions(actions); return;
+        }
+        if (print) {
+            const maybe = MAYBE.test(s.message || "");
+            $("saveTitle").textContent = maybe ? "Check the printer" : "Not printed";
+            failAt(t.reached === "working" ? "working" : "queued");
+            saveResult(maybe ? "warn" : "error", maybe ? "The Job Card may have printed" : "Job Card not printed", s.message);
+            const close = s.leftOpen ? [{ label: "Close it in COSTAR", run: () => closeInCostar(doc) }] : [];
+            saveActions(close.concat([{ label: "Done", run: closeSheet }])); return;
         }
         $("saveTitle").textContent = s.typed ? "Stopped part way" : "Not saved";
         failAt(s.typed || t.reached === "working" ? "working" : "queued");
@@ -852,8 +1008,27 @@
             saveActions(close.concat([{ label: "Read it again", primary: true, run: () => { closeSheet(); openDetail(doc, true); } }]));
         } else {
             saveResult("error", "Not saved", s.message);
-            saveActions(close.concat([{ label: "Keep editing", run: closeSheet }, { label: "Try again", primary: true, run: () => { closeSheet(); if (here(doc)) save(); } }]));
+            // Again through the review: its Order and Print ticks are seen (and set) before anything goes
+            // (once the Repair Order is read, when it is being read now).
+            saveActions(close.concat([{ label: "Keep editing", run: closeSheet }, { label: "Try again", primary: true, run: () => { closeSheet(); if (state.doc === doc) { state.reviewNext = doc; reviewIfAsked(); } } }]));
         }
+    }
+    // 2.6.1: a Repair Order this phone's save or read left open in COSTAR (COSTAR didn't close it): marked
+    // here, so opening it again can offer the close (the RDP helper waits while a Repair Order is open).
+    function markLeft(doc, open) { store("local", LEFT_KEY + doc, open ? { at: Date.now() } : null); }
+    function leftOpen(doc) { const m = store("local", LEFT_KEY + doc); return !!(m && Date.now() - m.at < DRAFT_MS); }
+    // The Repair Order this phone left open most recently (this one first), or null.
+    function anyLeftOpen(doc) {
+        if (leftOpen(doc)) return doc;
+        let best = null, at = 0;
+        try {
+            for (let i = 0; i < window.localStorage.length; i++) {
+                const k = window.localStorage.key(i); if (!k || !k.startsWith(LEFT_KEY)) continue;
+                const d = k.slice(LEFT_KEY.length), m = store("local", k);
+                if (m && Date.now() - m.at < DRAFT_MS && m.at > at) { best = d; at = m.at; }
+            }
+        } catch (error) { return null; }
+        return best;
     }
     async function closeInCostar(doc) {
         state.sheetDoc = doc; resetSteps(); $("saveTitle").textContent = "Closing it in COSTAR";
@@ -865,11 +1040,15 @@
         let status = null, error = null;
         try { status = await ask("close", doc); show(status); status = await follow(status, show, null); }
         catch (e) { error = e; }
+        // Closed (or already closed): no longer marked as left open, whether or not the sheet is still up.
+        if (!error && status && status.status === "done") markLeft(doc, false);
         if (!mine()) return;
         if (error) { failAt(status ? at.reached || "queued" : "sent"); saveResult("error", status ? "Lost contact" : "Not sent", error.message); }
         else if (status && status.status === "done") { for (const s of ["sent", "queued", "working", "done"]) setStep(s, "done"); $("saveDoneText").textContent = "Closed"; saveResult("ok", "Closed", status.message); }
         else { failAt(at.reached || "queued"); saveResult("error", "Not closed", status ? status.message : "The desk PC lost track of it."); }
-        saveActions([{ label: "Read it again", run: () => { closeSheet(); openDetail(doc, true); } }, { label: "Done", primary: true, run: closeSheet }]);
+        // Reading it again only makes sense for the Repair Order on the screen (a waiting open of another one goes on by itself).
+        const again = doc === state.doc ? [{ label: "Read it again", run: () => { closeSheet(); openDetail(doc, true); } }] : [];
+        saveActions(again.concat([{ label: "Done", primary: true, run: closeSheet }]));
     }
     function dropDraft(doc) {
         store("local", DRAFT_KEY + doc, null);
@@ -903,7 +1082,7 @@
             for (const c of document.querySelectorAll(".ro-chips .ro-chip")) c.setAttribute("aria-pressed", c === chip ? "true" : "false");
             renderList();
         });
-        $("refreshList").addEventListener("click", () => refreshList(null));
+        $("refreshList").addEventListener("click", () => refreshList(null, true));
         $("roList").addEventListener("click", e => { const b = e.target.closest(".ro-row"); if (b) { state.cameFromList = true; window.location.hash = "ro=" + b.dataset.doc; } });
         $("backToList").addEventListener("click", goList);
         $("reopen").addEventListener("click", () => readFromCostar(state.token));
@@ -929,6 +1108,7 @@
         $("review").addEventListener("click", openReview);
         $("reviewCancel").addEventListener("click", () => $("reviewSheet").close());
         $("saveNow").addEventListener("click", save);
+        $("alsoOrder").addEventListener("change", renderAlso); $("alsoPrint").addEventListener("change", renderAlso);
         $("discard").addEventListener("click", () => {
             if (locked() || !window.confirm("Undo all your changes to this Repair Order?")) return;
             dropDraft(state.base.doc); renderForm(); toast("Changes undone.");

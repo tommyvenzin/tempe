@@ -1098,6 +1098,52 @@ body.ro-page .ro-review .ro-to {
     font-weight: 750;
 }
 
+/* 2.6.2: Order and Print the Job Card, ticked in the review */
+body.ro-page .ro-also {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0 4px;
+}
+
+body.ro-page .ro-also[hidden], body.ro-page .ro-choice[hidden] { display: none; }
+
+body.ro-page .ro-choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--ro-line);
+    border-radius: 11px;
+    background: var(--ro-card);
+    cursor: pointer;
+}
+
+body.ro-page .ro-choice input {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    min-height: 0;
+    margin: 1px 0 0;
+    padding: 0;
+    accent-color: var(--ro-accent);
+}
+
+body.ro-page .ro-choice span {
+    display: grid;
+    gap: 3px;
+}
+
+body.ro-page .ro-choice strong {
+    color: #e2e8f0;
+    font-size: 0.95rem;
+}
+
+body.ro-page .ro-choice small {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
 body.ro-page .ro-review li.is-danger .ro-to {
     color: #fda4af;
 }

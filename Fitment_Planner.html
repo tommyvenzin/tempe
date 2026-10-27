@@ -15,6 +15,7 @@
             <a href="Project_C.html">Project C</a>
             <a href="Tyrestinder.html">Tyres Tinder</a>
             <a href="Fitment_Planner.html" aria-current="page">Job Card</a>
+            <a href="Repair_Orders.html">Repair Orders</a>
             <a href="testrun.html">Tempe Orders</a>
         </div>
 
@@ -24,6 +25,7 @@
             <option value="Project_C.html">Project C</option>
             <option value="Tyrestinder.html">Tyres Tinder</option>
             <option value="Fitment_Planner.html" selected>Job Card</option>
+            <option value="Repair_Orders.html">Repair Orders</option>
             <option value="testrun.html">Tempe Orders</option>
         </select>
     </nav>
@@ -176,7 +178,8 @@
             <button type="button" id="retryBtn" hidden disabled>RETRY</button>
         </section>
 
-        <div class="jobcard-bottom-space" aria-hidden="true"></div>
+        <!-- 2.6.2: room to scroll RETRY above the fixed SUBMIT bar (on phones the page's own bottom padding is only 22px) -->
+        <div class="jobcard-bottom-space" aria-hidden="true" style="height: calc(56px + env(safe-area-inset-bottom))"></div>
     </main>
 
     <div class="jobcard-action-bar">
@@ -216,8 +219,8 @@
             reload.addEventListener("click", () => window.location.reload());
         })();
     </script>
-    <script src="./jobcard-shared.js?v=20261019-newjob" defer></script>
-    <script src="./costar-client.js?v=20261019-newjob" defer></script>
-    <script src="./Fitment_Planner.js?v=20261019-newjob" defer></script>
+    <script src="./jobcard-shared.js?v=20261027-choices" defer></script>
+    <script src="./costar-client.js?v=20261027-choices" defer></script>
+    <script src="./Fitment_Planner.js?v=20261027-choices" defer></script>
 </body>
 </html>

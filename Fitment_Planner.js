@@ -12,6 +12,8 @@ let editQueue = Promise.resolve();
 let polling = false;
 let sending = false;
 let helperReady = false;
+// 2.6.2: the RDP helper does the Order and Print the Job Card choices (a 2.6.2 helper says so).
+let jobOptions = false;
 let storageHealthy = true;
 let lastProductView = "";
 let statusMessage = "";
@@ -115,7 +117,9 @@ function renderStatus() {
     $("jobcardError").textContent = statusMessage;
     $("jobcardError").hidden = !statusMessage;
     $("snapshotNotice").hidden = !sub;
-    $("snapshotNotice").textContent = sub ? "The submitted order is fixed. Further edits and added products stay on this card; they will not change the order sent to COSTAR." : "";
+    const chosen = sub?.payload?.options;
+    $("snapshotNotice").textContent = sub ? "The submitted order is fixed. Further edits and added products stay on this card; they will not change the order sent to COSTAR." +
+        (chosen ? " Chosen: " + (chosen.order ? "order (SHOP, CustWaiting, today)" : "no order") + ", " + (chosen.printJobCard ? "print the Job Card." : "no Job Card print.") : "") : "";
     $("submitBtn").disabled = !currentJob || !storageHealthy || !helperReady || !!sub || sending;
     $("submitBtn").textContent = sub ? "ORDER SUBMITTED" : "SUBMIT TO COSTAR";
     $("retryBtn").hidden = !sub || sub.gone || !(sub.status === "failed" || sub.status === "awaiting_ack");
@@ -137,6 +141,7 @@ async function poll() {
         }
         const health = await pcClient.health();
         helperReady = health.receiving === true && health.workerConnected === true;
+        jobOptions = helperReady && health.jobOptions === true;
         // 2.4.0 receivers also say whether the RDP helper is taking jobs right now (workerAccepting);
         // older ones only say whether it is connected.
         const accepting = health.workerAccepting;
@@ -179,11 +184,24 @@ async function submit() {
         const errors = jobCore.validation(currentJob);
         if (errors.length) { statusMessage = errors.join(" "); jobCore.toast(errors[0]); return; }
         const revision = currentJob.revision;
-        const confirmed = await jobCore.dialog("Submit this order to COSTAR?", [{ label: "Confirm", value: true }, { label: "Cancel", value: null }]);
-        if (!confirmed) return;
+        // 2.6.2 (Tommy, 27 Oct): with a 2.6.2 RDP helper, the two choices before going ahead, both ticked to
+        // start with. An older helper orders as before and doesn't print: the plain question.
+        let options = null;
+        if (jobOptions) {
+            options = await jobCore.choices("Submit this order to COSTAR?", [
+                { key: "order", label: "Order", hint: "Ship Via SHOP, CustWaiting ticked, Repair Date today." },
+                { key: "printJobCard", label: "Print the Job Card", hint: "COSTAR prints it once the order is in (on its Job Card printer)." }
+            ], "Submit to COSTAR");
+            if (!options) return;
+        } else {
+            const confirmed = await jobCore.dialog("Submit this order to COSTAR?", [{ label: "Confirm", value: true }, { label: "Cancel", value: null }]);
+            if (!confirmed) return;
+        }
         const health = await pcClient.health();
         if (!health.receiving || !health.workerConnected) throw new Error("The PC helper is unavailable. Your card has not been submitted.");
-        const state = await mutate({ type: "submit", jobId: currentJob.jobId, revision, submissionId: "MJC-" + jobCore.uuid(), createdUtc: new Date().toISOString() });
+        // The choices go only to a helper that does them (it may have changed while they were ticked).
+        if (options && health.jobOptions !== true) throw new Error("The RDP helper changed version meanwhile. Nothing was sent: tap SUBMIT TO COSTAR again.");
+        const state = await mutate({ type: "submit", jobId: currentJob.jobId, revision, submissionId: "MJC-" + jobCore.uuid(), createdUtc: new Date().toISOString(), ...(options ? { options } : {}) });
         applyState(state);
         await sendSnapshot(state.submission, false);
     } catch (error) { statusMessage = error.message; jobCore.toast(error.message); }
