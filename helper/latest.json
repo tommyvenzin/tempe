@@ -1,8 +1,8 @@
 {
-  "version": "2.6.2",
-  "name": "2.6.2 - Print and order from the phone",
-  "zip": "Tempe-COSTAR-Helper-v2.6.2.zip",
-  "sha256": "289337518502c9d9e941392d20a9aa4a3768a0472053dd4d83fc789663429f28",
-  "size": 678860,
-  "notes": "Print and order from the phone: SUBMIT TO COSTAR on the Job Card asks Order (Ship Via SHOP, Customer Waiting ticked, Repair Date today) and Print the Job Card, both ticked; Repair Orders has the same two when saving and can print a Job Card alone. The helper prints only the Job Card (Invoice unticked, nothing emailed, quantity 1, checked before OK) and never twice. Includes 2.6.1 (Repair Orders faster). Update the desk receiver first, then the RDP helper; upload the six files in website/ to the repo's top folder."
+  "version": "2.6.3",
+  "name": "2.6.3 - Map COSTAR",
+  "zip": "Tempe-COSTAR-Helper-v2.6.3.zip",
+  "sha256": "778734aa1aa334404d8aa3b0713c5c8883610beffa3a36ff0e56094085bbac21",
+  "size": 691602,
+  "notes": "Map COSTAR: a Map COSTAR screen button in the RDP helper. Press it, bring up the COSTAR screen within 5 s, and the helper reads it (never clicks or types): every box, button, tick box, tab, list and menu, and what can be pressed directly. The maps go with Save diagnostics. Update the RDP helper; no website files."
 }
