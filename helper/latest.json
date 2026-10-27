@@ -1,8 +1,0 @@
-{
-  "version": "2.5.3",
-  "name": "2.5.3 - SHOP and waiting",
-  "zip": "Tempe-COSTAR-Helper-v2.5.3.zip",
-  "sha256": "0e1f4bb79041e5f8a637000c20fb4b26ae8a3eb979518535831e095b2477b0b8",
-  "size": 518180,
-  "notes": "Phone jobs get Ship Via SHOP for every customer and Customer Waiting ticked. F Alt Tab on a phone has a Job Card button (upload the three files in website/ to the repo's top folder). Update the desk receiver too."
-}
