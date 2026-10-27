@@ -52,12 +52,16 @@
                     if (error instanceof TypeError) throw new TypeError("Could not reach the PC helper at " + new URL(config.baseUrl).host + ". If its own page shows a certificate warning, reinstall the PC's certificate on this phone.");
                     throw error;
                 }
-                if (response.status === 404 && path.startsWith("/jobs/")) return null;
-                if (response.status === 401) throw new Error("Pair this phone with the PC helper again.");
+                // A job or Repair Order request this PC doesn't know (any more): null, not an error.
+                if (response.status === 404 && (path.startsWith("/jobs/") || path.startsWith("/ro/requests/"))) return null;
+                if (response.status === 401) { const unpaired = new Error("Pair this phone with the PC helper again."); unpaired.status = 401; throw unpaired; }
                 if (!response.ok) {
                     // The helper says why it refused (e.g. a website it is not paired with, or Tempe failing).
+                    // 2.6.0: with its HTTP status, so a caller can tell a refusal from a lost connection.
                     const detail = await response.json().then(body => typeof body?.error === "string" ? " " + body.error : "", () => "");
-                    throw new Error(`PC helper returned HTTP ${response.status}.${detail}`);
+                    const refused = new Error(`PC helper returned HTTP ${response.status}.${detail}`);
+                    refused.status = response.status;
+                    throw refused;
                 }
                 const value = await response.json();
                 if (!value || typeof value !== "object") throw new Error("The PC returned an invalid response.");
@@ -74,6 +78,12 @@
             getJob: id => request("/jobs/" + encodeURIComponent(id)),
             submit: payload => request("/jobs", "POST", payload),
             retry: id => request("/jobs/" + encodeURIComponent(id) + "/retry", "POST", { submissionId: id }),
+            // 2.6.0: Repair Orders in COSTAR Tempe. roList: the last Work-in-Progress list the PC read;
+            // roAsk: a WIP read, an open, a change or a close ({ id, kind, doc, edit }); roStatus: how
+            // a request is going (null when the PC doesn't know it, e.g. after it restarted).
+            roList: () => request("/ro/list"),
+            roAsk: ask => request("/ro/requests", "POST", ask),
+            roStatus: id => request("/ro/requests/" + encodeURIComponent(id)),
             async fetchTyres(target) {
                 const url = new URL(target);
                 if (url.protocol !== "https:" || !["tempetyres.com.au", "www.tempetyres.com.au"].includes(url.hostname) ||
