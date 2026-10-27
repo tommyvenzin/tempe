@@ -1,8 +1,8 @@
 {
-  "version": "2.4.2",
-  "name": "2.4.2 - phone card unstuck",
-  "zip": "Tempe-COSTAR-Helper-v2.4.2.zip",
-  "sha256": "cebfd47880dbfd191a62019328c3e094912b5abe6d8d29481d4ae93dd835219e",
-  "size": 425262,
-  "notes": "The phone job card can start a new card after a stopped, removed or closed order (it was stuck on the last order). Upload the website files too."
+  "version": "2.6.2",
+  "name": "2.6.2 - Print and order from the phone",
+  "zip": "Tempe-COSTAR-Helper-v2.6.2.zip",
+  "sha256": "289337518502c9d9e941392d20a9aa4a3768a0472053dd4d83fc789663429f28",
+  "size": 678860,
+  "notes": "Print and order from the phone: SUBMIT TO COSTAR on the Job Card asks Order (Ship Via SHOP, Customer Waiting ticked, Repair Date today) and Print the Job Card, both ticked; Repair Orders has the same two when saving and can print a Job Card alone. The helper prints only the Job Card (Invoice unticked, nothing emailed, quantity 1, checked before OK) and never twice. Includes 2.6.1 (Repair Orders faster). Update the desk receiver first, then the RDP helper; upload the six files in website/ to the repo's top folder."
 }

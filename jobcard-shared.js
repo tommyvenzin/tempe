@@ -58,11 +58,15 @@
         if (state.alignmentEnabled && !["WA", "WAFR"].includes(state.alignment)) errors.push("Choose front or front and rear wheel alignment.");
         return errors;
     }
-    function snapshot(state, id, createdUtc) {
+    // options (2.6.2, with a 2.6.2 RDP helper): { order, printJobCard }, what was ticked with SUBMIT TO COSTAR;
+    // left out for an older helper (it orders as before and doesn't print).
+    function snapshot(state, id, createdUtc, options) {
         const errors = validation(state);
         if (errors.length) fail(errors[0]);
+        if (options != null && (typeof options !== "object" || typeof options.order !== "boolean" || typeof options.printJobCard !== "boolean")) fail("Choose Order and Print the Job Card again.");
         const f = state.fields;
         return { schema: "tempe.mobile-jobcard.v1", submissionId: id, draftId: state.jobId, createdUtc,
+            ...(options != null ? { options: { order: options.order, printJobCard: options.printJobCard } } : {}),
             customer: { name: clean(f.customerName).toUpperCase(), mobile: clean(f.phone) },
             vehicle: { registration: sku(f.rego), makeModel: clean(f.vehicle).toUpperCase(), odometer: Number(f.kilometres) },
             products: ordered(state.products).map(p => ({ type: p.type, sku: p.sku, quantity: p.quantity, description: p.description })),
@@ -109,7 +113,7 @@
         case "submit":
             if (state.submission) fail("This job has already been submitted. Use Retry for the same submission, or New job after Ready for Review.");
             if (action.revision !== state.revision) fail("The Job Card changed while you were confirming. Review it and submit again.");
-            state.submission = { payload: snapshot(state, action.submissionId, action.createdUtc), status: "awaiting_ack",
+            state.submission = { payload: snapshot(state, action.submissionId, action.createdUtc, action.options), status: "awaiting_ack",
                 serverVersion: 0, message: "Waiting for the PC to acknowledge this submission.", progress: "", deliveryUnknown: false };
             break;
         case "status": {
@@ -235,6 +239,35 @@
             root.document.body.appendChild(node); node.showModal(); if (input) input.focus();
         });
     }
+    // 2.6.2: tick boxes before going ahead (each ticked to start with unless said). Resolves to
+    // { key: true/false } for every item, or null (Cancel).
+    function choices(title, items, confirmLabel) {
+        return new Promise(resolve => {
+            const doc = root.document, node = doc.createElement("dialog"); node.className = "jobcard-dialog";
+            const heading = doc.createElement("h2"); heading.id = "jobcard-dialog-" + uuid(); heading.textContent = title; heading.style.marginBottom = "16px"; node.appendChild(heading);
+            node.setAttribute("aria-labelledby", heading.id);
+            const boxes = {};
+            for (const item of items) {
+                const label = doc.createElement("label"); label.className = "jobcard-choice";
+                label.style.cssText = "display:flex;align-items:flex-start;gap:12px;margin:0 0 14px;cursor:pointer";
+                const box = doc.createElement("input"); box.type = "checkbox"; box.checked = item.checked !== false;
+                box.style.cssText = "flex:none;width:24px;height:24px;min-height:0;margin:1px 0 0;padding:0;accent-color:#22d3ee";
+                const text = doc.createElement("span"); text.style.cssText = "display:grid;gap:3px";
+                const name = doc.createElement("strong"); name.textContent = item.label;
+                const hint = doc.createElement("small"); hint.textContent = item.hint || ""; hint.style.cssText = "color:#94a3b8;font-size:.78rem;line-height:1.4";
+                text.append(name, hint); label.append(box, text); node.appendChild(label); boxes[item.key] = box;
+            }
+            const group = doc.createElement("div"); group.className = "jobcard-dialog-actions";
+            function finish(value) { node.close(); node.remove(); resolve(value); }
+            const go = doc.createElement("button"); go.type = "button"; go.textContent = confirmLabel || "Confirm";
+            go.addEventListener("click", () => finish(Object.fromEntries(items.map(item => [item.key, boxes[item.key].checked]))));
+            const cancel = doc.createElement("button"); cancel.type = "button"; cancel.textContent = "Cancel";
+            cancel.addEventListener("click", () => finish(null));
+            group.append(go, cancel); node.appendChild(group);
+            node.addEventListener("cancel", event => { event.preventDefault(); finish(null); });
+            doc.body.appendChild(node); node.showModal(); go.focus();
+        });
+    }
     async function addProduct(product) {
         const db = getStore(), state = await db.read();
         if (!validSku(product.sku)) fail("This product has no valid COSTAR SKU. Choose a product with a SKU.");
@@ -251,7 +284,7 @@
         toast(`${sku(product.sku)} ${replaceId ? "replaced" : "added"} on the Job Card · quantity ${product.type === "tyre" ? 4 : 1}`);
         return result;
     }
-    const api = { FIELDS, STATUSES, settled, validSku, ordered, empty, migrate, validation, snapshot, reduce, preview, createStore, getStore, uuid, toast, dialog, addProduct };
+    const api = { FIELDS, STATUSES, settled, validSku, ordered, empty, migrate, validation, snapshot, reduce, preview, createStore, getStore, uuid, toast, dialog, choices, addProduct };
     root.TempeJobCard = api;
     if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
