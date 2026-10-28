@@ -1,8 +1,8 @@
 {
-  "version": "2.6.4",
-  "name": "2.6.4 - Map COSTAR, deeper",
-  "zip": "Tempe-COSTAR-Helper-v2.6.4.zip",
-  "sha256": "6747f1b756733009071e91e97ad33733f0e7fbd68c4cc0df8748fddbfef20740",
-  "size": 699849,
-  "notes": "Map COSTAR, deeper: the map now skips the parts of COSTAR's screens that don't show, so it reaches the Repair Order's toolbar and lines; it reads only the COSTAR in front; and Ctrl+Alt+F9 maps the screen in front at once (a sound when it's saved; the button counts 10 s now). Update the RDP helper; no website files."
+  "version": "2.6.5",
+  "name": "2.6.5 - Press COSTAR directly",
+  "zip": "Tempe-COSTAR-Helper-v2.6.5.zip",
+  "sha256": "16989079721ed12c6fdc85ed8da36068d6dd34dbef9ec165f0538d821204561c",
+  "size": 719569,
+  "notes": "Press COSTAR directly instead of clicking: boxes get the keyboard directly; Customer Waiting and the print form ticks, Print, OK, Add New and the eBay tabs are pressed directly; Work-in-Progress opens a Repair Order by making its row the active one and pressing Enter. The mouse only steps in when a direct press does not take; taking a line out is unchanged. Switch: Files and settings. Update the RDP helper; no website files."
 }
