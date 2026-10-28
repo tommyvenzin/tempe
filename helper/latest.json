@@ -1,8 +1,8 @@
 {
-  "version": "2.6.6",
-  "name": "2.6.6 - Item lines clicked",
-  "zip": "Tempe-COSTAR-Helper-v2.6.6.zip",
-  "sha256": "208d12426ad1825a2e021132e123ef0012f39aea06c9c960ad4f91ec84138d20",
-  "size": 728808,
-  "notes": "Item lines clicked again: the Repair Order's item lines (item code, the note lines, quantity, price, a line taken out) get the keyboard with a click as in 2.6.4 (28 Oct: COSTAR took it back from the ODOMETER note given it directly). Everything else stays pressed directly. The run report says where a box's keyboard went; the self-tests no longer write into the day log. Update the RDP helper; no website files."
+  "version": "2.6.8",
+  "name": "2.6.8 - Add new on WIP only",
+  "zip": "Tempe-COSTAR-Helper-v2.6.8.zip",
+  "sha256": "8fa33a445e872434dc1d20cecba9d2d4451761052322133d3639c3c2e424c02e",
+  "size": 745554,
+  "notes": "Add new only on Work-in-Progress: with COSTAR on another list (such as Orders yet to be filled, the wholesale orders) nothing is pressed, and eBay orders, phone jobs and phone Repair Orders wait with the reason until it's back. Includes 2.6.7: a Repair Order left open in COSTAR Tempe is closed first for the phone, and every wait for COSTAR to be ready is 3 s. Update the RDP helper; no website files."
 }
