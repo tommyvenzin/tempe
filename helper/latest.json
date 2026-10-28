@@ -1,8 +1,8 @@
 {
-  "version": "2.6.5",
-  "name": "2.6.5 - Press COSTAR directly",
-  "zip": "Tempe-COSTAR-Helper-v2.6.5.zip",
-  "sha256": "16989079721ed12c6fdc85ed8da36068d6dd34dbef9ec165f0538d821204561c",
-  "size": 719569,
-  "notes": "Press COSTAR directly instead of clicking: boxes get the keyboard directly; Customer Waiting and the print form ticks, Print, OK, Add New and the eBay tabs are pressed directly; Work-in-Progress opens a Repair Order by making its row the active one and pressing Enter. The mouse only steps in when a direct press does not take; taking a line out is unchanged. Switch: Files and settings. Update the RDP helper; no website files."
+  "version": "2.6.6",
+  "name": "2.6.6 - Item lines clicked",
+  "zip": "Tempe-COSTAR-Helper-v2.6.6.zip",
+  "sha256": "208d12426ad1825a2e021132e123ef0012f39aea06c9c960ad4f91ec84138d20",
+  "size": 728808,
+  "notes": "Item lines clicked again: the Repair Order's item lines (item code, the note lines, quantity, price, a line taken out) get the keyboard with a click as in 2.6.4 (28 Oct: COSTAR took it back from the ODOMETER note given it directly). Everything else stays pressed directly. The run report says where a box's keyboard went; the self-tests no longer write into the day log. Update the RDP helper; no website files."
 }
