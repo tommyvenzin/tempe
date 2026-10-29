@@ -1,8 +1,8 @@
 {
-  "version": "2.6.8",
-  "name": "2.6.8 - Add new on WIP only",
-  "zip": "Tempe-COSTAR-Helper-v2.6.8.zip",
-  "sha256": "8fa33a445e872434dc1d20cecba9d2d4451761052322133d3639c3c2e424c02e",
-  "size": 745554,
-  "notes": "Add new only on Work-in-Progress: with COSTAR on another list (such as Orders yet to be filled, the wholesale orders) nothing is pressed, and eBay orders, phone jobs and phone Repair Orders wait with the reason until it's back. Includes 2.6.7: a Repair Order left open in COSTAR Tempe is closed first for the phone, and every wait for COSTAR to be ready is 3 s. Update the RDP helper; no website files."
+  "version": "2.6.9",
+  "name": "2.6.9 - Job Card progress",
+  "zip": "Tempe-COSTAR-Helper-v2.6.9.zip",
+  "sha256": "3166573a7e027bcfa249a31bb618bd6c9e72622639a736ad362506feda366e37",
+  "size": 767157,
+  "notes": "Job Card progress: after SUBMIT TO COSTAR the phone shows each step (sent, waiting and why, typing into COSTAR step by step, ready for review) with Retry if it stops. Fixes the 11:34 stop at a tyre's quantity (COSTAR moved the keyboard on to Disc by itself; the helper now lets it settle and goes back along the line) and reads COSTAR's own Repair Date box. Includes 2.6.8 and 2.6.7. Update the desk receiver first, then the RDP helper; upload the three files in website/ to the repo's top folder."
 }

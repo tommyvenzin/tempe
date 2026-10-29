@@ -17,6 +17,10 @@ let jobOptions = false;
 let storageHealthy = true;
 let lastProductView = "";
 let statusMessage = "";
+// 2.6.9: why the desk PC can't be reached right now (the progress sheet says so), and whether the RDP
+// helper is in touch with it (health).
+let connectionProblem = "";
+let workerAway = false;
 const $ = id => document.getElementById(id);
 
 function storageProblem(error) {
@@ -113,7 +117,8 @@ function renderStatus() {
     const sub = currentJob?.submission;
     const names = { awaiting_ack: "Waiting for PC confirmation", queued: "Queued", awaiting_approval: "Waiting for approval on PC", injecting: "Filling COSTAR", failed: "Stopped — Retry on this phone, or New job", ready_for_review: "READY FOR REVIEW", removed: "Removed on the desk PC" };
     $("submissionStatus").textContent = !sub ? "Not submitted" : sub.gone ? "Closed on the PC — start a new job" : names[sub.status] || sub.status;
-    $("injectionProgress").textContent = sub?.progress || sub?.message || "";
+    // 2.6.9: a queued order says why it waits (a 2.6.9 desk PC tells).
+    $("injectionProgress").textContent = sub?.status === "queued" ? sub.waiting || sub.message || "" : sub?.progress || sub?.message || "";
     $("jobcardError").textContent = statusMessage;
     $("jobcardError").hidden = !statusMessage;
     $("snapshotNotice").hidden = !sub;
@@ -126,6 +131,81 @@ function renderStatus() {
     $("retryBtn").disabled = !helperReady || sending;
     // New job: once the order is ready for review, removed, gone from the PC, or stopped (failed).
     $("newJobBtn").disabled = !currentJob || !storageHealthy || sending || !jobCore.settled(sub);
+    const progress = $("progressBtn");
+    if (progress) progress.hidden = !sub || sheetOpen() || typeof jobCore?.progressView !== "function";
+    // The sheet only shows how it goes: nothing in it may get in the way of the card or the order.
+    try { renderSheet(); } catch (error) { console.error(error); }
+}
+// ---------- 2.6.9: the progress sheet (Tommy, 29 Oct: "add a progress when you submit to costar just like
+// the repair order page") ----------
+// Opened by SUBMIT TO COSTAR, Retry and Show progress; closing it changes nothing: the order goes on, and
+// the COSTAR status card keeps saying how it stands.
+const STEP_IDS = { sent: "submitStepSent", queued: "submitStepQueued", working: "submitStepWorking", done: "submitStepDone" };
+function sheetOpen() { const sheet = $("submitSheet"); return !!(sheet && sheet.open); }
+// Never in the way of sending: whatever goes wrong here, the order goes on (and the card says how it stands).
+function openSheet() {
+    try {
+        const sheet = $("submitSheet");
+        if (!sheet || !currentJob?.submission || typeof jobCore.progressView !== "function") return;
+        if (!sheet.open && typeof sheet.showModal === "function") sheet.showModal();
+    } catch (error) { console.error(error); }
+    renderStatus();
+}
+function closeSheet() {
+    try {
+        const sheet = $("submitSheet");
+        if (sheet && sheet.open && typeof sheet.close === "function") sheet.close();
+    } catch (error) { console.error(error); }
+    renderStatus();
+}
+function sheetTime(iso) {
+    const at = new Date(iso);
+    return isNaN(at.getTime()) ? "" : at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+function renderSheet() {
+    if (!sheetOpen() || typeof jobCore.progressView !== "function") return;
+    const sub = currentJob?.submission;
+    const view = jobCore.progressView(sub, { sending, offline: connectionProblem, away: workerAway });
+    if (!view) { closeSheet(); return; }
+    $("submitSheetTitle").textContent = view.title;
+    const payload = sub.payload || {};
+    $("submitSheetFor").textContent = [payload.vehicle?.registration ? "Rego " + payload.vehicle.registration : "", payload.customer?.name || ""].filter(Boolean).join(" · ");
+    for (const name of jobCore.STEPS) { const li = $(STEP_IDS[name]); if (li) li.dataset.mode = view.steps[name]; }
+    const at = sheetTime(payload.createdUtc);
+    $("submitSentText").textContent = view.texts.sent || (at ? "at " + at : "");
+    $("submitWaiting").textContent = view.texts.queued;
+    $("submitProgress").textContent = (view.bar ? "Step " + view.bar.n + " of " + view.bar.m + (view.texts.working ? " · " : "") : "") + view.texts.working;
+    const bar = $("submitBar");
+    bar.hidden = !(view.bar && view.steps.working === "active");
+    if (view.bar) { $("submitBarFill").style.width = Math.round(100 * view.bar.n / view.bar.m) + "%"; bar.setAttribute("aria-valuenow", String(view.bar.n)); bar.setAttribute("aria-valuemax", String(view.bar.m)); }
+    const box = $("submitResult");
+    box.hidden = !view.result;
+    // Made again only when it changes (it is read out by screen readers, and its words can be selected).
+    const said = JSON.stringify(view.result);
+    if (view.result && box.dataset.said !== said) {
+        box.dataset.said = said;
+        const r = view.result, parts = [];
+        box.dataset.kind = r.kind;
+        const title = document.createElement("strong"); title.textContent = r.title; parts.push(title);
+        if (r.text) { const p = document.createElement("p"); p.textContent = r.text; parts.push(p); }
+        if (r.notes.length) { const ul = document.createElement("ul"); for (const n of r.notes) { const li = document.createElement("li"); li.textContent = n; ul.append(li); } parts.push(ul); }
+        if (r.checks) { const p = document.createElement("p"); p.className = "jobcard-check-hand"; p.textContent = "Check by hand: " + r.checks; parts.push(p); }
+        box.replaceChildren(...parts);
+    }
+    $("submitSheetHint").hidden = view.ended || view.retry;
+    const actions = [];
+    if (view.retry) actions.push({ label: "Close", run: closeSheet }, { label: "Retry", primary: true, disabled: !helperReady || sending, run: retrySubmission });
+    else if (view.ended) actions.push({ label: "New job", run: () => { closeSheet(); newJob(); } }, { label: "Done", primary: true, run: closeSheet });
+    else actions.push({ label: "Close", run: closeSheet });
+    const signature = JSON.stringify(actions.map(a => [a.label, !!a.disabled]));
+    const group = $("submitActions");
+    if (group.dataset.actions === signature) return;
+    group.dataset.actions = signature;
+    group.replaceChildren(...actions.map(a => {
+        const button = document.createElement("button"); button.type = "button"; button.className = a.primary ? "is-primary" : "is-quiet";
+        button.textContent = a.label; button.disabled = !!a.disabled; button.addEventListener("click", a.run);
+        return button;
+    }));
 }
 async function poll() {
     if (polling) return;
@@ -140,6 +220,8 @@ async function poll() {
             return;
         }
         const health = await pcClient.health();
+        connectionProblem = "";
+        workerAway = health.workerConnected !== true;
         helperReady = health.receiving === true && health.workerConnected === true;
         jobOptions = helperReady && health.jobOptions === true;
         // 2.4.0 receivers also say whether the RDP helper is taking jobs right now (workerAccepting);
@@ -158,6 +240,7 @@ async function poll() {
         }
     } catch (error) {
         helperReady = false;
+        connectionProblem = error.message;
         $("helperConnection").textContent = "PC helper offline";
         statusMessage = "Draft kept on this phone. " + error.message;
     } finally { polling = false; renderStatus(); }
@@ -203,13 +286,15 @@ async function submit() {
         if (options && health.jobOptions !== true) throw new Error("The RDP helper changed version meanwhile. Nothing was sent: tap SUBMIT TO COSTAR again.");
         const state = await mutate({ type: "submit", jobId: currentJob.jobId, revision, submissionId: "MJC-" + jobCore.uuid(), createdUtc: new Date().toISOString(), ...(options ? { options } : {}) });
         applyState(state);
+        // 2.6.9: from here the progress sheet follows it (sent, waiting, typing, ready).
+        openSheet();
         await sendSnapshot(state.submission, false);
     } catch (error) { statusMessage = error.message; jobCore.toast(error.message); }
     finally { sending = false; renderStatus(); }
 }
 async function retrySubmission() {
     if (sending || !helperReady || !currentJob?.submission) return;
-    sending = true; renderStatus();
+    sending = true; openSheet(); renderStatus();
     try { await refreshDraft(); await sendSnapshot(currentJob.submission, true); }
     finally { sending = false; renderStatus(); }
 }
@@ -294,6 +379,9 @@ async function startJobCard() {
         document.querySelectorAll('input[name="alignmentCode"]').forEach(input => input.addEventListener("change", saveAlignment));
         $("submitBtn").addEventListener("click", submit); $("retryBtn").addEventListener("click", retrySubmission);
         $("newJobBtn").addEventListener("click", newJob);
+        if ($("progressBtn")) $("progressBtn").addEventListener("click", openSheet);
+        // Closed with Close, Done, the back gesture or Esc: only the sheet goes.
+        if ($("submitSheet")) $("submitSheet").addEventListener("close", renderStatus);
         jobStore.subscribe(refreshDraft);
         window.addEventListener("focus", poll); window.addEventListener("online", poll);
         window.addEventListener("offline", () => { helperReady = false; $("helperConnection").textContent = "Offline — draft kept on this phone"; renderStatus(); });
@@ -304,7 +392,9 @@ async function startJobCard() {
         });
         setDraftControlsEnabled(true);
         if (window.TempeJobCardStartup) window.TempeJobCardStartup.ready();
-        await poll(); window.setInterval(() => { if (!document.hidden) poll(); }, 3000);
+        // 2.6.9: every 1.5 s while the progress sheet follows an order on its way, else every 3 s as before.
+        let ticks = 0;
+        await poll(); window.setInterval(() => { ticks++; if (!document.hidden && (ticks % 2 === 0 || (sheetOpen() && !jobCore.settled(currentJob?.submission)))) poll(); }, 1500);
     } catch (error) {
         setDraftControlsEnabled(false);
         storageProblem(error);

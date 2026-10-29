@@ -6,6 +6,48 @@
     <meta name="color-scheme" content="dark">
     <title>Mobile Job Card</title>
     <link rel="stylesheet" href="./allaround.css">
+    <style>
+        /* 2.6.9: the progress sheet after SUBMIT TO COSTAR, like the Repair Orders page's save sheet. Here, not in
+           allaround.css, so the Job Card's three files are all that change. */
+        .jobcard-progress-sheet { box-sizing: border-box; width: min(560px, 100%); max-width: 100%; max-height: min(88vh, 760px); margin: auto auto 0; padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); overflow: auto; border: 1px solid rgba(148, 163, 184, 0.34); border-radius: 20px 20px 0 0; color: #f8fafc; background: #0d141d; box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.55); font-size: 0.82rem; line-height: 1.5; }
+        @media (min-width: 640px) { .jobcard-progress-sheet { margin: auto; border-radius: 20px; } }
+        .jobcard-progress-sheet::backdrop { background: rgba(2, 6, 12, 0.66); backdrop-filter: blur(3px); }
+        .jobcard-progress-sheet [hidden] { display: none !important; }
+        .jobcard-progress-sheet h2 { margin: 0; color: #f8fafc; font-size: 1.05rem; line-height: 1.35; }
+        .jobcard-sheet-for { margin: 2px 0 12px; color: #94a3b8; font-size: 0.76rem; overflow-wrap: anywhere; }
+        .jobcard-sheet-for:empty { display: none; }
+        .jobcard-steps { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
+        .jobcard-steps li { display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: start; gap: 2px 10px; color: #64748b; font-size: 0.92rem; font-weight: 700; }
+        .jobcard-steps li > span { grid-row: 1 / span 3; box-sizing: border-box; width: 22px; height: 22px; border: 2px solid #334155; border-radius: 50%; }
+        .jobcard-steps li > b { font-weight: 700; }
+        .jobcard-steps li small { grid-column: 2; color: #94a3b8; font-size: 0.78rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+        .jobcard-steps li small:empty { display: none; }
+        .jobcard-steps li[data-mode="active"] { color: #e0f2fe; }
+        .jobcard-steps li[data-mode="active"] > span { border-color: rgba(56, 189, 248, 0.25); border-top-color: #38bdf8; animation: jobcard-spin 0.9s linear infinite; }
+        .jobcard-steps li[data-mode="done"] { color: #d1fae5; }
+        .jobcard-steps li[data-mode="done"] > span { border-color: #34d399; background: #34d399; box-shadow: inset 0 0 0 4px #0d141d; }
+        .jobcard-steps li[data-mode="failed"] { color: #fecdd3; }
+        .jobcard-steps li[data-mode="failed"] > span { border-color: #fb7185; background: #fb7185; box-shadow: inset 0 0 0 4px #0d141d; }
+        @keyframes jobcard-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .jobcard-steps li[data-mode="active"] > span { animation-duration: 2.4s; } }
+        .jobcard-step-bar { grid-column: 2; height: 6px; margin-top: 5px; overflow: hidden; border-radius: 999px; background: #1e293b; }
+        .jobcard-step-bar > i { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #0284c7, #38bdf8); transition: width 0.4s ease; }
+        .jobcard-result { margin-top: 14px; padding: 12px 14px; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 12px; background: #101720; }
+        .jobcard-result[data-kind="ok"] { border-color: rgba(52, 211, 153, 0.45); background: rgba(6, 95, 70, 0.16); }
+        .jobcard-result[data-kind="warn"] { border-color: rgba(251, 191, 36, 0.45); background: rgba(120, 53, 15, 0.18); }
+        .jobcard-result[data-kind="error"] { border-color: rgba(251, 113, 133, 0.45); background: rgba(136, 19, 55, 0.16); }
+        .jobcard-result strong { display: block; color: #f8fafc; font-size: 0.9rem; }
+        .jobcard-result p, .jobcard-result ul { margin: 6px 0 0; color: #e2e8f0; font-size: 0.84rem; line-height: 1.45; overflow-wrap: anywhere; }
+        .jobcard-result ul { padding-left: 18px; }
+        .jobcard-result .jobcard-check-hand { color: #fde68a; font-weight: 700; }
+        .jobcard-sheet-hint { margin: 14px 0 0; color: #94a3b8; font-size: 0.74rem; line-height: 1.45; }
+        .jobcard-sheet-actions { display: flex; gap: 8px; margin-top: 16px; }
+        .jobcard-sheet-actions button { flex: 1 1 0; min-height: 46px; margin: 0; padding: 0 10px; border-radius: 12px; font-size: 0.95rem; font-weight: 800; white-space: nowrap; box-shadow: none; transform: none; }
+        .jobcard-sheet-actions .is-primary, .jobcard-sheet-actions .is-primary:hover { border: 1px solid rgba(56, 189, 248, 0.6); color: #f0f9ff; background: linear-gradient(135deg, #0284c7, #0ea5e9); transform: none; }
+        .jobcard-sheet-actions .is-quiet, .jobcard-sheet-actions .is-quiet:hover { border: 1px solid rgba(148, 163, 184, 0.34); color: #dbeafe; background: rgba(30, 41, 59, 0.7); transform: none; }
+        .mobile-jobcard-page .jobcard-status-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .mobile-jobcard-page #progressBtn { min-height: 44px; margin: 0; }
+    </style>
 </head>
 
 <body class="app-page mobile-jobcard-page">
@@ -175,7 +217,10 @@
             <p id="injectionProgress" aria-live="polite"></p>
             <p id="jobcardError" class="jobcard-error" role="alert" hidden></p>
             <p id="snapshotNotice" class="jobcard-hint" hidden></p>
-            <button type="button" id="retryBtn" hidden disabled>RETRY</button>
+            <div class="jobcard-status-actions">
+                <button type="button" id="retryBtn" hidden disabled>RETRY</button>
+                <button type="button" id="progressBtn" class="jobcard-quiet-button" hidden>Show progress</button>
+            </div>
         </section>
 
         <!-- 2.6.2: room to scroll RETRY above the fixed SUBMIT bar (on phones the page's own bottom padding is only 22px) -->
@@ -185,6 +230,22 @@
     <div class="jobcard-action-bar">
         <button type="button" id="submitBtn" class="jobcard-primary-action" disabled>SUBMIT TO COSTAR</button>
     </div>
+
+    <!-- 2.6.9: how the order sent to COSTAR is getting on (opened by SUBMIT TO COSTAR, Retry, Show progress) -->
+    <dialog id="submitSheet" class="jobcard-progress-sheet" aria-labelledby="submitSheetTitle">
+        <h2 id="submitSheetTitle" aria-live="polite">Sending to COSTAR</h2>
+        <p id="submitSheetFor" class="jobcard-sheet-for"></p>
+        <ol class="jobcard-steps">
+            <li id="submitStepSent" data-step="sent"><span></span><b>Sent to the desk PC</b><small id="submitSentText"></small></li>
+            <li id="submitStepQueued" data-step="queued"><span></span><b>Waiting for the RDP helper</b><small id="submitWaiting"></small></li>
+            <li id="submitStepWorking" data-step="working"><span></span><b>Typing into COSTAR</b><small id="submitProgress"></small>
+                <div id="submitBar" class="jobcard-step-bar" role="progressbar" aria-label="Steps typed into COSTAR" aria-valuemin="0" hidden><i id="submitBarFill"></i></div></li>
+            <li id="submitStepDone" data-step="done"><span></span><b>Ready for review in COSTAR</b></li>
+        </ol>
+        <div id="submitResult" class="jobcard-result" role="status" hidden></div>
+        <p id="submitSheetHint" class="jobcard-sheet-hint">You can close this: the order carries on, and Show progress brings it back.</p>
+        <div id="submitActions" class="jobcard-sheet-actions"></div>
+    </dialog>
 
     <div id="jobcardToast" class="jobcard-toast" role="status" aria-live="polite"></div>
 
@@ -219,8 +280,8 @@
             reload.addEventListener("click", () => window.location.reload());
         })();
     </script>
-    <script src="./jobcard-shared.js?v=20261027-choices" defer></script>
-    <script src="./costar-client.js?v=20261027-choices" defer></script>
-    <script src="./Fitment_Planner.js?v=20261027-choices" defer></script>
+    <script src="./jobcard-shared.js?v=20261029-progress" defer></script>
+    <script src="./costar-client.js?v=20261029-progress" defer></script>
+    <script src="./Fitment_Planner.js?v=20261029-progress" defer></script>
 </body>
 </html>

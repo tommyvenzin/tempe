@@ -10,6 +10,11 @@
     const STATUSES = ["queued", "awaiting_approval", "injecting", "failed", "ready_for_review", "removed"];
     // The submission is finished with as far as this phone is concerned: a new card may start.
     function settled(sub) { return !sub || sub.status === "ready_for_review" || sub.status === "removed" || sub.status === "failed" || sub.gone === true; }
+    // 2.6.9: the progress sheet's steps, in order (like the Repair Orders page's save sheet).
+    const STEPS = ["sent", "queued", "working", "done"];
+    // The desk PC's and RDP helper's words for a stop before anything was typed (the choices it can't do, Add new
+    // not pressed, the new Repair Order gone before any field).
+    const NOT_ENTERED = /^Not entered\b|can't do this job's choices now|Add new was not pressed|before any fields were entered/i;
     const clone = value => JSON.parse(JSON.stringify(value));
     const clean = value => String(value == null ? "" : value).trim();
     const sku = value => clean(value).toUpperCase();
@@ -120,9 +125,18 @@
             const sub = state.submission, status = action.status;
             if (!sub || status.submissionId !== sub.payload.submissionId) fail("The PC returned a status for another submission.");
             if (!STATUSES.includes(status.status) || !Number.isInteger(status.version) || status.version < 1) fail("The PC returned an unsupported job status.");
-            if (status.version <= sub.serverVersion || sub.status === "ready_for_review" || sub.status === "removed") return state;
+            if (sub.status === "ready_for_review" || sub.status === "removed") return state;
+            // 2.6.9: why a queued job waits (a 2.6.9 desk says) changes without a new version.
+            if (status.version === sub.serverVersion && status.status === sub.status) { sub.waiting = waitingOf(status); return state; }
+            if (status.version <= sub.serverVersion) return state;
             sub.status = status.status; sub.serverVersion = status.version;
             sub.message = clean(status.message).slice(0, 1000); sub.progress = clean(status.progress).slice(0, 400);
+            sub.waiting = waitingOf(status);
+            // 2.6.9, for the progress sheet: the RDP helper's last step count ("4/12: …", kept while it says
+            // other things) and how far the order got (a stop is shown at that step).
+            const count = stepCount(sub.progress) || stepCount(sub.message);
+            if (count) sub.step = { n: count.n, m: count.m };
+            if (status.status === "injecting" || status.status === "ready_for_review") sub.reached = "working";
             sub.deliveryUnknown = false;
             break;
         }
@@ -149,6 +163,91 @@
         }
         state.revision++;
         return state;
+    }
+    function waitingOf(status) { return status.status === "queued" ? clean(status.waiting).slice(0, 400) : ""; }
+    // "4/12: Create DET details" (the RDP helper's step count while it types): { n, m, rest } or null.
+    function stepCount(text) {
+        const m = /^(\d{1,3})\/(\d{1,3}):\s*/.exec(String(text == null ? "" : text));
+        return m && +m[1] >= 1 && +m[1] <= +m[2] ? { n: +m[1], m: +m[2], rest: String(text).slice(m[0].length) } : null;
+    }
+    // The RDP helper's last words for an order in COSTAR: "READY FOR REVIEW · note · note CHECK BY HAND: …".
+    // { text, notes, checks }: its notes one by one and what to check by hand (one text: its sentences
+    // can't be told apart); any other words (Marked done by hand on the desk PC…) are the text.
+    function readyParts(message) {
+        const text = clean(message);
+        if (!/^READY FOR REVIEW\b/i.test(text)) return { text, notes: [], checks: "" };
+        const cut = text.search(/\s*CHECK BY HAND:/i), head = cut < 0 ? text : text.slice(0, cut);
+        return { text: "", notes: head.split(" · ").slice(1).map(clean).filter(Boolean), checks: cut < 0 ? "" : clean(text.slice(cut).replace(/^\s*CHECK BY HAND:/i, "")) };
+    }
+    // 2.6.9 (Tommy, 29 Oct: "add a progress when you submit to costar just like the repair order page"): what
+    // the progress sheet shows for a submission. live (from the page): sending (being sent now), offline (the
+    // desk PC can't be reached: why), away (the desk is reached but the RDP helper isn't in touch).
+    // steps: sent / queued / working / done, each "", "active", "done" or "failed"; texts: the words under
+    // each; bar: { n, m } while COSTAR is typed into; result: how it ended (or why it isn't known);
+    // ended: nothing more happens to it; retry: Retry is offered. null without a submission.
+    function progressView(sub, live) {
+        if (!sub) return null;
+        live = live || {};
+        const steps = {}, texts = {};
+        for (const x of STEPS) { steps[x] = ""; texts[x] = ""; }
+        const view = { title: "", steps, texts, bar: null, result: null, ended: false, retry: false };
+        const failAt = name => { for (const x of STEPS) { if (x === name) { steps[x] = "failed"; return; } steps[x] = "done"; } };
+        const offline = live.offline ? "Can't reach the desk PC right now: " + live.offline : "";
+        const result = (kind, title, text, notes, checks) => { view.result = { kind, title, text: text || "", notes: notes || [], checks: checks || "" }; };
+        if (sub.gone) {
+            // Whether any of it went in can't be told from here: only "sent" is marked.
+            steps.sent = "done"; view.title = "Closed on the desk PC"; view.ended = true;
+            result("warn", "The desk PC doesn't have this order any more", "It was closed or removed there, or its queue was cleared. Check COSTAR, then start a new job card when ready.");
+            return view;
+        }
+        // Being sent (SUBMIT TO COSTAR), or sent again (Retry): until the desk PC answers.
+        if (live.sending && (sub.status === "awaiting_ack" || sub.status === "failed")) {
+            steps.sent = "active"; view.title = sub.status === "failed" ? "Retrying" : "Sending to COSTAR";
+            texts.sent = offline || (sub.status === "failed" ? "Asking the desk PC to try it again…" : "Sending it to the desk PC…");
+            return view;
+        }
+        switch (sub.status) {
+        case "awaiting_ack":
+            steps.sent = "failed"; view.title = "Not confirmed"; view.retry = true;
+            result("warn", "The desk PC hasn't confirmed this order", sub.deliveryUnknown ? sub.message : "It may not have arrived. Retry sends this same order again: it never goes in twice.");
+            return view;
+        case "awaiting_approval":
+            steps.sent = "done"; steps.queued = "active"; view.title = "Waiting for approval";
+            texts.queued = offline || sub.message || "Approve this job on the desk PC.";
+            return view;
+        case "queued":
+            steps.sent = "done"; steps.queued = "active"; view.title = "Waiting for the RDP helper";
+            texts.queued = offline || sub.waiting || sub.message || "";
+            return view;
+        case "injecting": {
+            steps.sent = steps.queued = "done"; steps.working = "active"; view.title = "Typing into COSTAR";
+            const said = sub.progress || sub.message || "", count = stepCount(said);
+            texts.working = offline || (live.away ? "The RDP helper isn't in touch with the desk PC right now." : count ? count.rest : said);
+            if (sub.step) view.bar = { n: sub.step.n, m: sub.step.m };
+            return view;
+        }
+        case "ready_for_review": {
+            for (const x of STEPS) steps[x] = "done";
+            view.title = "Ready for review"; view.ended = true;
+            const parts = readyParts(sub.message), handWork = parts.checks || parts.notes.some(n => /by hand|check the printer|not printed|may have|couldn't/i.test(n));
+            result(handWork ? "warn" : "ok", "In COSTAR: check it there, then save it", parts.text, parts.notes, parts.checks);
+            return view;
+        }
+        case "failed": {
+            // Part of it may be in COSTAR unless the words say nothing went in: this phone may not have seen it
+            // being typed (put away meanwhile, or the stop came fast).
+            const partWay = sub.reached === "working" || !NOT_ENTERED.test(sub.message || "");
+            failAt(partWay ? "working" : "queued"); view.ended = true; view.retry = true;
+            view.title = partWay ? "Stopped part way" : "Stopped";
+            result("error", partWay ? "Part of it may be in COSTAR: check it there" : "Not entered in COSTAR", sub.message || "The RDP helper stopped this order.");
+            return view;
+        }
+        case "removed":
+            failAt("queued"); view.title = "Removed"; view.ended = true;
+            result("warn", "Removed on the desk PC", "It was taken off the queue there, so it won't go into COSTAR. Start a new job card when ready.");
+            return view;
+        default: return view;
+        }
     }
     function preview(state) {
         const f = state.fields, show = v => clean(v).toUpperCase() || "________________";
@@ -284,7 +383,7 @@
         toast(`${sku(product.sku)} ${replaceId ? "replaced" : "added"} on the Job Card · quantity ${product.type === "tyre" ? 4 : 1}`);
         return result;
     }
-    const api = { FIELDS, STATUSES, settled, validSku, ordered, empty, migrate, validation, snapshot, reduce, preview, createStore, getStore, uuid, toast, dialog, choices, addProduct };
+    const api = { FIELDS, STATUSES, STEPS, settled, validSku, ordered, empty, migrate, validation, snapshot, reduce, stepCount, readyParts, progressView, preview, createStore, getStore, uuid, toast, dialog, choices, addProduct };
     root.TempeJobCard = api;
     if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
