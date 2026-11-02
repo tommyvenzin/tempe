@@ -1,8 +1,8 @@
 {
-  "version": "2.6.10",
-  "name": "2.6.10 - Open RO closed for new jobs",
-  "zip": "Tempe-COSTAR-Helper-v2.6.10.zip",
-  "sha256": "79f2df26e0356c555e524e703ed9ee7a7e6b1381b7d0c46a92e2cb262497ff2f",
-  "size": 776933,
-  "notes": "A new order from the phone (Job Card, SUBMIT TO COSTAR) closes a Repair Order left open in the selected COSTAR first, as the phone's Repair Orders do since 2.6.7: once nobody has used the PC for 3 s, never one waiting for review (a phone job's, an online order's, an eBay order's) or one COSTAR is asking something on. Includes 2.6.9. Update the RDP helper (the desk PC may update too)."
+  "version": "2.6.11",
+  "name": "2.6.11 - Notices answered, SHOP orders",
+  "zip": "Tempe-COSTAR-Helper-v2.6.11.zip",
+  "sha256": "76938f72cc6a9858dd8f06d2007c75b96d6e28aaf144a1b4f272aceb86b3c747",
+  "size": 798983,
+  "notes": "COSTAR's notices over an order (the customer's Notes, a Point-of-sale Memo) are answered with OK on every order; the Repair Orders page can clear COSTAR's own Work-in-Progress filter left at the PC, has a Show all chip, and its SHOP button also ticks Customer Waiting and sets Date In today; phone jobs wait for the Repair Order to be back in front before Ship Via SHOP and Customer Waiting; online orders no longer type Shipping Instructions; a window over Add new is waited out for a moment. Includes 2.6.10. Update the RDP helper and the desk PC; upload the three Repair Orders website files."
 }

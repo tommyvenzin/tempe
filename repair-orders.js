@@ -27,7 +27,7 @@
     // (sig: the fingerprint that save was made on).
     // canPrint (2.6.2): the RDP helper prints Job Cards (a 2.6.2 helper says so).
     const state = { rows: [], list: null, filter: "all", query: "", doc: null, row: null, base: null, readAt: 0, draft: emptyDraft(), sent: null,
-        token: 0, listBusy: false, readingToken: 0, closingToken: 0, sheetDoc: null, cameFromList: false, canPrint: false, reviewNext: null };
+        token: 0, listBusy: false, readingToken: 0, closingToken: 0, sheetDoc: null, cameFromList: false, canPrint: false, canClear: false, reviewNext: null };
 
     // ---------- small helpers ----------
     const norm = v => String(v ?? "").replace(/\s+/g, " ").trim().toUpperCase();
@@ -96,12 +96,14 @@
     }
 
     // ---------- the desk PC ----------
-    async function ask(kind, doc, edit, fresh) {
+    async function ask(kind, doc, edit, fresh, clear) {
         const body = { id: "RO-" + uuid(), kind };
         if (doc) body.doc = doc;
         if (edit) body.edit = edit;
         // 2.6.1: a list read just now (↻), not Order Check's copy from the last few minutes.
         if (fresh) body.fresh = true;
+        // 2.6.11: COSTAR's own search boxes cleared first (a filter left at the PC), then a fresh read.
+        if (clear) body.clear = true;
         return client.roAsk(body);
     }
     // Follows a request until it is done or failed. null: the desk PC no longer knows it; undefined:
@@ -160,6 +162,11 @@
         return today.getTime() - d.getTime() <= 6 * 86400000 && d.getTime() <= today.getTime();
     }
     function docValue(doc) { const n = Number(String(doc || "").replace(/\D/g, "")); return Number.isFinite(n) ? n : 0; }
+    function setFilter(name) {
+        state.filter = name;
+        for (const c of document.querySelectorAll(".ro-chips .ro-chip[data-filter]")) c.setAttribute("aria-pressed", c.dataset.filter === name ? "true" : "false");
+        renderList();
+    }
     function renderList() {
         const words = norm(state.query).split(" ").filter(Boolean);
         const rows = state.rows.filter(r => inFilter(r) && rowMatches(r, words)).sort((a, b) => docValue(b.doc) - docValue(a.doc));
@@ -178,9 +185,12 @@
                 tags.childElementCount ? tags : null);
             list.append(el("li", null, button));
         }
+        // 2.6.11 (Tommy, 2 Nov: "add clear filter ... in case if I leave my pc with something filtered out"):
+        // Clear filter shows while a search or Today / This week narrows the list.
+        $("clearFilter").hidden = !(words.length || state.filter !== "all");   // "Show all"
         const empty = $("listEmpty");
         if (!state.list) { empty.hidden = false; empty.textContent = state.listBusy ? "Reading COSTAR's Work-in-Progress…" : "No list yet. Tap ↻ to read COSTAR's Work-in-Progress."; }
-        else if (!rows.length) { empty.hidden = false; empty.textContent = words.length || state.filter !== "all" ? "No Repair Order matches." : "COSTAR's Work-in-Progress is empty."; }
+        else if (!rows.length) { empty.hidden = false; empty.textContent = words.length || state.filter !== "all" ? "No Repair Order matches. Show all lists every Repair Order read." : "COSTAR's Work-in-Progress is empty."; }
         else empty.hidden = true;
         if (rows.length > 300) list.append(el("li", { class: "ro-more", text: (rows.length - 300) + " more: search to narrow the list." }));
     }
@@ -191,9 +201,24 @@
         if (!state.list) { meta.textContent = ""; return; }
         const n = (state.list.rows || []).length;
         meta.textContent = n + " Repair Order" + (n === 1 ? "" : "s") + " · read " + ago(state.list.readUtc) + (state.list.source === "order-check" ? " (Order Check's copy)" : "") + (state.list.note ? " · " + state.list.note : "");
+        renderPcFilter();
+    }
+    // 2.6.11: the helper's note says when COSTAR's own Work-in-Progress search boxes hold a filter (left at the PC),
+    // e.g. "COSTAR's Work-in-Progress is filtered (Cust/Contact = SAMPLE)": offer to clear it from here.
+    // The filter's words may hold brackets: up to the bracket that ends the note (or the next "; ").
+    const PC_FILTER = /Work-in-Progress is filtered \((.*?)\)(?=;|$)/i;
+    function pcFilterOf(list) { const m = list && list.note ? PC_FILTER.exec(list.note) : null; return m ? m[1] : ""; }
+    function renderPcFilter() {
+        const f = pcFilterOf(state.list), box = $("pcFilter");
+        box.hidden = !f || state.listBusy;
+        if (!f) return;
+        // Offered only when the desk PC and the RDP helper both clear it (2.6.11); otherwise it's said what to do.
+        $("clearPcFilter").hidden = !state.canClear;
+        $("pcFilterText").textContent = "COSTAR's list at the PC is filtered (" + f + "), so only those show." +
+            (state.canClear ? "" : " Clear it at the PC (Clear, then Search), or update the desk PC and the RDP helper to 2.6.11 to clear it from here.");
     }
     function applyList(view) {
-        if (view && view.helper) setCanPrint(view.helper.print === true);
+        if (view && view.helper) { setCanPrint(view.helper.print === true); state.canClear = view.helper.clears === true; }
         state.list = view && view.list ? view.list : state.list;
         state.rows = state.list && Array.isArray(state.list.rows) ? state.list.rows : [];
         renderList(); renderMeta();
@@ -207,12 +232,12 @@
         const age = state.list ? Date.now() - Date.parse(state.list.readUtc) : Infinity;
         if (force || view.refresh || !(age < 60000)) refreshList(view.refresh);
     }
-    async function refreshList(pending, fresh) {
+    async function refreshList(pending, fresh, clear) {
         // ↻ while a read is going: a fresh read follows it (2.6.1).
         if (state.listBusy) { if (fresh) state.wantFresh = true; return; }
-        state.listBusy = true; $("listBar").hidden = false; $("refreshList").classList.add("is-spinning"); renderList();
+        state.listBusy = true; $("listBar").hidden = false; $("refreshList").classList.add("is-spinning"); renderList(); renderPcFilter();
         try {
-            let status = pending || await ask("list", null, null, fresh);
+            let status = pending || await ask("list", null, null, fresh || clear, clear);
             const show = s => renderMeta(s.status === "queued" ? "Waiting for the RDP helper: " + (s.waiting || s.message) : "Reading COSTAR's Work-in-Progress…");
             show(status);
             status = await follow(status, s => show(s), null);
@@ -221,7 +246,7 @@
             applyList(await client.roList());
         } catch (error) { renderMeta(error.message, "error"); }
         finally {
-            state.listBusy = false; $("listBar").hidden = true; $("refreshList").classList.remove("is-spinning"); renderList();
+            state.listBusy = false; $("listBar").hidden = true; $("refreshList").classList.remove("is-spinning"); renderList(); renderPcFilter();
             if (state.wantFresh) { state.wantFresh = false; refreshList(null, true); }
         }
     }
@@ -304,7 +329,10 @@
                 // Shown already unless COSTAR's copy changed in between: the form isn't drawn again under the fingers.
                 if (status.snapshot.sig !== early) setBase(status.snapshot, Date.now(), false);
                 markLeft(state.doc, !!status.leftOpen); if (!status.leftOpen && offered) hideAlert();
-                if (status.leftOpen) showAlert(status.message || "COSTAR didn't close it again.", [{ label: "Close it in COSTAR", primary: true, run: () => { hideAlert(); closeInCostar(state.doc); } }], "warn");
+                const notes = Array.isArray(status.notes) && status.notes.length ? status.notes.join(" ") : "";
+                if (status.leftOpen) showAlert((status.message || "COSTAR didn't close it again.") + (notes ? " " + notes : ""), [{ label: "Close it in COSTAR", primary: true, run: () => { hideAlert(); closeInCostar(state.doc); } }], "warn");
+                // 2.6.11: what COSTAR showed on the way in (the customer's Notes answered with OK; a memo's words).
+                else if (notes) showAlert(notes, [{ label: "OK", primary: true, run: hideAlert }], "warn");
             }
             else showAlert(status.message || "COSTAR couldn't open it.", again, early ? "warn" : "error");
         } catch (error) {
@@ -1073,16 +1101,14 @@
             el("strong", { text: "Connect this phone first" }),
             el("p", { text: reason || "On the desk PC click Show phone QR and scan the Job Card code with this phone, then come back to Repair Orders." }),
             el("a", { href: "Fitment_Planner.html", class: "ro-primary", text: "Open the Job Card" }));
-        $("refreshList").disabled = true; $("search").disabled = true;
+        $("refreshList").disabled = true; $("search").disabled = true; $("clearPcFilter").disabled = true;
     }
     function bind() {
         $("search").addEventListener("input", e => { state.query = e.target.value; renderList(); });
-        for (const chip of document.querySelectorAll(".ro-chips .ro-chip")) chip.addEventListener("click", () => {
-            state.filter = chip.dataset.filter;
-            for (const c of document.querySelectorAll(".ro-chips .ro-chip")) c.setAttribute("aria-pressed", c === chip ? "true" : "false");
-            renderList();
-        });
+        for (const chip of document.querySelectorAll(".ro-chips .ro-chip[data-filter]")) chip.addEventListener("click", () => setFilter(chip.dataset.filter));
+        $("clearFilter").addEventListener("click", () => { state.query = ""; $("search").value = ""; setFilter("all"); });
         $("refreshList").addEventListener("click", () => refreshList(null, true));
+        $("clearPcFilter").addEventListener("click", () => refreshList(null, true, true));
         $("roList").addEventListener("click", e => { const b = e.target.closest(".ro-row"); if (b) { state.cameFromList = true; window.location.hash = "ro=" + b.dataset.doc; } });
         $("backToList").addEventListener("click", goList);
         $("reopen").addEventListener("click", () => readFromCostar(state.token));
@@ -1093,7 +1119,15 @@
             else onLineInput(e);
         });
         $("lines").addEventListener("click", onLineClick); $("newLines").addEventListener("click", onLineClick);
-        $("shopButton").addEventListener("click", () => { const i = inputOf("shipVia"); i.value = "SHOP"; setValue("shipVia", "SHOP"); });
+        // 2.6.11 (Tommy, 2 Nov: "instead of only putting SHOP ... also tick customer waiting, otherwise tyres will
+        // never left warehouse"): SHOP is the order itself, so it sets all three parts (as the Order tick does):
+        // Ship Via SHOP, Customer Waiting ticked and Date In today, each where the phone can change it.
+        $("shopButton").addEventListener("click", () => {
+            const i = inputOf("shipVia"); i.value = "SHOP"; setValue("shipVia", "SHOP");
+            const cannot = (state.base && state.base.cannot) || {};
+            if (!cannot.customerWaiting) { $("waitingSwitch").setAttribute("aria-checked", "true"); setValue("customerWaiting", "yes"); }
+            if (!cannot.dateIn) { const d = inputOf("dateIn"); d.value = iso(new Date()); setValue("dateIn", d.value); }
+        });
         $("todayButton").addEventListener("click", () => { const i = inputOf("dateIn"); i.value = iso(new Date()); setValue("dateIn", i.value); });
         $("waitingSwitch").addEventListener("click", () => {
             const sw = $("waitingSwitch"), on = sw.getAttribute("aria-checked") !== "true";
@@ -1129,5 +1163,5 @@
     }
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
     // For the tests: the page's own rules and helpers.
-    window.TempeRepairOrders = { parseDate, iso, num, cents, rebase, problemOf, noteProblem, lineKey };
+    window.TempeRepairOrders = { parseDate, iso, num, cents, rebase, problemOf, noteProblem, lineKey, pcFilterOf };
 })();

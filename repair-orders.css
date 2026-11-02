@@ -303,6 +303,26 @@ body.ro-page .ro-chip {
     cursor: pointer;
 }
 
+/* 2.6.11: shown while a search or a chip other than All narrows the list. */
+body.ro-page .ro-chip-clear {
+    margin-left: auto;
+    border-style: dashed;
+}
+
+/* 2.6.11: COSTAR's own list is filtered (a search left at the PC). */
+body.ro-page .ro-pcfilter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    border: 1px dashed var(--ro-line-strong);
+    border-radius: 12px;
+    color: var(--ro-muted);
+    font-size: 14px;
+}
+
 body.ro-page .ro-chip[aria-pressed="true"] {
     border-color: rgba(56, 189, 248, 0.65);
     color: #e0f2fe;

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#070b11">
     <title>Repair Orders</title>
     <link rel="stylesheet" href="./allaround.css?v=20261027-ro3">
-    <link rel="stylesheet" href="./repair-orders.css?v=20261027-ro4">
+    <link rel="stylesheet" href="./repair-orders.css?v=20261102-ro5">
 </head>
 
 <body class="app-page ro-page">
@@ -67,6 +67,14 @@
                 <button type="button" class="ro-chip" data-filter="all" aria-pressed="true">All</button>
                 <button type="button" class="ro-chip" data-filter="today" aria-pressed="false">Today</button>
                 <button type="button" class="ro-chip" data-filter="week" aria-pressed="false">This week</button>
+                <button type="button" class="ro-chip ro-chip-clear" id="clearFilter" hidden>Show all</button>
+            </div>
+
+            <!-- 2.6.11: COSTAR's own Work-in-Progress search boxes hold a filter (left at the PC): the RDP helper
+                 presses COSTAR's Clear, then Search, and reads the list again. -->
+            <div id="pcFilter" class="ro-pcfilter" hidden>
+                <span id="pcFilterText"></span>
+                <button type="button" id="clearPcFilter" class="ro-chip ro-chip-clear">Clear COSTAR's filter</button>
             </div>
 
             <div id="listBar" class="ro-listbar" hidden><div></div></div>
@@ -153,7 +161,7 @@
                     <div class="ro-grid">
                         <label class="ro-field ro-wide-phone" data-key="shipVia">
                             <span>Ship Via</span>
-                            <span class="ro-inline"><input name="shipVia" autocapitalize="characters" maxlength="20" enterkeyhint="done"><button type="button" class="ro-mini" id="shopButton">SHOP</button></span>
+                            <span class="ro-inline"><input name="shipVia" autocapitalize="characters" maxlength="20" enterkeyhint="done"><button type="button" class="ro-mini" id="shopButton" title="Ship Via SHOP, Customer Waiting ticked, Date In today">SHOP</button></span>
                         </label>
                         <label class="ro-field ro-wide-phone" data-key="dateIn">
                             <span>Date In</span>
@@ -256,6 +264,6 @@
         })();
     </script>
     <script src="./costar-client.js?v=20261027-ro4" defer></script>
-    <script src="./repair-orders.js?v=20261027-ro4" defer></script>
+    <script src="./repair-orders.js?v=20261102-ro5" defer></script>
 </body>
 </html>
