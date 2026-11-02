@@ -1,8 +1,8 @@
 {
-  "version": "2.6.11",
-  "name": "2.6.11 - Notices answered, SHOP orders",
-  "zip": "Tempe-COSTAR-Helper-v2.6.11.zip",
-  "sha256": "76938f72cc6a9858dd8f06d2007c75b96d6e28aaf144a1b4f272aceb86b3c747",
-  "size": 798983,
-  "notes": "COSTAR's notices over an order (the customer's Notes, a Point-of-sale Memo) are answered with OK on every order; the Repair Orders page can clear COSTAR's own Work-in-Progress filter left at the PC, has a Show all chip, and its SHOP button also ticks Customer Waiting and sets Date In today; phone jobs wait for the Repair Order to be back in front before Ship Via SHOP and Customer Waiting; online orders no longer type Shipping Instructions; a window over Add new is waited out for a moment. Includes 2.6.10. Update the RDP helper and the desk PC; upload the three Repair Orders website files."
+  "version": "2.6.12",
+  "name": "2.6.12 - Clean copy of 2.6.11",
+  "zip": "Tempe-COSTAR-Helper-v2.6.12.zip",
+  "sha256": "c8a28c6ce2d1a344b6f4a73d6033a60b8769cea56856c9a0ebc2d9142141d267",
+  "size": 800129,
+  "notes": "2.6.11 with nothing changed but its version number: updating downloads the whole helper again and checks every file before it starts. Update the RDP helper and the desk PC."
 }
