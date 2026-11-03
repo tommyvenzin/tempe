@@ -1,8 +1,8 @@
 {
-  "version": "2.9.0",
-  "name": "2.9.0 - Wholesale dry run",
-  "zip": "Tempe-COSTAR-Helper-v2.9.0.zip",
-  "sha256": "ad8dc1d578d95ed4c2598d9eb3a34fb5d376b93072a465af27a89085efcff8a0",
-  "size": 938422,
-  "notes": "Wholesale dry run: a new Wholesale tab on the RDP helper looks at COSTAR Sydney's BUF wholesale orders (Terms, card details yes/no, Sydney's stock of each tyre) and shows what it would do with each: sell, add CHECK STOCK or NO CARD DETAILS to the Comment, or leave it. Nothing is typed, sold or changed. Map COSTAR screen keeps the Cashier's customer name and memo words as a length only. Update the RDP helper and the desk PC."
+  "version": "2.9.1",
+  "name": "2.9.1 - Wholesale stock fix",
+  "zip": "Tempe-COSTAR-Helper-v2.9.1.zip",
+  "sha256": "640fda8bac8b91347cfd63f30cb5faa08dca8956ac691621aa1a68e332c09e05",
+  "size": 941769,
+  "notes": "Wholesale stock fix: the dry run took every tyre for NON-STOCKING (COSTAR keeps that label hidden under the stock numbers). Sydney's = Avail number now always wins; NON-STOCKING counts only when COSTAR shows it. Nothing is typed, sold or changed. Update the RDP helper and the desk PC."
 }
