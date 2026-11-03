@@ -101,6 +101,11 @@
         .costar-state.maybe { color: #fbbf24; }
         .costar-state.missing { color: #f87171; }
         .costar-state.sent { color: #93c5fd; }
+        .costar-state.stopped { color: #f87171; }
+        /* Auto (helper 2.8.1): Tempe pickups go to the helper by themselves. */
+        #autoBtn.on { background: #166534; border-color: #22c55e; color: #f0fdf4; }
+        .auto-status { border: 1px solid #334155; border-radius: 10px; padding: 8px 12px; margin: 0 0 12px; font-size: 0.9rem; color: #cbd5e1; }
+        .auto-status.problem { border-color: #f59e0b; color: #fbbf24; }
 
         .toolbar {
             display: flex;
@@ -251,11 +256,13 @@
         <label class="store-pick" for="storeSelect">Store <select id="storeSelect"></select></label>
         <button class="main-btn secondary" id="copyAllBtn">Copy All</button>
         <button class="main-btn" id="sendCostarBtn" disabled>Send to COSTAR</button>
+        <button class="main-btn secondary" id="autoBtn" type="button" aria-pressed="false" title="Tempe pickups for today and tomorrow that aren't in COSTAR go to the helper by themselves (every 3 minutes, in shop hours)">Auto: off</button>
     </div>
 
-    <p class="transfer-help">Select an order and click <strong>Send to COSTAR</strong>. The helper enters it into the COSTAR selected at the top of its window, in any branch, and checks the order's store against that branch first.</p>
+    <p class="transfer-help">Select an order and click <strong>Send to COSTAR</strong>. The helper enters it into the COSTAR selected at the top of its window, in any branch, and checks the order's store against that branch first. With <strong>Auto</strong> on, Tempe pickups for today and tomorrow that aren't in COSTAR go to the helper by themselves (deliveries and other stores: Send to COSTAR).</p>
     <div class="status-line" id="statusLine" role="status" aria-live="polite">Ready.</div>
     <p class="costar-status" id="costarStatus" hidden></p>
+    <p class="auto-status" id="autoStatus" role="status" aria-live="polite" hidden></p>
 
     <div class="page-wrap">
         <section class="card">
@@ -393,6 +400,117 @@
     }
     const api = { PREFIX, text, money, classify, pickup, makeOrder };
     scope.TempeCostar = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof window === 'undefined' ? globalThis : window);
+/* Auto (helper 2.8.1): which orders the Tempe Orders page sends to the helper by itself. Pure; shared by the page and its tests. */
+(function (scope) {
+    'use strict';
+    // Sydney's date ("YYYYMMDD", as the page's pickup keys), weekday (0 = Sunday) and minutes past midnight.
+    function sydneyParts(date) {
+        const parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+        const get = type => (parts.find(p => p.type === type) || {}).value || '';
+        const days = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+        const hour = Number(get('hour')) % 24;
+        return { key: get('year') + get('month') + get('day'), weekday: days[get('weekday').slice(0, 3)], minutes: hour * 60 + Number(get('minute')) };
+    }
+    // Shop hours, as the helper's (Order Check reads COSTAR then), Sydney time. Tempe Tyres is open Mon-Fri 8:00-17:00,
+    // Sat 8:00-16:00, Sun 9:00-14:00 (Tommy, 3 Nov); Auto works from an hour before opening to an hour and a half after
+    // closing: Mon-Fri 7:00-18:30, Sat 7:00-17:30, Sun 8:00-15:30.
+    function shopWindow(weekday) { return weekday === 0 ? [8 * 60, 15 * 60 + 30] : weekday === 6 ? [7 * 60, 17 * 60 + 30] : [7 * 60, 18 * 60 + 30]; }
+    function inShopHours(date) {
+        const p = sydneyParts(date), w = shopWindow(p.weekday);
+        return p.minutes >= w[0] && p.minutes <= w[1];
+    }
+    function addDays(key, n) {
+        const d = new Date(Date.UTC(Number(key.slice(0, 4)), Number(key.slice(4, 6)) - 1, Number(key.slice(6, 8)) + n));
+        return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
+    }
+    // The pickup days Auto looks at: today and tomorrow (open 7 days), as the helper's Customer Waiting rule (today
+    // 14:00-16:00, tomorrow 08:00-09:00).
+    function autoDays(date) {
+        const today = sydneyParts(date).key;
+        return [today, addDays(today, 1)];
+    }
+    // A delivery method that names a delivery, whatever the website calls it (a pickup is collected in store).
+    const DELIVERY_WORDS = /AUSTRALIA|DELIVER|PARTNER|FREIGHT|COURIER|POSTAGE|SHIPPING|EBAY/i;
+    // Tempe pickups (Tommy, 3 Nov: "Tempe pickups only") for those days, from the page's order list.
+    function autoCandidates(orders, days) {
+        return (orders || []).filter(o => o && /^TTW\d+$/.test(o.orderId || '') && /\bTempe\b/i.test(o.store || '') && days.indexOf(o.pickupDateKey) >= 0 && !DELIVERY_WORDS.test(o.deliveryMethod || ''));
+    }
+    // An order against Order Check's read of COSTAR's Work-in-Progress list (and the helper's own entered list): "in"
+    // (its number is a job's PO#, or in a job's comment, or the helper entered it, or it was on a job that has left
+    // Work-in-Progress since: invoiced or deleted), "maybe" (a job with the same amount, within 2% or $1, that isn't
+    // another online order), else "missing". The helper checks the same before typing (and, for "maybe", that the job
+    // is the same customer's or a walk-in's: the page's list has no names).
+    function costarMatch(order, rows, entered, left) {
+        const id = String(order.orderId || "").toUpperCase();
+        const digits = id.replace(/^TTW/, "");
+        const numberInText = new RegExp("(^|[^0-9])(TTW)?" + digits + "([^0-9]|$)", "i");
+        const byPo = rows.find(r => String(r.po || "").trim().toUpperCase() === id);
+        if (byPo) return { kind: "in", doc: byPo.doc, how: "PO#" };
+        const byComment = /^\d{5,}$/.test(digits) ? rows.find(r => numberInText.test(String(r.comment || ""))) : null;
+        if (byComment) return { kind: "in", doc: byComment.doc, how: "comment" };
+        const mine = entered && entered.get(id);
+        if (mine) return { kind: "in", doc: "", how: "helper", at: mine };
+        const gone = (left || []).find(g => g && (" " + String(g.ttw || "").toUpperCase() + " ").includes(" " + id + " "));
+        if (gone) return { kind: "in", doc: gone.doc, how: "left" };
+        const amount = Number(order.amountNumber);
+        if (Number.isFinite(amount) && amount > 0) {
+            const same = rows.filter(r => r.hasTotal !== false && !/^TTW\d+$/i.test(String(r.po || "").trim()) && Math.abs(Number(r.total) - amount) <= Math.max(1, amount * 0.02));
+            if (same.length) return { kind: "maybe", doc: same.map(r => r.doc).join(", "), how: same.length === 1 ? "same amount" : same.length + " jobs with the same amount" };
+        }
+        return { kind: "missing" };
+    }
+    // What a round does with each candidate: COSTAR's check ("in", "maybe", "missing"; "sent": sent from this page by
+    // hand) and the helper's record (its state, or none). Sent: missing, or "maybe" (a job with the same amount: the
+    // helper decides on its own read, with the customer's name, and holds it for a person if it's that customer's or a
+    // walk-in's), and unknown to the helper. The helper is asked about those only.
+    function autoPlan(candidates, costar, helper) {
+        const send = [], known = [];
+        for (const o of candidates) {
+            const c = costar[o.orderId] || { kind: 'missing' };
+            if (c.kind !== 'missing' && c.kind !== 'maybe') continue;
+            if (helper && helper[o.orderId]) known.push(o.orderId); else send.push(o);
+        }
+        return { send, known };
+    }
+    // How the page shows the helper's record of an order (null: nothing to show). make: the page offers Make it.
+    function helperView(record) {
+        if (!record || !record.state) return null;
+        const at = record.at ? ' ' + record.at : '';
+        switch (record.state) {
+            case 'waiting': return { kind: 'sent', text: 'Waiting in the helper' + at };
+            case 'entering': return { kind: 'sent', text: 'Being entered by the helper' + at };
+            case 'entered': return { kind: 'in', text: 'Entered by the helper' + at + (/left open/i.test(record.message || '') ? ': ' + record.message : '') };
+            case 'in_costar': return { kind: 'in', text: 'Already in COSTAR (the helper checked)' + at };
+            case 'by_hand': return { kind: 'sent', make: true, text: 'Sent by hand: the Online orders tab has it' + at };
+            case 'held': return { kind: 'maybe', make: true, text: 'Held for you by the helper' + at + ': ' + (record.message || 'a job with the same amount is in COSTAR') };
+            case 'stopped': return { kind: 'stopped', make: true, text: 'Stopped in the helper' + at + ': ' + (record.message || 'check COSTAR') };
+            default: return null;
+        }
+    }
+    // Make it / Make all missing: never for an order the helper has or entered (a stopped, held or by-hand one is a
+    // person's call).
+    function helperHasIt(record) {
+        return !!(record && record.state && record.state !== 'stopped' && record.state !== 'held' && record.state !== 'by_hand');
+    }
+    // The helper this page is paired with, among the Order Checks answering on this PC (an RDP server can run several,
+    // one per Windows session): the one whose /health names the pairing. Pairing: the ones showing a code.
+    function pairedHelper(checks, pair) {
+        return pair ? (checks || []).find(c => c && c.health && c.health.autoPair === pair) || null : null;
+    }
+    function pairingHelpers(checks) {
+        return (checks || []).filter(c => c && c.health && c.health.autoPairing === true);
+    }
+    // What the page keeps of a pairing (localStorage): the key and the pairing's id; anything else is no pairing.
+    function readPairing(text) {
+        try {
+            const p = JSON.parse(text || '');
+            return p && typeof p.key === 'string' && p.key && typeof p.pair === 'string' && p.pair ? { key: p.key, pair: p.pair } : null;
+        } catch (e) { return null; }
+    }
+    const api = { sydneyParts, inShopHours, addDays, autoDays, autoCandidates, costarMatch, autoPlan, helperView, helperHasIt, pairedHelper, pairingHelpers, readPairing };
+    scope.TempeAuto = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);
 
@@ -1107,6 +1225,63 @@
             }
         }
 
+        // An order's details from the website, without touching the screen (Send to COSTAR and Auto both use it).
+        // withStock: each product's stock is looked up too (shown on screen; COSTAR doesn't need it).
+        async function fetchOrderData(order, withStock = true) {
+            const html = await fetchHtml(order.orderLink);
+            const doc = parseHtml(html);
+
+            const orderId = uppercaseSafe(extractLabeledValue(doc, "Order ID:"));
+            if (orderId !== order.orderId) throw new Error("The returned order number does not match the selected order.");
+            const customerName = uppercaseSafe(extractLabeledValue(doc, "Customer:"));
+            const phone = extractLabeledValue(doc, "Phone:");
+            const email = extractLabeledValue(doc, "Email:");
+
+            const billingParts = extractBillingAddressBlock(doc) || [];
+            const addressParts = splitAddress(billingParts);
+            const partnerParts = extractAddressBlock(doc, "SELECTED FITTING PARTNER:") || [];
+            const fittingPartner = /^FITTING PARTNER$/i.test(extractLabeledValue(doc, "Delivery Method:") || order.deliveryMethod || "");
+            const deliveryParts = fittingPartner ? partnerParts : (extractAddressBlock(doc, "DELIVERY ADDRESS:") || []);
+            const totals = extractOrderTotals(doc);
+            const detailTotal = totals.find(total => /^Total Amount$/i.test(total.label));
+
+            const vehicle = extractVehicleInfo(doc);
+            const productRows = extractProductRows(doc);
+            const productsWithStock = withStock ? await enrichProductsWithStock(productRows) : productRows.map(item => ({ ...item, stock: "" }));
+
+            return {
+                orderLink: order.orderLink,
+                amountText: detailTotal?.amount || order.amountText,
+                pickupPreview: order.pickupPreview,
+                store: order.store || "",
+                deliveryMethod: extractLabeledValue(doc, "Delivery Method:") || order.deliveryMethod || "",
+                deliveringBranch: extractLabeledValue(doc, "Delivering Branch:"),
+                shipVia: extractLabeledValue(doc, "ShipVia:"),
+                paymentMethod: extractLabeledValue(doc, "Payment Method:"),
+                fittingPartner,
+                billingAddress: { lines: billingParts, ...addressParts },
+                deliveryAddress: { lines: deliveryParts, ...splitAddress(deliveryParts), contact: addressDetail(deliveryParts, "Contact Person"), phone: addressDetail(deliveryParts, "Phone"), email: addressDetail(deliveryParts, "Email"), estimatedFittingDate: addressDetail(deliveryParts, "Estimated Fitting Date") },
+                addressesDiffer: deliveryParts.length > 0 && addressBlocksDiffer(billingParts, deliveryParts),
+                totals,
+                orderId,
+                name: customerName,
+                streetAddress: uppercaseSafe(addressParts.streetAddress),
+                suburb: uppercaseSafe(addressParts.suburb),
+                postcode: addressParts.postcode,
+                phone,
+                email,
+                vehicleInfo: uppercaseSafe(vehicle.vehicleInfo),
+                rego: uppercaseSafe(vehicle.rego),
+                products: productsWithStock.map(item => ({
+                    ...item,
+                    sku: uppercaseSafe(item.sku),
+                    qty: item.qty,
+                    product: uppercaseSafe(item.product),
+                    stock: item.stock
+                }))
+            };
+        }
+
         async function loadOrderDetails(order) {
             const request = ++detailRequest;
             selectedOrderData = null;
@@ -1117,61 +1292,8 @@
             statusLine.textContent = `Loading ${order.orderId}...`;
 
             try {
-                const html = await fetchHtml(order.orderLink);
+                const data = await fetchOrderData(order);
                 if (request !== detailRequest) return;
-                const doc = parseHtml(html);
-
-                const orderId = uppercaseSafe(extractLabeledValue(doc, "Order ID:"));
-                if (orderId !== order.orderId) throw new Error("The returned order number does not match the selected order.");
-                const customerName = uppercaseSafe(extractLabeledValue(doc, "Customer:"));
-                const phone = extractLabeledValue(doc, "Phone:");
-                const email = extractLabeledValue(doc, "Email:");
-
-                const billingParts = extractBillingAddressBlock(doc) || [];
-                const addressParts = splitAddress(billingParts);
-                const partnerParts = extractAddressBlock(doc, "SELECTED FITTING PARTNER:") || [];
-                const fittingPartner = /^FITTING PARTNER$/i.test(extractLabeledValue(doc, "Delivery Method:") || order.deliveryMethod || "");
-                const deliveryParts = fittingPartner ? partnerParts : (extractAddressBlock(doc, "DELIVERY ADDRESS:") || []);
-                const totals = extractOrderTotals(doc);
-                const detailTotal = totals.find(total => /^Total Amount$/i.test(total.label));
-
-                const vehicle = extractVehicleInfo(doc);
-                const productRows = extractProductRows(doc);
-                const productsWithStock = await enrichProductsWithStock(productRows);
-                if (request !== detailRequest) return;
-
-                const data = {
-                    orderLink: order.orderLink,
-                    amountText: detailTotal?.amount || order.amountText,
-                    pickupPreview: order.pickupPreview,
-                    store: order.store || "",
-                    deliveryMethod: extractLabeledValue(doc, "Delivery Method:") || order.deliveryMethod || "",
-                    deliveringBranch: extractLabeledValue(doc, "Delivering Branch:"),
-                    shipVia: extractLabeledValue(doc, "ShipVia:"),
-                    paymentMethod: extractLabeledValue(doc, "Payment Method:"),
-                    fittingPartner,
-                    billingAddress: { lines: billingParts, ...addressParts },
-                    deliveryAddress: { lines: deliveryParts, ...splitAddress(deliveryParts), contact: addressDetail(deliveryParts, "Contact Person"), phone: addressDetail(deliveryParts, "Phone"), email: addressDetail(deliveryParts, "Email"), estimatedFittingDate: addressDetail(deliveryParts, "Estimated Fitting Date") },
-                    addressesDiffer: deliveryParts.length > 0 && addressBlocksDiffer(billingParts, deliveryParts),
-                    totals,
-                    orderId,
-                    name: customerName,
-                    streetAddress: uppercaseSafe(addressParts.streetAddress),
-                    suburb: uppercaseSafe(addressParts.suburb),
-                    postcode: addressParts.postcode,
-                    phone,
-                    email,
-                    vehicleInfo: uppercaseSafe(vehicle.vehicleInfo),
-                    rego: uppercaseSafe(vehicle.rego),
-                    products: productsWithStock.map(item => ({
-                        ...item,
-                        sku: uppercaseSafe(item.sku),
-                        qty: item.qty,
-                        product: uppercaseSafe(item.product),
-                        stock: item.stock
-                    }))
-                };
-
                 renderDetails(data);
                 statusLine.textContent = `${order.orderId} loaded.`;
 
@@ -1217,28 +1339,17 @@
             }));
             return found.filter(Boolean);
         }
-        function costarMatch(order, rows, entered) {
-            const id = String(order.orderId || "").toUpperCase();
-            const digits = id.replace(/^TTW/, "");
-            const numberInText = new RegExp("(^|[^0-9])(TTW)?" + digits + "([^0-9]|$)", "i");
-            const byPo = rows.find(r => String(r.po || "").trim().toUpperCase() === id);
-            if (byPo) return { kind: "in", doc: byPo.doc, how: "PO#" };
-            const byComment = digits.length >= 5 ? rows.find(r => numberInText.test(String(r.comment || ""))) : null;
-            if (byComment) return { kind: "in", doc: byComment.doc, how: "comment" };
-            const mine = entered.get(id);
-            if (mine) return { kind: "in", doc: "", how: "helper", at: mine };
-            const amount = Number(order.amountNumber);
-            if (Number.isFinite(amount) && amount > 0) {
-                const same = rows.filter(r => r.hasTotal !== false && Math.abs(Number(r.total) - amount) <= Math.max(1, amount * 0.02));
-                if (same.length) return { kind: "maybe", doc: same.map(r => r.doc).join(", "), how: same.length === 1 ? "same amount" : same.length + " jobs with the same amount" };
-            }
-            return { kind: "missing" };
-        }
+        // The same rule as the helper's last check before it types (auto-core.js): PO#, number in a comment, the helper's
+        // entered list, or a job with the same amount that isn't another online order.
+        function costarMatch(order, rows, entered, left) { return TempeAuto.costarMatch(order, rows, entered, left); }
         function costarStateHtml(item) {
             const cs = costarCheck.byOrder.get(item.orderId);
             if (!cs || searchQuery) return "";
-            if (cs.kind === "in") return `<div class="costar-state in">✓ In COSTAR${cs.doc ? " · doc " + escapeHtml(cs.doc) : ""}${cs.how === "helper" ? " · entered by the helper " + escapeHtml(cs.at || "") : ""}</div>`;
-            if (cs.kind === "maybe") return `<div class="costar-state maybe">≈ Probably in COSTAR · doc ${escapeHtml(cs.doc)} (${escapeHtml(cs.how)})</div>`;
+            // Auto (2.8.1): what the helper did with an order this page sent it.
+            const helper = cs.kind === "missing" || cs.kind === "sent" || cs.kind === "maybe" ? TempeAuto.helperView(autoHelper[item.orderId]) : null;
+            if (helper) return `<div class="costar-state ${helper.kind}">${helper.kind === "in" ? "✓" : helper.kind === "stopped" ? "⚠" : helper.kind === "maybe" ? "≈" : "→"} ${escapeHtml(helper.text)}${helper.make ? ` <button class="make-btn" type="button" data-make="${escapeHtml(item.orderId)}">Make it</button>` : ""}</div>`;
+            if (cs.kind === "in") return `<div class="costar-state in">✓ In COSTAR${cs.doc ? " · doc " + escapeHtml(cs.doc) : ""}${cs.how === "helper" ? " · entered by the helper " + escapeHtml(cs.at || "") : ""}${cs.how === "left" ? " (no longer in Work-in-Progress: invoiced or deleted)" : ""}</div>`;
+            if (cs.kind === "maybe") return `<div class="costar-state maybe">≈ Probably in COSTAR · doc ${escapeHtml(cs.doc)} (${escapeHtml(cs.how)}) <button class="make-btn" type="button" data-make="${escapeHtml(item.orderId)}">Make it</button></div>`;
             if (cs.kind === "sent") return `<div class="costar-state sent">→ Sent to the helper ${escapeHtml(cs.at || "")}</div>`;
             return `<div class="costar-state missing">✗ Not in COSTAR <button class="make-btn" type="button" data-make="${escapeHtml(item.orderId)}">Make it</button></div>`;
         }
@@ -1296,7 +1407,7 @@
                 }
                 const rows = Array.isArray(best.wip.rows) ? best.wip.rows : [];
                 for (const order of filteredOrdersCache) {
-                    const match = costarMatch(order, rows, entered);
+                    const match = costarMatch(order, rows, entered, best.wip.left);
                     costarCheck.byOrder.set(order.orderId, match.kind === "missing" && sent.has(order.orderId) ? sent.get(order.orderId) : match);
                 }
                 costarCheck.readAt = best.wip.readAt || "";
@@ -1313,6 +1424,8 @@
         async function makeInCostar(orderId) {
             const match = filteredOrdersCache.find(x => x.orderId === orderId);
             if (!match) throw new Error("That order is no longer in the list.");
+            // 2.8.1: not one the helper has or entered by itself (a stopped or held one is a person's call).
+            if (TempeAuto.helperHasIt(autoHelper[orderId])) throw new Error(orderId + " is with the helper already (" + ((TempeAuto.helperView(autoHelper[orderId]) || {}).text || autoHelper[orderId].state) + "), so it isn't sent twice.");
             currentSelectedOrderId = orderId;
             renderOrderList(filteredOrdersCache);
             await loadOrderDetails(match);
@@ -1320,13 +1433,14 @@
             const order = TempeCostar.makeOrder(selectedOrderData);
             await navigator.clipboard.writeText(TempeCostar.PREFIX + JSON.stringify(order));
             costarCheck.byOrder.set(orderId, { kind: "sent", at: new Date().toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }) });
+            markByHand(orderId);
             document.getElementById("statusLine").textContent = orderId + " sent to the helper. With Fill automatically on, it is entered now; otherwise click Fill in the helper.";
             renderOrderList(filteredOrdersCache);
             renderCostarBar();
         }
         // One after another, 3 seconds apart, so the helper queues each (needs Fill automatically).
         async function makeAllMissing() {
-            const missing = filteredOrdersCache.filter(o => (costarCheck.byOrder.get(o.orderId) || {}).kind === "missing").map(o => o.orderId);
+            const missing = filteredOrdersCache.filter(o => (costarCheck.byOrder.get(o.orderId) || {}).kind === "missing" && !autoHelper[o.orderId]).map(o => o.orderId);
             if (!missing.length) return;
             if (!confirm("Send " + missing.length + " missing order(s) to the helper?\n\nTurn on Fill automatically in the helper first, so it enters them one after another.")) return;
             for (let i = 0; i < missing.length; i++) {
@@ -1337,11 +1451,247 @@
         }
         setInterval(() => { if (!document.hidden && !searchQuery && filteredOrdersCache.length) checkCostar(); }, 120000);
 
+        // ---- Auto (helper 2.8.1) ---------------------------------------------------------------------------------
+        // Tommy, 3 Nov: "Tempe pickups only". With Auto on, every 3 minutes in shop hours the page has Order Check read
+        // COSTAR afresh, reads the website's orders, and sends the helper (not the clipboard) the Tempe pickups for
+        // today and tomorrow that aren't in COSTAR and that the helper doesn't know yet; the helper checks each again on
+        // a read of its own and enters them by itself, one at a time. A job with the same amount in COSTAR holds an
+        // order back for a person. Deliveries and other stores stay with Send to COSTAR. The page talks only to the
+        // helper it was paired with (a 6-digit code it shows once; the key and the pairing's id stay in this browser),
+        // through that helper's Order Check. Off, a paired page still checks in (saying it's off), so the helper knows.
+        const AUTO_ON_KEY = "tempeOrdersAuto", AUTO_KEY_KEY = "tempeOrdersHelperKey";
+        const AUTO_EVERY_MS = 180000, AUTO_MOST_PER_ROUND = 8, AUTO_FRESH_READ_MS = 60000, AUTO_STALE_READ_MS = 15 * 60000;
+        let autoOn = (() => { try { return localStorage.getItem(AUTO_ON_KEY) === "on"; } catch (e) { return false; } })();
+        let autoRunning = false;
+        const autoHelper = {};   // the helper's record of the orders this page asked about
+        const autoSkipped = {};  // orders Auto couldn't send (no COSTAR code for a service, a discount...): a person is needed
+        const autoFetchFails = {};   // the website's details not read, in a row (3: a person is needed)
+        let autoNoRead = 0;      // rounds in a row without a new read of COSTAR (5, a quarter of an hour: said)
+        // Orders sent by hand from this page (Send to COSTAR, Make it), kept in this tab and told to the paired helper:
+        // Auto doesn't also send them while the helper's Online orders tab may take them.
+        // 10 minutes, as the helper waits for its Online orders tab to take such an order; after that, one nobody loaded or
+        // filled is Auto's again (its checks against COSTAR as any other's), so it isn't left out.
+        const HAND_KEY = "tempeOrdersHandSent", HAND_MS = 10 * 60000;
+        function handMarks() { try { const m = JSON.parse(sessionStorage.getItem(HAND_KEY) || "{}"); return m && typeof m === "object" ? m : {}; } catch (e) { return {}; } }
+        function handMarked(orderId) { const at = Number(handMarks()[orderId]); return Number.isFinite(at) && Date.now() - at < HAND_MS; }
+        function markByHand(orderId) {
+            const marks = handMarks(), now = Date.now();
+            for (const [id, at] of Object.entries(marks)) if (!(now - Number(at) < HAND_MS)) delete marks[id];
+            marks[orderId] = now;
+            try { sessionStorage.setItem(HAND_KEY, JSON.stringify(marks)); } catch (e) { /* private window */ }
+            const pairing = autoPairing();
+            if (pairing) pairedCheck(pairing).then(check => check ? helperPost(check.base, "/online/hand", { id: orderId }, pairing.key) : null).catch(() => { /* Auto's next round leaves it alone anyway */ });
+        }
+        function autoPairing() { try { return TempeAuto.readPairing(localStorage.getItem(AUTO_KEY_KEY)); } catch (e) { return null; } }
+        function setAutoPairing(p) { try { if (p) localStorage.setItem(AUTO_KEY_KEY, JSON.stringify({ key: p.key, pair: p.pair })); else localStorage.removeItem(AUTO_KEY_KEY); } catch (e) { /* private window */ } }
+        function saveAutoOn() { try { localStorage.setItem(AUTO_ON_KEY, autoOn ? "on" : "off"); } catch (e) { /* private window */ } }
+        function setAutoLine(message, problem) {
+            const line = document.getElementById("autoStatus");
+            line.hidden = false; line.textContent = message; line.classList.toggle("problem", !!problem);
+        }
+        function renderAutoButton() {
+            const button = document.getElementById("autoBtn");
+            button.textContent = autoOn ? "Auto: on" : "Auto: off";
+            button.classList.toggle("on", autoOn);
+            button.setAttribute("aria-pressed", autoOn ? "true" : "false");
+        }
+        async function helperPost(base, path, body, key) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 15000);
+            try {
+                const headers = { "Content-Type": "application/json" };
+                if (key) headers["Authorization"] = "Bearer " + key;
+                const response = await fetch(base + path, { method: "POST", cache: "no-store", headers, body: JSON.stringify(body || {}), signal: controller.signal });
+                let data = {};
+                try { data = await response.json(); } catch (e) { data = {}; }
+                if (!response.ok) { const err = new Error(data.error || ("the helper answered " + response.status)); err.status = response.status; throw err; }
+                return data;
+            } finally { clearTimeout(timer); }
+        }
+        // The paired helper's Order Check on this PC (null: it isn't answering).
+        async function pairedCheck(pairing) {
+            return TempeAuto.pairedHelper(await findOrderChecks(), pairing && pairing.pair);
+        }
+        // A read of COSTAR's Work-in-Progress list made from now (an order typed in a minute ago shows), within a minute.
+        // None in that time (Order Check waits while the helper types, or COSTAR is busy): nothing is sent this round, the
+        // next comes in 3 minutes. Order Check stopped (its COSTAR closed, paused) or its last read old: said.
+        async function freshWip(check) {
+            const first = check.wip || {};
+            const before = String(first.readAt || "");
+            let last = first;
+            try { await fetch(check.base + "/refresh", { method: "POST", cache: "no-store", headers: { "X-Order-Check": "1" } }); } catch (e) { /* it reads on its own timer too */ }
+            const until = Date.now() + AUTO_FRESH_READ_MS;
+            while (Date.now() < until) {
+                await new Promise(resolve => setTimeout(resolve, 4000));
+                try {
+                    const wip = await fetchHelperJson(check.base, "/wip.json");
+                    if (wip) {
+                        last = wip;
+                        if (wip.readAt && String(wip.readAt) !== before) {
+                            if (wip.searched === false) throw new Error("Order Check read COSTAR without pressing Search, so the list may be old: in Order Check, tick Press Search before each read.");
+                            return { wip, fresh: true };
+                        }
+                    }
+                } catch (e) { if (/without pressing Search/.test(e.message)) throw e; /* the next try */ }
+            }
+            const age = Date.now() - Date.parse(String(last.readAt || ""));
+            if (!(Number.isFinite(age) && age <= AUTO_STALE_READ_MS) || ["setup", "error", "paused"].includes(String(last.state || "")))
+                throw new Error("Order Check hasn't read COSTAR since " + (String(last.readAt || "").slice(11, 16) || "the helper started") + (last.message ? " (" + last.message + ")" : "") + ".");
+            return { wip: last, fresh: false };
+        }
+        // Pairing: with the helper showing a code (Files & settings, Runs by itself, Pair the Tempe Orders page).
+        async function pairAuto() {
+            const showing = TempeAuto.pairingHelpers(await findOrderChecks());
+            if (!showing.length) throw new Error("no helper on this PC is showing a pairing code: in the RDP helper, Files & settings, Runs by itself, click Pair the Tempe Orders page first.");
+            const code = (prompt("Pair this page with the helper:\n\nType the 6-digit code the RDP helper shows (Files & settings, Runs by itself, Pair the Tempe Orders page).") || "").replace(/\s+/g, "");
+            if (!/^\d{6}$/.test(code)) throw new Error("no 6-digit code was typed, so Auto stays off.");
+            let last = null;
+            for (const check of showing) {
+                try {
+                    const answer = await helperPost(check.base, "/online/pair", { pin: code });
+                    if (!answer.key || !answer.pair) throw new Error("the helper didn't give a key.");
+                    setAutoPairing({ key: answer.key, pair: answer.pair });
+                    return;
+                } catch (err) { last = err; }
+            }
+            throw last || new Error("the helper didn't take the code.");
+        }
+        // error undefined: a round that only waited for Order Check's read leaves the page's trouble as it was.
+        function statusBody(ids, check, error) {
+            const skipped = Object.entries(autoSkipped).map(([id, why]) => ({ id, why }));
+            const body = { ids, check, auto: autoOn ? "on" : "off", skipped };
+            if (error !== undefined) body.error = error;
+            return body;
+        }
+        async function autoRound() {
+            const pairing = autoPairing();
+            if (autoRunning || !pairing) return;
+            autoRunning = true;
+            let check = null;
+            try {
+                const now = new Date();
+                check = await pairedCheck(pairing);
+                if (!check) throw new Error("the helper this page is paired with isn't answering on this PC (is the RDP helper open, with Order Check on?). If it was paired again, click Auto off and on to pair this page again.");
+                if (!autoOn) {
+                    await helperPost(check.base, "/online/status", statusBody([], [], ""), pairing.key);
+                    setAutoLine("Auto is off: Tempe pickups go to the helper only with Send to COSTAR.");
+                    return;
+                }
+                if (!TempeAuto.inShopHours(now)) {
+                    await helperPost(check.base, "/online/status", statusBody([], [], ""), pairing.key);
+                    setAutoLine("Auto waits for shop hours (Mon-Fri 7:00-18:30, Sat 7:00-17:30, Sun 8:00-15:30), when Order Check reads COSTAR.");
+                    return;
+                }
+                const read = await freshWip(check);
+                const time = now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
+                if (!read.fresh) {
+                    if (++autoNoRead >= 5) throw new Error("Order Check hasn't made a new read of COSTAR for a quarter of an hour" + (read.wip.message ? " (" + read.wip.message + ")" : "") + ".");
+                    const waiting = await helperPost(check.base, "/online/status", statusBody([], [], undefined), pairing.key);
+                    setAutoLine(`Auto, ${time}: waiting for Order Check's next read of COSTAR (${read.wip.message || "it waits while the helper types"}); the next check is in 3 minutes.` + (waiting.why ? " The helper: " + waiting.why + "." : ""));
+                    return;
+                }
+                autoNoRead = 0;
+                const wip = read.wip;
+                if (wip.filter) throw new Error("COSTAR's Work-in-Progress list at the PC is filtered (" + wip.filter + "): clear it, so every order can be checked.");
+                const all = parseOrderList(parseHtml(await fetchHtml(ORDERS_URL)));
+                const candidates = TempeAuto.autoCandidates(all, TempeAuto.autoDays(now));
+                const entered = new Map();
+                try {
+                    const mine = await fetchHelperJson(check.base, "/entered.json", 2000);
+                    for (const e of mine.entered || []) entered.set(String(e.orderId || "").toUpperCase(), String(e.at || "").slice(11, 16));
+                } catch (e) { /* COSTAR's list only */ }
+                const rows = Array.isArray(wip.rows) ? wip.rows : [];
+                const costar = {};
+                for (const id of Object.keys(autoSkipped)) if (!candidates.some(o => o.orderId === id)) delete autoSkipped[id];
+                for (const o of candidates) {
+                    const match = TempeAuto.costarMatch(o, rows, entered, wip.left);
+                    const here = costarCheck.byOrder.get(o.orderId);
+                    // Sent from this page by hand (Make it, Send to COSTAR): the Online orders tab has it.
+                    costar[o.orderId] = (match.kind === "missing" || match.kind === "maybe") && (handMarked(o.orderId) || (here && here.kind === "sent")) ? { kind: "sent" } : match;
+                }
+                const asked = TempeAuto.autoPlan(candidates, costar, null);
+                const status = await helperPost(check.base, "/online/status", statusBody(asked.send.map(o => o.orderId), [], ""), pairing.key);
+                // What the helper no longer has (let go after 25 minutes, a restart) is forgotten here too.
+                for (const o of asked.send) if (!(status.orders || {})[o.orderId]) delete autoHelper[o.orderId];
+                for (const [id, record] of Object.entries(status.orders || {})) autoHelper[id] = record;
+                const plan = TempeAuto.autoPlan(candidates, costar, status.orders || {});
+                let sent = 0;
+                const notSent = [];
+                if (status.accepting && !status.paused) {
+                    for (const o of plan.send.slice(0, AUTO_MOST_PER_ROUND)) {
+                        if (handMarked(o.orderId)) continue;   // sent by hand meanwhile
+                        let data, order;
+                        try { data = await fetchOrderData(o, false); delete autoFetchFails[o.orderId]; }
+                        catch (err) {
+                            notSent.push(o.orderId + " (" + err.message + ")");   // the website: tried again next round
+                            if ((autoFetchFails[o.orderId] = (autoFetchFails[o.orderId] || 0) + 1) >= 3) autoSkipped[o.orderId] = "its details on the website couldn't be read 3 times: " + err.message;
+                            continue;
+                        }
+                        try { order = TempeCostar.makeOrder(data); }
+                        catch (err) { notSent.push(o.orderId + " (" + err.message + ")"); autoSkipped[o.orderId] = err.message; continue; }
+                        if (order.schema !== 1) { const why = "not a Tempe pickup (" + (order.store || order.type || "?") + ")"; notSent.push(o.orderId + " (" + why + ")"); autoSkipped[o.orderId] = why; continue; }
+                        // The helper takes pickups only: the website's delivery method goes with it.
+                        order.deliveryMethod = String(data.deliveryMethod || o.deliveryMethod || "");
+                        try {
+                            const answer = await helperPost(check.base, "/online/order", order, pairing.key);
+                            autoHelper[o.orderId] = { state: answer.state, at: "", message: answer.message };
+                            delete autoSkipped[o.orderId];
+                            if (answer.added) sent++;
+                        } catch (err) {
+                            if (err.status === 401) throw err;
+                            notSent.push(o.orderId + " (" + err.message + ")");
+                            if (err.status === 400) autoSkipped[o.orderId] = err.message;   // the helper refused it: a person is needed
+                        }
+                    }
+                }
+                let line = `Auto, ${time}: ${candidates.length} Tempe pickup(s) for today and tomorrow, ${asked.send.length} not in COSTAR, ${sent} sent to the helper now.`;
+                const held = Object.entries(autoHelper).filter(([id, r]) => r && r.state === "held" && candidates.some(o => o.orderId === id))
+                    .map(([id, r]) => { const m = /\(doc ([^)]*)\)/.exec(r.message || ""); return id + (m ? " (doc " + m[1] + ")" : ""); });
+                if (held.length) line += ` Held for you by the helper (COSTAR has a job for that customer, or a walk-in, with the same amount): ${held.join(", ")}: if it's a new order, click Make it.`;
+                if (notSent.length) line += ` Not sent: ${notSent.join("; ")}.`;
+                if (status.why) line += " The helper: " + status.why + ".";
+                setAutoLine(line, notSent.length > 0 || !status.accepting || status.paused);
+                if (!searchQuery && isTempeStore(storeChoice) && filteredOrdersCache.length) renderOrderList(filteredOrdersCache);
+            } catch (err) {
+                if (err.status === 401) {
+                    setAutoPairing(null); autoOn = false; saveAutoOn(); renderAutoButton();
+                    setAutoLine("Auto is off: the helper no longer knows this page (it was paired again, or reset). Click Auto to pair it again.", true);
+                } else {
+                    const why = err.name === "AbortError" ? "the helper didn't answer" : err.message;
+                    setAutoLine("Auto: " + why, true);
+                    if (check) { try { await helperPost(check.base, "/online/status", statusBody([], [], why), pairing.key); } catch (e) { /* said on this page */ } }
+                }
+            } finally { autoRunning = false; }
+        }
+        document.getElementById("autoBtn").addEventListener("click", async () => {
+            try {
+                if (!autoOn) {
+                    const pairing = autoPairing();
+                    if (!pairing || !(await pairedCheck(pairing))) await pairAuto();
+                }
+                autoOn = !autoOn;
+                saveAutoOn(); renderAutoButton();
+                setAutoLine(autoOn ? "Auto is on: checking now." : "Auto is off: Tempe pickups go to the helper only with Send to COSTAR.");
+                autoRound();
+            } catch (err) { setAutoLine("Auto: " + err.message, true); }
+        });
+        renderAutoButton();
+        // Another tab of this page switched Auto: this one follows (one switch for the browser).
+        window.addEventListener("storage", event => {
+            if (event.key !== AUTO_ON_KEY) return;
+            autoOn = event.newValue === "on"; renderAutoButton();
+            setAutoLine(autoOn ? "Auto is on (switched on in another tab of this page)." : "Auto is off (switched off in another tab of this page).");
+        });
+        setInterval(() => { autoRound(); }, AUTO_EVERY_MS);
+        if (autoPairing()) setTimeout(() => { autoRound(); }, 5000);
+
         document.getElementById("sendCostarBtn").addEventListener("click", async () => {
             try {
                 if (!selectedOrderData || selectedOrderData.orderId !== currentSelectedOrderId) throw new Error("Select a fully loaded order first.");
                 const order = TempeCostar.makeOrder(selectedOrderData);
                 await navigator.clipboard.writeText(TempeCostar.PREFIX + JSON.stringify(order));
+                if (filteredOrdersCache.some(o => o.orderId === order.orderId)) costarCheck.byOrder.set(order.orderId, { kind: "sent", at: new Date().toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }) });
+                markByHand(order.orderId);
                 flashCopied(order.orderId + " sent. Choose Fill empty Repair Order in the Windows helper.");
                 document.getElementById("statusLine").textContent = order.orderId + " copied for COSTAR — open the Windows helper to fill it.";
             } catch (err) { alert("Order was not sent: " + err.message); }

@@ -8,15 +8,16 @@
    initials as its title and a red bar (orange when it's only "Not picked"); their tag sits above
    the card when their Discord ID is listed, so the post pings them:
 
-     @Pinad does it all
+     @Salesperson
      ┃ TOG
-     ┃ 07510297 - TAEHO CHOI - $1,560 - EDC44U - **Tick Customer Waiting**
+     ┃ 07510001 - TEST CUSTOMER - $1,560 - ABC123 - **Tick Customer Waiting**
      ┃
-     ┃ 07510467 - PHILIP INNESS - $30 - FFI80G - **Tick Customer Waiting**
+     ┃ 07510002 - SAMPLE CUSTOMER - $30 - XYZ789 - **Tick Customer Waiting**
 
    - A new problem re-posts that salesperson's message (old one deleted), so Discord notifies.
    - A fixed job's line is edited out (no notification); with nothing left the message is deleted.
-   - New problems only go out Monday to Saturday, 7:00 to 18:30; overnight ones go out at 7:00.
+   - New problems only go out in shop hours (Mon-Fri 7:00-18:30, Sat 7:00-17:30, Sun 8:00-15:30: an hour before
+     Tempe opens to an hour and a half after it closes); overnight ones go out when they start.
    No links and no test messages. */
 (function (root) {
   "use strict";
@@ -76,10 +77,12 @@
   function loadSent() { return upgrade(readJson(SENT_KEY, null)); }
   function saveSent(st) { writeJson(SENT_KEY, st); }
 
+  // Tempe is open Mon-Fri 8:00-17:00, Sat 8:00-16:00, Sun 9:00-14:00 (helper 2.8.1; Tommy, 3 Nov): from an hour before
+  // opening to an hour and a half after closing, as the helper's Order Check.
   function inShopHours(date) {
-    if (date.getDay() === 0) return false;
-    const m = date.getHours() * 60 + date.getMinutes();
-    return m >= 7 * 60 && m <= 18 * 60 + 30;
+    const m = date.getHours() * 60 + date.getMinutes(), d = date.getDay();
+    const w = d === 0 ? [8 * 60, 15 * 60 + 30] : d === 6 ? [7 * 60, 17 * 60 + 30] : [7 * 60, 18 * 60 + 30];
+    return m >= w[0] && m <= w[1];
   }
 
   // The board's leave-out list (people no longer at Tempe, the boss): a Set, an array or "MD ST UBH YTA".

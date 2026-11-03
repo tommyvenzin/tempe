@@ -1,8 +1,8 @@
 {
-  "version": "2.8.0",
-  "name": "2.8.0 - Runs by itself",
-  "zip": "Tempe-COSTAR-Helper-v2.8.0.zip",
-  "sha256": "bf0958388a1a1a60e88cda6a9f79ebb04f478917f8e56361691df94812aa9bd2",
-  "size": 831576,
-  "notes": "Runs by itself: online pickups get SHOP and deliveries DFE, and Customer Waiting for today 14:00-16:00 or the next shop day 08:00-09:00; online orders that need no checking close themselves; Start with Windows; mobile turns itself back on; updates install themselves outside shop hours; the desk retries a job that typed nothing once; Discord alerts; Import connection. Update the RDP helper and the desk PC."
+  "version": "2.8.1",
+  "name": "2.8.1 - Tempe pickups by themselves",
+  "zip": "Tempe-COSTAR-Helper-v2.8.1.zip",
+  "sha256": "4f23cc7a67648cc8b2da01dc53a5453b8d97f0d235be38d617d510dbf2dc62cd",
+  "size": 886942,
+  "notes": "Tempe pickups by themselves: with Auto on the Tempe Orders page, Tempe pickups for today and tomorrow that aren't in COSTAR are entered by the RDP helper by itself, one at a time (pair the page once in Files & settings, Runs by itself). Open 7 days with Tempe's hours: Mon-Fri 7:00-18:30, Sat 7:00-17:30, Sun 8:00-15:30 (an hour before opening to 1.5 hours after closing). Update the RDP helper and the desk PC; upload testrun.html and discord.js too."
 }
