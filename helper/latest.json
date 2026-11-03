@@ -1,8 +1,8 @@
 {
-  "version": "2.8.1",
-  "name": "2.8.1 - Tempe pickups by themselves",
-  "zip": "Tempe-COSTAR-Helper-v2.8.1.zip",
-  "sha256": "4f23cc7a67648cc8b2da01dc53a5453b8d97f0d235be38d617d510dbf2dc62cd",
-  "size": 886942,
-  "notes": "Tempe pickups by themselves: with Auto on the Tempe Orders page, Tempe pickups for today and tomorrow that aren't in COSTAR are entered by the RDP helper by itself, one at a time (pair the page once in Files & settings, Runs by itself). Open 7 days with Tempe's hours: Mon-Fri 7:00-18:30, Sat 7:00-17:30, Sun 8:00-15:30 (an hour before opening to 1.5 hours after closing). Update the RDP helper and the desk PC; upload testrun.html and discord.js too."
+  "version": "2.9.0",
+  "name": "2.9.0 - Wholesale dry run",
+  "zip": "Tempe-COSTAR-Helper-v2.9.0.zip",
+  "sha256": "ad8dc1d578d95ed4c2598d9eb3a34fb5d376b93072a465af27a89085efcff8a0",
+  "size": 938422,
+  "notes": "Wholesale dry run: a new Wholesale tab on the RDP helper looks at COSTAR Sydney's BUF wholesale orders (Terms, card details yes/no, Sydney's stock of each tyre) and shows what it would do with each: sell, add CHECK STOCK or NO CARD DETAILS to the Comment, or leave it. Nothing is typed, sold or changed. Map COSTAR screen keeps the Cashier's customer name and memo words as a length only. Update the RDP helper and the desk PC."
 }
