@@ -1,8 +1,8 @@
 {
-  "version": "2.9.3",
-  "name": "2.9.3 - Online tab fix",
-  "zip": "Tempe-COSTAR-Helper-v2.9.3.zip",
-  "sha256": "f236b529f818482f34de8f1417153e227b91416a149ee8ee40e4f099312f4b07",
-  "size": 955721,
-  "notes": "Online tab fix: the RDP helper's Online orders tab no longer holds phone jobs and phone Repair Orders back when nobody is at the PC (it holds them only while someone has used the PC in the last 2 minutes). Also fixes a self-test with a fixed date in it that failed from 7 Nov. Update the RDP helper and the desk PC."
+  "version": "2.9.4",
+  "name": "2.9.4 - Open on another PC",
+  "zip": "Tempe-COSTAR-Helper-v2.9.4.zip",
+  "sha256": "4e0ba070ec1b435b0812d53f9e6c31a237efa45d47e15fdc1a906702363c8e78",
+  "size": 966827,
+  "notes": "Open on another PC: when the phone opens, changes or prints a Repair Order that is open on another PC, the helper presses OK on COSTAR's Document Already Open and tells the phone, so it can go straight on with another one. The Tempe Orders page's orders no longer pause over a moment of COSTAR's (a stop before Add new is tried again, up to 5 tries). Includes 2.9.3. Update the RDP helper and the desk PC."
 }
