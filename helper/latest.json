@@ -1,8 +1,8 @@
 {
-  "version": "2.9.4",
-  "name": "2.9.4 - Open on another PC",
-  "zip": "Tempe-COSTAR-Helper-v2.9.4.zip",
-  "sha256": "4e0ba070ec1b435b0812d53f9e6c31a237efa45d47e15fdc1a906702363c8e78",
-  "size": 966827,
-  "notes": "Open on another PC: when the phone opens, changes or prints a Repair Order that is open on another PC, the helper presses OK on COSTAR's Document Already Open and tells the phone, so it can go straight on with another one. The Tempe Orders page's orders no longer pause over a moment of COSTAR's (a stop before Add new is tried again, up to 5 tries). Includes 2.9.3. Update the RDP helper and the desk PC."
+  "version": "2.9.5",
+  "name": "2.9.5 - Update button",
+  "zip": "Tempe-COSTAR-Helper-v2.9.5.zip",
+  "sha256": "7e3bae241044ca23a7ad77a9cc5dadd6bb24a171d5c1c50058e76e0186172bf8",
+  "size": 969978,
+  "notes": "Update button: Update now on the RDP helper and the desk receiver asks GitHub at once (past its caches) and, if there's a newer version, installs it and restarts into it by itself: no closing and opening. Includes 2.9.4 (Repair Orders open on another PC; the page's orders not paused by a moment of COSTAR's) and 2.9.3. Update the RDP helper and the desk PC."
 }
