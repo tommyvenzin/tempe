@@ -1,8 +1,8 @@
 {
-  "version": "2.9.2",
-  "name": "2.9.2 - Wholesale Notes fix",
-  "zip": "Tempe-COSTAR-Helper-v2.9.2.zip",
-  "sha256": "c829c33efa09ef1df68df2cec63239732fd786bf487366c4e9a563d485620262",
-  "size": 949345,
-  "notes": "Wholesale Notes fix: the dry run no longer stops when the customer's Notes come up right after a Point-of-sale Memo (a window COSTAR is still making is looked at again for up to 5 s), and \"no card details\" comes only from a whole, settled read of the Notes. Nothing is typed, sold or changed. Update the RDP helper and the desk PC."
+  "version": "2.9.3",
+  "name": "2.9.3 - Online tab fix",
+  "zip": "Tempe-COSTAR-Helper-v2.9.3.zip",
+  "sha256": "f236b529f818482f34de8f1417153e227b91416a149ee8ee40e4f099312f4b07",
+  "size": 955721,
+  "notes": "Online tab fix: the RDP helper's Online orders tab no longer holds phone jobs and phone Repair Orders back when nobody is at the PC (it holds them only while someone has used the PC in the last 2 minutes). Also fixes a self-test with a fixed date in it that failed from 7 Nov. Update the RDP helper and the desk PC."
 }
