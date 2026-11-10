@@ -1,8 +1,8 @@
 {
-  "version": "2.9.5",
-  "name": "2.9.5 - Update button",
-  "zip": "Tempe-COSTAR-Helper-v2.9.5.zip",
-  "sha256": "7e3bae241044ca23a7ad77a9cc5dadd6bb24a171d5c1c50058e76e0186172bf8",
-  "size": 969978,
-  "notes": "Update button: Update now on the RDP helper and the desk receiver asks GitHub at once (past its caches) and, if there's a newer version, installs it and restarts into it by itself: no closing and opening. Includes 2.9.4 (Repair Orders open on another PC; the page's orders not paused by a moment of COSTAR's) and 2.9.3. Update the RDP helper and the desk PC."
+  "version": "2.9.6",
+  "name": "2.9.6 - Phone RO fix",
+  "zip": "Tempe-COSTAR-Helper-v2.9.6.zip",
+  "sha256": "a0b6c056e835539c2aa137c815d1c90811a3ec06b7eb901652cb1210e65e64f8",
+  "size": 986584,
+  "notes": "Phone RO fix: a Repair Order kept open for you in COSTAR Tempe (an online order's, or one waiting for review) no longer holds the phone's Repair Orders back: it stays exactly as it is, and the one you ask for opens beside it. They also go into COSTAR Tempe whichever branch the helper is set to. Includes 2.9.5 (Update now) and 2.9.4. Update the RDP helper (and the desk PC, to keep them the same)."
 }
