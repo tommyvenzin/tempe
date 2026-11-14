@@ -1,8 +1,8 @@
 {
-  "version": "2.9.8",
-  "name": "2.9.8 - Wholesale speed test (dry run)",
-  "zip": "Tempe-COSTAR-Helper-v2.9.8.zip",
-  "sha256": "7d1bd5813ed97a0c9586ce009a7447c4e70cb0245a054e2d07a75724cad0d703",
-  "size": 1070724,
-  "notes": "Wholesale speed test (dry run): the wholesale helper gets an Approach choice (the 2.9.7 approach by default; Back to 2.9.7 returns to it) and a Speed test that opens the same BUF orders with each approach in turn (finding the row directly, ready checks instead of 1.5 s waits, only the list columns needed, shorter timers, all four, search by order number, the list filtered to BUF) and reports which is fastest with the same results. Still a dry run: nothing is typed, sold or changed, and every order is closed again. Update the RDP helper (and the desk PC, to keep them the same) and the wholesale helper."
+  "version": "2.9.9",
+  "name": "2.9.9 - Speed comparison on the Wholesale tab (dry run)",
+  "zip": "Tempe-COSTAR-Helper-v2.9.9.zip",
+  "sha256": "012e49d5917173d9726224d8f2e2ae92f9f0c17114a34e792df77c582ffb721c",
+  "size": 1079970,
+  "notes": "Speed comparison on the Wholesale tab (dry run): the RDP helper's Wholesale tab gets Run speed comparison and the Approach box. The comparison opens the same BUF orders with each approach in turn (the 2.9.7 approach first and last, each improvement, all four, by order number, filtered to BUF) in your usual session, ignoring what was previewed, holding COSTAR until it ends, and reports the fastest reliable approach (also in Save diagnostics). Still a dry run: nothing is typed, sold or changed, and every order is closed again. Update the RDP helper (and the desk PC, to keep them the same)."
 }
