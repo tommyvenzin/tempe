@@ -1,8 +1,8 @@
 {
-  "version": "2.9.6",
-  "name": "2.9.6 - Phone RO fix",
-  "zip": "Tempe-COSTAR-Helper-v2.9.6.zip",
-  "sha256": "a0b6c056e835539c2aa137c815d1c90811a3ec06b7eb901652cb1210e65e64f8",
-  "size": 986584,
-  "notes": "Phone RO fix: a Repair Order kept open for you in COSTAR Tempe (an online order's, or one waiting for review) no longer holds the phone's Repair Orders back: it stays exactly as it is, and the one you ask for opens beside it. They also go into COSTAR Tempe whichever branch the helper is set to. Includes 2.9.5 (Update now) and 2.9.4. Update the RDP helper (and the desk PC, to keep them the same)."
+  "version": "2.9.7",
+  "name": "2.9.7 - Wholesale loop (dry run)",
+  "zip": "Tempe-COSTAR-Helper-v2.9.7.zip",
+  "sha256": "bea5a489ece1e5618eb47a166d0cd4a2f08c74b04dc6d27f4b51b7095f83965e",
+  "size": 1035994,
+  "notes": "Wholesale loop (dry run): a wholesale helper (Start-Wholesale.cmd) for a Windows session of its own checks COSTAR Sydney's wholesale orders by itself from 06:00 to 18:00, up to 100 a pass, with the new rules (Sydney's = Avail 4 or more, [stock] [card] [review] [items], staff's go, Comment variants, Document Already Open skipped). Still a dry run: nothing is typed, sold or changed; Discord messages say DRY RUN. The RDP helper's Wholesale tab uses the same rules. Update the RDP helper (and the desk PC, to keep them the same)."
 }
