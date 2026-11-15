@@ -1,8 +1,8 @@
 {
-  "version": "2.9.9",
-  "name": "2.9.9 - Speed comparison on the Wholesale tab (dry run)",
-  "zip": "Tempe-COSTAR-Helper-v2.9.9.zip",
-  "sha256": "012e49d5917173d9726224d8f2e2ae92f9f0c17114a34e792df77c582ffb721c",
-  "size": 1079970,
-  "notes": "Speed comparison on the Wholesale tab (dry run): the RDP helper's Wholesale tab gets Run speed comparison and the Approach box. The comparison opens the same BUF orders with each approach in turn (the 2.9.7 approach first and last, each improvement, all four, by order number, filtered to BUF) in your usual session, ignoring what was previewed, holding COSTAR until it ends, and reports the fastest reliable approach (also in Save diagnostics). Still a dry run: nothing is typed, sold or changed, and every order is closed again. Update the RDP helper (and the desk PC, to keep them the same)."
+  "version": "2.9.10",
+  "name": "2.9.10 - Search by number, list recovery, comparison report (dry run)",
+  "zip": "Tempe-COSTAR-Helper-v2.9.10.zip",
+  "sha256": "1187f3f7095d3ee25057423fe30a6cdb760ee168be310d024dbf284c6d797ed9",
+  "size": 1107259,
+  "notes": "Search by number, list recovery, comparison report (dry run): All four, search by order number becomes the approach for dry runs (and the planned live lookup). Each number search checks COSTAR Sydney's Wholesale Orders view and the exact order number, and skips an order no longer listed or eligible. A list that hasn't finished loading is waited for and read again (60 s at most). The speed comparison picks a broader sample (several tyre lines, wheels, Notes, a memo), compares against a complete 2.9.7 pass, separates matches, differences, unread and not-reached results, lists what wasn't tested and records what was seen at a stop for someone at the PC. Still a dry run: nothing is typed, sold or changed. Update the RDP helper (and the desk PC, to keep them the same)."
 }
