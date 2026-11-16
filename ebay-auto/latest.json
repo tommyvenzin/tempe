@@ -1,0 +1,18 @@
+{
+  "product": "Ebay-auto",
+  "version": "1.1.0",
+  "name": "1.1.0 - Sydney by itself, tray, one-click updates",
+  "notes": "Finds COSTAR Sydney by itself among other branches (several Sydney: the earliest-started one, kept while it is valid); compact windows that hide fully in the notification area; one-click updates from GitHub.",
+  "published": "2026-11-16",
+  "protocol": 1,
+  "receiver": {
+    "zip": "Ebay-auto-Receiver-v1.1.0.zip",
+    "sha256": "ea193e30f95f7dee187ab82b95255cdc790c24b35b5034346d641d7989199bcc",
+    "size": 806076
+  },
+  "worker": {
+    "zip": "Ebay-auto-Worker-v1.1.0.zip",
+    "sha256": "e96690a1d40d6590a0a6c5c862b5ba1da054946d5b5ca51cb747612abd191db5",
+    "size": 802278
+  }
+}
