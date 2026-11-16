@@ -1,18 +1,18 @@
 {
   "product": "Ebay-auto",
-  "version": "1.1.0",
-  "name": "1.1.0 - Sydney by itself, tray, one-click updates",
-  "notes": "Finds COSTAR Sydney by itself among other branches (several Sydney: the earliest-started one, kept while it is valid); compact windows that hide fully in the notification area; one-click updates from GitHub.",
-  "published": "2026-11-16",
+  "version": "1.1.1",
+  "name": "1.1.1 - ez, next (each verified Repair Order left open for Seb)",
+  "notes": "Each entered and verified eBay Repair Order is left open in COSTAR Sydney for Seb to check and close; the worker says ez, next and goes on with the next order in a new Repair Order.",
+  "published": "2026-11-17",
   "protocol": 1,
   "receiver": {
-    "zip": "Ebay-auto-Receiver-v1.1.0.zip",
-    "sha256": "ea193e30f95f7dee187ab82b95255cdc790c24b35b5034346d641d7989199bcc",
-    "size": 806076
+    "zip": "Ebay-auto-Receiver-v1.1.1.zip",
+    "sha256": "014e0a2f4d16276663cc708bee489618ee9d144d8c44c09cf5d0103c8063ba47",
+    "size": 813164
   },
   "worker": {
-    "zip": "Ebay-auto-Worker-v1.1.0.zip",
-    "sha256": "e96690a1d40d6590a0a6c5c862b5ba1da054946d5b5ca51cb747612abd191db5",
-    "size": 802278
+    "zip": "Ebay-auto-Worker-v1.1.1.zip",
+    "sha256": "62d901e505c0af185726d1d2e2de4f57964d6326f0374bdf9ab13f96f5d444fd",
+    "size": 809367
   }
 }
