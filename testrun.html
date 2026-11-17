@@ -376,8 +376,11 @@
                 email: text(address.email) || customer.email, shipVia: text(data.shipVia).toUpperCase(),
                 instructions: address.estimatedFittingDate ? 'EST FITTING: ' + text(address.estimatedFittingDate).toUpperCase() : ''
             };
+            // 18 Nov (helper 2.9.13): an address with no state goes to the helper as it is, which looks it up by that address's
+            // own suburb and postcode and refuses the order (saying why) unless they are in exactly one state. A state that
+            // isn't one of the eight, or a missing street, suburb or postcode, is still refused here.
             for (const [label, addressToCheck] of [['billing', customer], ['delivery', shipping]]) {
-                if (!addressToCheck.streetAddress || !addressToCheck.suburb || !/^(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)$/.test(addressToCheck.state) || !/^\d{4}$/.test(addressToCheck.postcode))
+                if (!addressToCheck.streetAddress || !addressToCheck.suburb || (addressToCheck.state && !/^(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)$/.test(addressToCheck.state)) || !/^\d{4}$/.test(addressToCheck.postcode))
                     throw new Error('Check the ' + label + ' street, suburb, state and postcode.');
             }
             if (!shipping.name) throw new Error('The delivery recipient is missing.');
@@ -388,6 +391,10 @@
                 comment: 'DFE' + (requiresReview ? ' - PACKAGE REVIEW' : ''), totalCents, lines };
         }
         if (lines.some(line => line.kind === 'package')) throw new Error('Package pickup orders still need their component entry mapped.');
+        // 18 Nov (helper 2.9.11): a pickup carries its billing address's state too, as a delivery does, so the helper can
+        // make a new customer's COSTAR account. None on the website's billing address (or not one of the eight): empty.
+        const billingState = text(data.billingAddress && data.billingAddress.state).toUpperCase();
+        customer.state = /^(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)$/.test(billingState) ? billingState : '';
         const slot = pickup(data.pickupPreview);
         // Any store's pickup can be sent (helper 2.3.0+ checks it against the selected COSTAR
         // branch). Other stores use schema 3, which helpers before 2.3.0 refuse instead of
@@ -765,24 +772,62 @@
             // unit lines and keeping the full original block for display.
             for (let index = useful.length - 1; index >= 2; index--) {
                 const match = useful[index].match(/^(.*?)\s+(\d{4})$/);
-                if (match) return {
-                    recipient: useful[0] || "",
-                    streetAddress: useful.slice(1, index).join(", "),
-                    addressLine1: useful[1] || "",
-                    addressLine2: useful.slice(2, index).join(", "),
-                    suburb: match[1].trim().replace(/\s+(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)$/i, ""),
-                    postcode: match[2],
-                    state: addressState(match[1] + " " + useful.slice(index + 1).join(" "))
-                };
+                if (match) {
+                    // 18 Nov (helper 2.9.12): the state only where it is written as the state (addressState).
+                    const found = addressState(match[1], useful.slice(index + 1));
+                    return {
+                        recipient: useful[0] || "",
+                        streetAddress: useful.slice(1, index).join(", "),
+                        addressLine1: useful[1] || "",
+                        addressLine2: useful.slice(2, index).join(", "),
+                        suburb: found.suburb,
+                        postcode: match[2],
+                        state: found.state
+                    };
+                }
             }
             return { recipient: useful[0] || "", streetAddress: useful[1] || "", addressLine1: useful[1] || "", addressLine2: "", suburb: useful[2] || "", postcode: "", state: "" };
         }
 
-        function addressState(text) {
-            const states = { "NEW SOUTH WALES": "NSW", "VICTORIA": "VIC", "QUEENSLAND": "QLD", "SOUTH AUSTRALIA": "SA", "WESTERN AUSTRALIA": "WA", "TASMANIA": "TAS", "NORTHERN TERRITORY": "NT", "AUSTRALIAN CAPITAL TERRITORY": "ACT" };
-            const value = uppercaseSafe(text);
-            for (const [name, code] of Object.entries(states)) if (value.includes(name)) return code;
-            return value.match(/\b(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b/)?.[1] || "";
+        // The eight states by code and by full name, read as the eBay extension's stateCode reads them (case, extra spaces
+        // and dots don't matter: "nsw", "N.S.W.", "New  South Wales" are NSW). PLACES_ENDING_IN_A_STATE: places whose own
+        // names end in a state's name (Australia Post's list as of 6 Sep 2025), never read as "place + state".
+        const STATE_CODES = ["NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT"];
+        const STATE_NAMES = { "NEW SOUTH WALES": "NSW", "VICTORIA": "VIC", "QUEENSLAND": "QLD", "SOUTH AUSTRALIA": "SA", "WESTERN AUSTRALIA": "WA", "TASMANIA": "TAS", "NORTHERN TERRITORY": "NT", "AUSTRALIAN CAPITAL TERRITORY": "ACT" };
+        const PLACES_ENDING_IN_A_STATE = ["MOUNT VICTORIA", "MT VICTORIA", "PORT VICTORIA", "PT VICTORIA", "UNIVERSITY OF QUEENSLAND", "UNIVERSITY OF TASMANIA"];
+        function stateWords(text) { return uppercaseSafe(text).replace(/\./g, "").replace(/,/g, " ").replace(/\s+/g, " ").trim(); }
+        // A whole text that is a state ("NSW", " n.s.w. ", "N S W", "New  South Wales": NSW); anything else: "".
+        function stateOf(text) {
+            const value = stateWords(text);
+            if (STATE_NAMES[value]) return STATE_NAMES[value];
+            const short = value.replace(/\s/g, "");
+            return STATE_CODES.includes(short) ? short : "";
+        }
+        // 18 Nov (helper 2.9.12): the suburb and the state of a postcode line's part before the postcode: a state written at
+        // its end ("Tempe NSW", "Tempe, New South Wales", "TEMPE N.S.W.", "Tempe NSW Australia"), else on a line of its own
+        // after it ("New South Wales", "NSW, Australia"). A state's name inside a place's name is the place's: "VICTORIA PARK
+        // WA" is WA, "VICTORIA POINT" and "MOUNT VICTORIA" have no state (before 2.9.12 both read as VIC). Else, as before,
+        // a state code anywhere in them. None: the suburb as it is, state "".
+        function addressState(beforePostcode, after) {
+            const words = String(beforePostcode || "").trim().split(/\s+/).filter(Boolean);
+            const plain = words.map(stateWords);
+            const suburbOf = count => words.slice(0, count).join(" ").replace(/,+$/, "").trim();
+            let end = words.length;
+            if (end > 2 && plain[end - 1] === "AUSTRALIA" && plain[end - 2] !== "SOUTH" && plain[end - 2] !== "WESTERN") end--;
+            for (const size of [3, 2, 1]) {
+                if (end - size < 1) continue;
+                const tail = plain.slice(end - size, end).join(" ");
+                const code = STATE_NAMES[tail] || (size === 1 && STATE_CODES.includes(tail) ? tail : "");
+                if (!code) continue;
+                if (STATE_NAMES[tail] && PLACES_ENDING_IN_A_STATE.includes(plain.slice(0, end).join(" "))) break;
+                return { suburb: suburbOf(end - size), state: code };
+            }
+            for (const line of after || []) {
+                const code = stateOf(stateWords(line).replace(/\s+AUSTRALIA$/, ""));
+                if (code) return { suburb: suburbOf(words.length), state: code };
+            }
+            const any = stateWords([beforePostcode].concat(after || []).join(" ")).match(/\b(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b/);
+            return { suburb: suburbOf(words.length), state: any ? any[1] : "" };
         }
 
         function addressDetail(lines, label) {

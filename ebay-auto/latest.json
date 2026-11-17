@@ -1,18 +1,18 @@
 {
   "product": "Ebay-auto",
-  "version": "1.1.2",
-  "name": "1.1.2 - New buyers' COSTAR accounts",
-  "notes": "A new buyer (COSTAR's Customer Not found) gets a COSTAR customer account when the eBay order has every detail COSTAR's new-customer form asks for: the magnifier beside Account#, Add new, every box checked against the order, OK once per order, then Ship to. A detail missing: no account, the order goes on as before.",
-  "published": "2026-11-17",
+  "version": "1.1.5",
+  "name": "1.1.5 - Account step waits for COSTAR's windows",
+  "notes": "The new-customer account step now waits until COSTAR has finished drawing its customer search and its new-customer form before deciding what they are (on 18 Nov the search was looked at too soon, part-drawn, and the order stopped). Includes 1.1.3 and 1.1.4 (never uploaded): an eBay order with no state gets in (with the 404 extension 1.5.1), its state looked up by suburb and postcode. Update both parts, then the extension.",
+  "published": "2026-11-18",
   "protocol": 1,
   "receiver": {
-    "zip": "Ebay-auto-Receiver-v1.1.2.zip",
-    "sha256": "04f8510ac4d7c23bfb7a181f25845d45334b4f7be206c5897b3d59fdff1ad8c5",
-    "size": 844029
+    "zip": "Ebay-auto-Receiver-v1.1.5.zip",
+    "sha256": "5bcb18737fb1c93c7810361716ab03d7295c6e616462cb04e510f12866de58ee",
+    "size": 958380
   },
   "worker": {
-    "zip": "Ebay-auto-Worker-v1.1.2.zip",
-    "sha256": "9ea318bbe18e75ce32e5cc5b48ccd568d2450ec2e5f9871c547375d1c2b3a1ea",
-    "size": 840214
+    "zip": "Ebay-auto-Worker-v1.1.5.zip",
+    "sha256": "f8f9049b8d178e9857fcb4b6a55f8e0a9038fa6b2da22db9e082cf56a34ee021",
+    "size": 954562
   }
 }

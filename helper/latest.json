@@ -1,8 +1,8 @@
 {
-  "version": "2.9.11",
-  "name": "2.9.11 - New customer accounts",
-  "zip": "Tempe-COSTAR-Helper-v2.9.11.zip",
-  "sha256": "0464b5f143dcadee4de52f91aa8e58b79bbea4192d67fa012715028ed45bbdfb",
-  "size": 1138792,
-  "notes": "New customer accounts: on online orders (pickups and deliveries) and eBay orders, when the phone lookup ends with COSTAR's Customer Not found, Account# is blank and the order has every detail COSTAR's new-customer form asks for (name, street, suburb, state, postcode, phone), the helper makes the customer's COSTAR account: the magnifier beside Account#, Add new, every required box of the form checked against the order, OK once per order, the account confirmed, the customer panel checked again (COSTAR's account number and name kept), then Ship to. A detail missing: no account, the order goes on as before. An unsure result after OK stops the order and is never tried again for it. Switch: Files & settings. Update the RDP helper (and the desk PC, to keep them the same)."
+  "version": "2.9.14",
+  "name": "2.9.14 - New account window fix",
+  "zip": "Tempe-COSTAR-Helper-v2.9.14.zip",
+  "sha256": "3c241254069474378e19ad7b1fe9ca601b95f182e49f8b467af65625ed7f64ad",
+  "size": 1259899,
+  "notes": "New account window fix (includes 2.9.12 and 2.9.13, never uploaded): the new-customer account step now waits until COSTAR has finished drawing its customer search and its new-customer form before deciding what they are (on 18 Nov 08:15 the search was looked at 0.2 s after the magnifier, part-drawn, and the order stopped). Also: an online delivery or eBay order whose address has no state reaches the helper; each address's state is found before the checks that need it (written first and never replaced; none: looked up by that address's own suburb and postcode, one state only; not found: refused as before, saying which address and why). Upload website/testrun.html too. Update the RDP helper (and the desk PC, to keep them the same)."
 }
