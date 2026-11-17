@@ -1,18 +1,18 @@
 {
   "product": "Ebay-auto",
-  "version": "1.1.1",
-  "name": "1.1.1 - ez, next (each verified Repair Order left open for Seb)",
-  "notes": "Each entered and verified eBay Repair Order is left open in COSTAR Sydney for Seb to check and close; the worker says ez, next and goes on with the next order in a new Repair Order.",
+  "version": "1.1.2",
+  "name": "1.1.2 - New buyers' COSTAR accounts",
+  "notes": "A new buyer (COSTAR's Customer Not found) gets a COSTAR customer account when the eBay order has every detail COSTAR's new-customer form asks for: the magnifier beside Account#, Add new, every box checked against the order, OK once per order, then Ship to. A detail missing: no account, the order goes on as before.",
   "published": "2026-11-17",
   "protocol": 1,
   "receiver": {
-    "zip": "Ebay-auto-Receiver-v1.1.1.zip",
-    "sha256": "014e0a2f4d16276663cc708bee489618ee9d144d8c44c09cf5d0103c8063ba47",
-    "size": 813164
+    "zip": "Ebay-auto-Receiver-v1.1.2.zip",
+    "sha256": "04f8510ac4d7c23bfb7a181f25845d45334b4f7be206c5897b3d59fdff1ad8c5",
+    "size": 844029
   },
   "worker": {
-    "zip": "Ebay-auto-Worker-v1.1.1.zip",
-    "sha256": "62d901e505c0af185726d1d2e2de4f57964d6326f0374bdf9ab13f96f5d444fd",
-    "size": 809367
+    "zip": "Ebay-auto-Worker-v1.1.2.zip",
+    "sha256": "9ea318bbe18e75ce32e5cc5b48ccd568d2450ec2e5f9871c547375d1c2b3a1ea",
+    "size": 840214
   }
 }
