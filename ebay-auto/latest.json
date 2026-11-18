@@ -1,18 +1,18 @@
 {
   "product": "Ebay-auto",
-  "version": "1.1.6",
-  "name": "1.1.6 - Repair Order number on the clipboard",
-  "notes": "Before \"ez, next\", the worker now copies the verified Repair Order's number to the clipboard as the number, one space and DFE (for example 01234567 DFE; leading zeros kept, nothing else), and reads it back. A Repair Order with no number yet, or a number that can't be read for sure or was copied before, is never copied: the order says CHECK BY HAND (no number yet: press Next # on it, then copy it) and the previous order's number is taken off the clipboard. The worker doesn't press Next # yet. Update the worker (and the receiver, to keep them the same); the extension (1.5.1) is unchanged.",
+  "version": "1.1.7",
+  "name": "1.1.7 - Next # and the Repair Order number on the clipboard",
+  "notes": "Before \"ez, next\", the worker now presses Next # once when the Repair Order's number box is blank, waits for the number, and copies it to the clipboard as the number, one space and DFE (for example 01234567 DFE; leading zeros kept, nothing else), then reads the clipboard back. Never pressed twice; if no number can be had or read for sure, the order says CHECK BY HAND and the previous order's number is taken off the clipboard. Includes the clipboard safeguards introduced in 1.1.6 and a blocking-window check before copying. Update the worker (and the receiver, to keep them the same); the extension (1.5.1) is unchanged.",
   "published": "2026-11-18",
   "protocol": 1,
   "receiver": {
-    "zip": "Ebay-auto-Receiver-v1.1.6.zip",
-    "sha256": "e92d6b01e6243d9fc80c12ee9a7bfa8fee2bbcbf7b3c74cebd2d1b8c4330aca7",
-    "size": 976103
+    "zip": "Ebay-auto-Receiver-v1.1.7.zip",
+    "sha256": "20187553cc42e934b126b78c465d8bac133b3113d099473cf9c761752b4a24de",
+    "size": 985292
   },
   "worker": {
-    "zip": "Ebay-auto-Worker-v1.1.6.zip",
-    "sha256": "75894a787e8977cb5caacc5e3df7ff19f87aa3d8acb7b3330af24a977d9240dd",
-    "size": 972280
+    "zip": "Ebay-auto-Worker-v1.1.7.zip",
+    "sha256": "1ce1eb0cc8257af423b1bedb4f7e6ca14cf51da170cfc7dc70a5687cbae00bbf",
+    "size": 981473
   }
 }
