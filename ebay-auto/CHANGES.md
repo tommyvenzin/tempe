@@ -1,5 +1,14 @@
 # Ebay-auto changes
 
+## Extension 1.5.3 - 19 November 2026
+
+- Wheel-only listings drop one numeric SKU suffix: 903189096S-11897 becomes 903189096S.
+- The copy panel, Copy all and Send to COSTAR use the same corrected code. The original-to-COSTAR mapping is shown on the panel.
+- Tyres, packages, accessories, missing/conflicting item titles and complex multi-hyphen codes keep their current handling. Item titles are matched to their own item ID.
+- Quantity, pricing, stock checks and existing-order retry safeguards stay unchanged.
+- Extension-only update: receiver and worker remain 1.1.8. Replace the existing extension folder, reload the extension and refresh eBay.
+- Validation: 19 parser/formatter groups and 11 payload groups passed; all JavaScript syntax checks and ZIP byte comparisons passed. No live COSTAR order was sent.
+
 ## 1.1.8 - 19 November 2026
 
 - Contact info phone first; Ship to fallback only when no account is found; restore Contact info if both miss.
