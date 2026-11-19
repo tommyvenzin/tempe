@@ -1,5 +1,17 @@
 # Ebay-auto changes
 
+## 1.1.9 - 20 November 2026
+
+- Each eBay order goes into COSTAR Sydney (Br1) or COSTAR Tempe (Br11): Seb chooses with two buttons in the 404 extension 1.6.0 panel.
+- Suggested Tempe when an item's own title has the whole word wheel/wheels/package/packages; otherwise Sydney; nothing when titles can't be read.
+- Choosing against the suggestion (or with unread titles) asks to confirm in the panel. Package SKUs are never trimmed.
+- Same receiver and worker for both branches, one order at a time; one chosen COSTAR per branch (earliest started); never moved to the other branch.
+- Order payload tempe.ebay-order.v3, protocol 2. Stored 1.1.8 orders stay Sydney orders and keep their duplicate-order hashes (a 1.1.8 order sent again with the same details is the same order, not a CONFLICT).
+- Stock prompt, statuses, alerts and diagnostics name the order's branch.
+- Includes the extension-only 1.5.3 wheel SKU fix (published 19 November).
+
+Requires BOTH app parts 1.1.9 and extension 1.6.0 (a 1.1.8 part gets no orders from a 1.1.9 part). The first live Tempe order still needs a watched check.
+
 ## Extension 1.5.3 - 19 November 2026
 
 - Wheel-only listings drop one numeric SKU suffix: 903189096S-11897 becomes 903189096S.

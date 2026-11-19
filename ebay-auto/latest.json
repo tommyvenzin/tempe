@@ -1,18 +1,18 @@
 {
   "product": "Ebay-auto",
-  "version": "1.1.8",
-  "name": "1.1.8 - Phones, names, stock and addresses",
-  "notes": "Contact info first with Ship to fallback. Billing uses Order/Buyer name; delivery uses Ship to. Sydney stock above 2 continues; 0-2 needs ok/check; negative needs yes to contact the customer. check adds the low-stock comment. Unit/slash addresses and spacing cleaned up. Repair Orders stay open. Update BOTH parts and extension 1.5.2; re-send untouched old queued orders. Watch the first live stock prompt.",
-  "published": "2026-11-19",
-  "protocol": 1,
+  "version": "1.1.9",
+  "name": "1.1.9 - Sydney or Tempe",
+  "notes": "Each eBay order goes into COSTAR Sydney (Br1) or COSTAR Tempe (Br11), chosen with two buttons in the 404 extension 1.6.0 panel (wheel/package titles suggest Tempe; the other choice asks to confirm). Same receiver and worker, one order at a time. Update BOTH parts to 1.1.9 and the extension to 1.6.0: a 1.1.8 part gets no orders from a 1.1.9 part. Old 1.1.8 orders stay Sydney orders.",
+  "published": "2026-11-20",
+  "protocol": 2,
   "receiver": {
-    "zip": "Ebay-auto-Receiver-v1.1.8.zip",
-    "sha256": "681c276c08c6767c775ea6dd29da13cf1227f8d453f83353d1286f3904220055",
-    "size": 977467
+    "zip": "Ebay-auto-Receiver-v1.1.9.zip",
+    "sha256": "dd35ae333699aa1aeeb647d3f30d278a93c16eac5f649ccb0b3386c4d5749a20",
+    "size": 1006179
   },
   "worker": {
-    "zip": "Ebay-auto-Worker-v1.1.8.zip",
-    "sha256": "bc6e83543817b005cfecd755f2c2647d4aa3166f47f92dbc1cf249b5a4689aed",
-    "size": 973628
+    "zip": "Ebay-auto-Worker-v1.1.9.zip",
+    "sha256": "e88735185456886405b6502e921b71cef5b93e4089962f890c086f2fae1985d9",
+    "size": 1002359
   }
 }
