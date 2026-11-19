@@ -1,18 +1,18 @@
 {
   "product": "Ebay-auto",
-  "version": "1.1.7",
-  "name": "1.1.7 - Next # and the Repair Order number on the clipboard",
-  "notes": "Before \"ez, next\", the worker now presses Next # once when the Repair Order's number box is blank, waits for the number, and copies it to the clipboard as the number, one space and DFE (for example 01234567 DFE; leading zeros kept, nothing else), then reads the clipboard back. Never pressed twice; if no number can be had or read for sure, the order says CHECK BY HAND and the previous order's number is taken off the clipboard. Includes the clipboard safeguards introduced in 1.1.6 and a blocking-window check before copying. Update the worker (and the receiver, to keep them the same); the extension (1.5.1) is unchanged.",
-  "published": "2026-11-18",
+  "version": "1.1.8",
+  "name": "1.1.8 - Phones, names, stock and addresses",
+  "notes": "Contact info first with Ship to fallback. Billing uses Order/Buyer name; delivery uses Ship to. Sydney stock above 2 continues; 0-2 needs ok/check; negative needs yes to contact the customer. check adds the low-stock comment. Unit/slash addresses and spacing cleaned up. Repair Orders stay open. Update BOTH parts and extension 1.5.2; re-send untouched old queued orders. Watch the first live stock prompt.",
+  "published": "2026-11-19",
   "protocol": 1,
   "receiver": {
-    "zip": "Ebay-auto-Receiver-v1.1.7.zip",
-    "sha256": "20187553cc42e934b126b78c465d8bac133b3113d099473cf9c761752b4a24de",
-    "size": 985292
+    "zip": "Ebay-auto-Receiver-v1.1.8.zip",
+    "sha256": "681c276c08c6767c775ea6dd29da13cf1227f8d453f83353d1286f3904220055",
+    "size": 977467
   },
   "worker": {
-    "zip": "Ebay-auto-Worker-v1.1.7.zip",
-    "sha256": "1ce1eb0cc8257af423b1bedb4f7e6ca14cf51da170cfc7dc70a5687cbae00bbf",
-    "size": 981473
+    "zip": "Ebay-auto-Worker-v1.1.8.zip",
+    "sha256": "bc6e83543817b005cfecd755f2c2647d4aa3166f47f92dbc1cf249b5a4689aed",
+    "size": 973628
   }
 }
