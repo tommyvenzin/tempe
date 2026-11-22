@@ -1,8 +1,8 @@
 {
-  "version": "2.9.14",
-  "name": "2.9.14 - New account window fix",
-  "zip": "Tempe-COSTAR-Helper-v2.9.14.zip",
-  "sha256": "3c241254069474378e19ad7b1fe9ca601b95f182e49f8b467af65625ed7f64ad",
-  "size": 1259899,
-  "notes": "New account window fix (includes 2.9.12 and 2.9.13, never uploaded): the new-customer account step now waits until COSTAR has finished drawing its customer search and its new-customer form before deciding what they are (on 18 Nov 08:15 the search was looked at 0.2 s after the magnifier, part-drawn, and the order stopped). Also: an online delivery or eBay order whose address has no state reaches the helper; each address's state is found before the checks that need it (written first and never replaced; none: looked up by that address's own suburb and postcode, one state only; not found: refused as before, saying which address and why). Upload website/testrun.html too. Update the RDP helper (and the desk PC, to keep them the same)."
+  "version": "2.9.15",
+  "name": "2.9.15 - Invoice read (dry run)",
+  "zip": "Tempe-COSTAR-Helper-v2.9.15.zip",
+  "sha256": "8767dbc63280be135fbd89a90e8b03ea4d1e66ed13cac8e6adcf6273f406fb98",
+  "size": 1331277,
+  "notes": "Invoice read (dry run): a new Invoice tab reads the COSTAR Invoice that is already open: its number, order, status and branch; every X field and every Ship to (Y) field, kept apart with COSTAR's own labels (or a plain description where COSTAR's box has none); every line with its exact Item/SKU (on invoices over 25 lines it scrolls the line list and back, nothing else is pressed); freight (Item F) shown on its own as an amount, zero, no entry or unreadable; totals checked against the lines. Copy Buffalo Details copies a labelled summary in which every rule not yet decided (sender, X or Y, references, weights, service) is UNRESOLVED; it always says NOT READY FOR BOOKING. Nothing is sold, saved, booked, printed or sent; Sold is a disabled button. Not yet checked on a live COSTAR. Update the RDP helper (and the desk PC, to keep them the same)."
 }
