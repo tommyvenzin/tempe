@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#070b11">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tempe">
+    <title>Tempe Orders</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./icon-180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+    <link rel="stylesheet" href="./app.css?v=20261124-app1">
+    <script src="./app-shell.js?v=20261124-app1"></script>
+    <style>
+        :root {
+            --bg: #070b11;
+            --card: #101720;
+            --card-2: #0c121a;
+            --line: rgba(148, 163, 184, 0.18);
+            --line-strong: rgba(148, 163, 184, 0.34);
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-strong: #0ea5e9;
+            --green: #34d399;
+            --amber: #fbbf24;
+            --red: #fb7185;
+            --radius: 14px;
+        }
+        * { box-sizing: border-box; }
+        html { background: var(--bg); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(32px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+            color: var(--text);
+            background:
+                radial-gradient(circle at 10% -10%, rgba(14, 165, 233, 0.16), transparent 34%),
+                radial-gradient(circle at 90% 0%, rgba(52, 211, 153, 0.09), transparent 28%),
+                linear-gradient(180deg, #090d14 0%, var(--bg) 56%, #05070b 100%);
+            background-attachment: fixed;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+            font-size: 16px;
+            line-height: 1.45;
+            -webkit-tap-highlight-color: transparent;
+        }
+        html.tempe-app body {
+            padding-top: calc(var(--tempe-appbar-h, 0px) + 16px);
+        }
+        main { width: min(640px, 100%); margin: 0 auto; display: grid; gap: 14px; }
+        h1 { margin: 4px 0 0; font-size: 1.7rem; line-height: 1.15; letter-spacing: -0.01em; }
+        h2 { margin: 0 0 8px; font-size: 1.12rem; }
+        p { margin: 0 0 10px; }
+        .lead { color: var(--muted); margin: 4px 0 0; }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand img { width: 52px; height: 52px; border-radius: 12px; flex: none; }
+        .card {
+            padding: 16px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--card);
+        }
+        .card[hidden], [hidden] { display: none !important; }
+        .card.install { border-color: rgba(56, 189, 248, 0.35); background: linear-gradient(135deg, rgba(14, 165, 233, 0.14), rgba(16, 23, 32, 0.95)); }
+        ol, ul { margin: 0; padding-left: 1.3em; }
+        li { margin: 4px 0; }
+        .muted { color: var(--muted); }
+        .small { font-size: 0.9rem; }
+        .tiles { display: grid; gap: 12px; grid-template-columns: 1fr; }
+        @media (min-width: 520px) { .tiles { grid-template-columns: 1fr 1fr; } }
+        .tile {
+            display: grid;
+            gap: 6px;
+            min-height: 112px;
+            padding: 18px 16px;
+            border: 1px solid var(--line-strong);
+            border-radius: var(--radius);
+            background: linear-gradient(160deg, #13202d, var(--card-2));
+            color: var(--text);
+            text-decoration: none;
+        }
+        .tile:active { transform: scale(0.99); background: #142231; }
+        .tile-title { font-size: 1.25rem; font-weight: 750; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .tile-title::after { content: "\203A"; color: var(--accent); font-size: 1.6rem; line-height: 1; }
+        .tile-desc { color: var(--muted); font-size: 0.92rem; }
+        .status { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; font-weight: 600; overflow-wrap: anywhere; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--muted); }
+        .status[data-state="ok"] { color: #a7f3d0; }
+        .status[data-state="ok"] .dot { background: var(--green); box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.15); }
+        .status[data-state="warn"] { color: #fde68a; }
+        .status[data-state="warn"] .dot { background: var(--amber); box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.14); }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 0 18px;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            font: inherit;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            text-decoration: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .btn-primary { background: var(--accent-strong); color: #04121c; }
+        .btn-primary:active { background: var(--accent); }
+        .btn-ghost { background: transparent; color: var(--text); border-color: var(--line-strong); }
+        .btn-danger { background: transparent; color: #fecdd3; border-color: rgba(251, 113, 133, 0.45); }
+        .btn:disabled { opacity: 0.55; }
+        .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+        .btn-row .btn { flex: 1 1 140px; }
+        .way { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+        .way h3 { margin: 0 0 6px; font-size: 1rem; }
+        label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 0.92rem; }
+        textarea {
+            display: block;
+            width: 100%;
+            min-height: 96px;
+            padding: 12px;
+            border: 1px solid var(--line-strong);
+            border-radius: 12px;
+            background: #0a1018;
+            color: var(--text);
+            font: inherit;
+            font-size: 16px; /* stops iOS zooming on focus */
+            resize: vertical;
+            overflow-wrap: anywhere;
+        }
+        textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+        .msg { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 0.95rem; }
+        .msg:empty { display: none; }
+        .msg[data-kind="error"] { color: #fecdd3; background: rgba(251, 113, 133, 0.12); border: 1px solid rgba(251, 113, 133, 0.35); }
+        .msg[data-kind="info"] { color: #e0f2fe; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); }
+        .msg[data-kind="ok"] { color: #a7f3d0; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.3); }
+        .scanner { margin-top: 10px; }
+        .scanner-frame { position: relative; overflow: hidden; border-radius: 12px; background: #000; aspect-ratio: 1 / 1; max-height: 70vh; }
+        .scanner-frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .scanner-frame::after {
+            content: "";
+            position: absolute;
+            inset: 16%;
+            border: 3px solid rgba(56, 189, 248, 0.85);
+            border-radius: 16px;
+            box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.28);
+            pointer-events: none;
+        }
+        #pair { scroll-margin-top: calc(var(--tempe-appbar-h, 0px) + 12px); }
+        #pair:focus { outline: none; }
+        #pair.flash { animation: flash 1.6s ease-out 1; }
+        @keyframes flash { 0% { box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.9); } 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); } }
+        footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding-top: 6px; }
+        a.inline { color: var(--accent); }
+    </style>
+</head>
+<body>
+<main>
+    <header class="brand">
+        <img src="./icon-180.png" alt="" width="52" height="52">
+        <div>
+            <h1>Tempe Orders</h1>
+            <p class="lead">Repair Orders and Order Check on your phone.</p>
+        </div>
+    </header>
+
+    <section class="card install" id="install" hidden aria-labelledby="install-h">
+        <h2 id="install-h">Install on iPhone</h2>
+        <ol>
+            <li>Open this page in <strong>Safari</strong>.</li>
+            <li>Tap the <strong>Share</strong> button (the square with an arrow).</li>
+            <li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
+            <li>Open <strong>Tempe</strong> from your home screen and pair it below.</li>
+        </ol>
+        <p class="muted small" style="margin-top:8px">Needs Safari on iOS 16.4 or newer. The home-screen app keeps its own data, separate from Safari, so you pair it and enter the passphrase again inside the app.</p>
+    </section>
+
+    <section class="tiles" aria-label="Tools">
+        <a class="tile" href="../Repair_Orders.html">
+            <span class="tile-title">Repair Orders</span>
+            <span class="tile-desc">COSTAR work in progress, via the desk PC helper.</span>
+            <span class="status" id="ro-status" data-state="warn"><span class="dot"></span><span class="status-text">Checking&hellip;</span></span>
+        </a>
+        <a class="tile" href="../Order_Check.html">
+            <span class="tile-title">Order Check</span>
+            <span class="tile-desc">The shared order board (view only on the phone).</span>
+            <span class="status" id="oc-status" data-state="warn"><span class="dot"></span><span class="status-text">Checking&hellip;</span></span>
+        </a>
+    </section>
+
+    <section class="card" id="pair" aria-labelledby="pair-h" tabindex="-1">
+        <h2 id="pair-h">Pair with desk PC</h2>
+        <p>On the desk PC, open the COSTAR helper and choose <strong>Show phone QR</strong>. Then use one of these:</p>
+
+        <div class="way">
+            <h3>1. Scan the QR code</h3>
+            <div class="btn-row">
+                <button type="button" class="btn btn-primary" id="scan-btn">Scan QR code</button>
+                <button type="button" class="btn btn-ghost" id="scan-stop" hidden>Stop camera</button>
+            </div>
+            <div class="scanner" id="scanner" hidden>
+                <div class="scanner-frame"><video id="scan-video" playsinline muted autoplay></video></div>
+                <p class="muted small" style="margin-top:8px">Point the camera at the QR on the desk PC screen.</p>
+            </div>
+            <div class="msg" id="scan-msg" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="way">
+            <h3>2. Paste the link</h3>
+            <label for="pair-link">Link from the desk PC QR (it contains <code>pc=</code> and <code>key=</code>)</label>
+            <textarea id="pair-link" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://&hellip;#pc=&hellip;&amp;key=&hellip;"></textarea>
+            <div class="btn-row">
+                <button type="button" class="btn btn-primary" id="pair-btn">Pair</button>
+            </div>
+            <div class="msg" id="pair-msg" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="way">
+            <h3>Already paired?</h3>
+            <p class="muted small">If the desk PC's pairing was reset, Repair Orders says "pair again". Just scan the new QR above. Forgetting is only needed to unpair this phone.</p>
+            <div class="btn-row">
+                <button type="button" class="btn btn-danger" id="forget-btn">Forget pairing</button>
+            </div>
+            <div class="msg" id="forget-msg" role="status" aria-live="polite"></div>
+        </div>
+    </section>
+
+    <section class="card" aria-labelledby="first-h">
+        <h2 id="first-h">Before first use</h2>
+        <ul>
+            <li>Be on the <strong>shop Wi-Fi</strong>. The desk PC helper is only reachable on the shop network.</li>
+            <li>Install the desk PC's <strong>certificate</strong> and fully trust it: the pairing page on the desk PC shows a QR for the certificate. After installing, go to <strong>Settings &rarr; General &rarr; About &rarr; Certificate Trust Settings</strong> and switch it on.</li>
+            <li>Open <strong>Order Check</strong> inside the app and enter the <strong>team passphrase</strong> once. Home-screen apps don't share Safari's saved data.</li>
+        </ul>
+    </section>
+
+    <footer>app 1 (2026-11-24)</footer>
+</main>
+
+<script>
+(function () {
+    "use strict";
+    var PAIR_KEY = "tempe:costar-pairing:v1";
+    var PASS_KEY = "orderCheck.share.passphrase";
+    // The npm package's own static build (jsDelivr's .min.js is generated on the fly and can't be pinned).
+    var JSQR_URL = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+    var JSQR_SRI = "sha384-b5Ya4Bq3qCyz39m2ISh+4DxjAIljdeFwK/BsXLuj9gugaNwAcj/ia15fxNZL9Nlx";
+    var app = window.TempeApp || {};
+
+    function $(id) { return document.getElementById(id); }
+    function store(op, key, value) {
+        try {
+            if (op === "get") return window.localStorage.getItem(key);
+            if (op === "del") window.localStorage.removeItem(key);
+        } catch (_) { /* storage blocked */ }
+        return null;
+    }
+    function say(el, text, kind) { el.textContent = text || ""; el.setAttribute("data-kind", kind || "info"); }
+    function setStatus(el, text, ok) {
+        el.setAttribute("data-state", ok ? "ok" : "warn");
+        el.querySelector(".status-text").textContent = text;
+    }
+
+    /* Mirror of costar-client.js pairing(): HTTPS on localhost / private IPv4 / .local, no credentials,
+       query or fragment in the address, token 32-160 chars of [A-Za-z0-9_-]. Returns {baseUrl, token} or throws. */
+    function pairing(value) {
+        if (!value || typeof value !== "object") return null;
+        var url = new URL(String(value.baseUrl));
+        var host = url.hostname;
+        var octets = host.split(".");
+        var ipv4 = octets.length === 4 && octets.every(function (part) { return /^\d{1,3}$/.test(part) && Number(part) <= 255; });
+        var privateIpv4 = ipv4 && (Number(octets[0]) === 10 || (Number(octets[0]) === 192 && Number(octets[1]) === 168) ||
+            (Number(octets[0]) === 172 && Number(octets[1]) >= 16 && Number(octets[1]) <= 31));
+        var local = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.slice(-6) === ".local" || privateIpv4;
+        if (url.protocol !== "https:" || !local || url.username || url.password || url.search || url.hash || !/^[A-Za-z0-9_-]{32,160}$/.test(String(value.token)))
+            throw new Error("bad pairing");
+        return { baseUrl: url.origin, token: value.token, host: url.host };
+    }
+
+    /* Pull pc= and key= out of any pasted text or scanned QR: a full link (fragment or query), or bare "pc=...&key=...". */
+    function extract(text) {
+        text = String(text || "").trim();
+        if (!text) return { error: "Paste the link from the desk PC's QR code first." };
+        var parts = text.split(/\s+/);
+        var candidate = "";
+        for (var i = 0; i < parts.length; i++) {
+            if (/(^|[#?&])pc=/.test(parts[i]) || /(^|[#?&])key=/.test(parts[i])) { candidate = parts[i]; break; }
+        }
+        if (!candidate) return { error: "That isn't a pairing link. It should contain pc= and key= (from Show phone QR on the desk PC)." };
+        var tries = [];
+        var hashAt = candidate.indexOf("#");
+        if (hashAt >= 0) tries.push(candidate.slice(hashAt + 1));
+        var qAt = candidate.indexOf("?");
+        if (qAt >= 0 && (hashAt < 0 || qAt < hashAt)) tries.push(candidate.slice(qAt + 1, hashAt >= 0 ? hashAt : undefined));
+        if (hashAt < 0 && qAt < 0) tries.push(candidate);
+        for (var j = 0; j < tries.length; j++) {
+            var params = new URLSearchParams(tries[j]);
+            if (params.get("pc") && params.get("key")) return { pc: params.get("pc"), key: params.get("key") };
+        }
+        return { error: "The link is missing part of the code (it needs both pc= and key=). Copy the whole link again." };
+    }
+
+    function check(text) {
+        var found = extract(text);
+        if (found.error) return found;
+        var ok;
+        try { ok = pairing({ baseUrl: found.pc, token: found.key }); }
+        catch (_) { ok = null; }
+        if (!ok) {
+            var reason = "This code isn't valid for pairing. ";
+            try {
+                var u = new URL(found.pc);
+                if (u.protocol !== "https:") reason += "The desk PC address must start with https://.";
+                else if (!/^[A-Za-z0-9_-]{32,160}$/.test(found.key)) reason += "The key looks cut off. Copy or scan the whole code again.";
+                else if (u.username || u.password || u.search || u.hash) reason += "The desk PC address has extra text after it. Copy or scan the whole code again.";
+                else reason +="The desk PC address must be on the shop network (a 192.168.x.x, 10.x.x.x or 172.16-31.x.x address, or a .local name).";
+            } catch (_) { reason += "The desk PC address in it isn't a web address."; }
+            return { error: reason };
+        }
+        return { pc: found.pc, key: found.key, host: ok.host };
+    }
+
+    function go(pc, key) {
+        // costar-client.js reads these with URLSearchParams (which decodes), validates, saves and strips them.
+        location.href = "../Repair_Orders.html#pc=" + encodeURIComponent(pc) + "&key=" + encodeURIComponent(key);
+    }
+
+    function refresh() {
+        var saved = null;
+        try { saved = pairing(JSON.parse(store("get", PAIR_KEY) || "null")); } catch (_) { saved = null; }
+        setStatus($("ro-status"), saved ? "Paired with desk PC " + saved.host : "Not paired yet", !!saved);
+        $("forget-btn").disabled = !saved && !store("get", PAIR_KEY);
+        var pass = store("get", PASS_KEY);
+        setStatus($("oc-status"), pass ? "Passphrase saved" : "Needs the team passphrase", !!pass);
+        $("install").hidden = !!app.standalone;
+    }
+
+    /* ---------- paste ---------- */
+    $("pair-btn").addEventListener("click", function () {
+        var result = check($("pair-link").value);
+        if (result.error) { say($("pair-msg"), result.error, "error"); return; }
+        say($("pair-msg"), "Pairing with " + result.host + "…", "ok");
+        go(result.pc, result.key);
+    });
+
+    /* ---------- forget ---------- */
+    $("forget-btn").addEventListener("click", function () {
+        if (!window.confirm("Forget the desk PC pairing on this phone? You'll need to scan the QR again to use Repair Orders.")) return;
+        store("del", PAIR_KEY);
+        say($("forget-msg"), "Pairing forgotten.", "ok");
+        refresh();
+    });
+
+    /* ---------- scan ---------- */
+    var stream = null, scanning = false, canvas = null, ctx = null, lastBad = "", jsqrPromise = null;
+    var scanGen = 0;   // bumped by every Scan tap and stopScan(): a camera start that resolves late is dropped
+
+    function loadJsQR() {
+        if (typeof window.jsQR === "function") return Promise.resolve(window.jsQR);
+        if (jsqrPromise) return jsqrPromise;
+        jsqrPromise = new Promise(function (resolve, reject) {
+            var s = document.createElement("script");
+            s.src = JSQR_URL;
+            s.async = true;
+            s.crossOrigin = "anonymous";
+            s.integrity = JSQR_SRI;
+            s.onload = function () { typeof window.jsQR === "function" ? resolve(window.jsQR) : reject(new Error("jsQR missing")); };
+            s.onerror = function () { reject(new Error("load failed")); };
+            document.head.appendChild(s);
+        });
+        jsqrPromise.catch(function () { jsqrPromise = null; });
+        return jsqrPromise;
+    }
+
+    function stopScan() {
+        scanGen++;
+        scanning = false;
+        if (stream) {
+            try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_) { /* ignore */ }
+            stream = null;
+        }
+        var video = $("scan-video");
+        try { video.pause(); video.srcObject = null; } catch (_) { /* ignore */ }
+        $("scanner").hidden = true;
+        $("scan-stop").hidden = true;
+        $("scan-btn").disabled = false;
+    }
+
+    function tick(jsQR) {
+        if (!scanning) return;
+        var video = $("scan-video");
+        if (video.readyState >= 2 && video.videoWidth) {
+            var scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+            var w = Math.round(video.videoWidth * scale), h = Math.round(video.videoHeight * scale);
+            if (canvas.width !== w) canvas.width = w;
+            if (canvas.height !== h) canvas.height = h;
+            ctx.drawImage(video, 0, 0, w, h);
+            var code = null;
+            try { code = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: "attemptBoth" }); } catch (_) { code = null; }
+            if (code && code.data) {
+                var result = check(code.data);
+                if (!result.error) {
+                    stopScan();
+                    $("pair-link").value = code.data;
+                    say($("scan-msg"), "Found the desk PC (" + result.host + "). Pairing…", "ok");
+                    go(result.pc, result.key);
+                    return;
+                }
+                if (code.data !== lastBad) {
+                    lastBad = code.data;
+                    say($("scan-msg"), /pc=|key=/.test(code.data) ? result.error
+                        : "That QR isn't the phone pairing code. On the desk PC choose Show phone QR (not the certificate QR).", "error");
+                }
+            }
+        }
+        (window.requestAnimationFrame || function (f) { return setTimeout(f, 120); })(function () { tick(jsQR); });
+    }
+
+    $("scan-btn").addEventListener("click", function () {
+        if (scanning) return;
+        lastBad = "";
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+            say($("scan-msg"), "This browser can't use the camera here. Use Paste the link instead (on iPhone, Safari 16.4+ or the home-screen app).", "error");
+            return;
+        }
+        $("scan-btn").disabled = true;
+        say($("scan-msg"), "Starting the camera…", "info");
+        var jsqr, gen = ++scanGen;
+        loadJsQR().then(function (fn) {
+            if (gen !== scanGen || document.hidden) throw { stage: "cancelled" };
+            jsqr = fn;
+            return navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+        }, function () {
+            throw { stage: "load" };
+        }).then(function (s) {
+            if (gen !== scanGen || document.hidden) {
+                // Stopped (page hidden or left) while the camera was starting: turn it straight off.
+                try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (_) { /* ignore */ }
+                throw { stage: "cancelled" };
+            }
+            stream = s;
+            var video = $("scan-video");
+            video.setAttribute("playsinline", "");
+            video.muted = true;
+            video.srcObject = s;
+            $("scanner").hidden = false;
+            $("scan-stop").hidden = false;
+            scanning = true;
+            canvas = canvas || document.createElement("canvas");
+            ctx = ctx || canvas.getContext("2d", { willReadFrequently: true }) || canvas.getContext("2d");
+            var p = video.play();
+            if (p && p.catch) p.catch(function () { /* autoplay attribute covers it */ });
+            say($("scan-msg"), "Looking for the QR code…", "info");
+            tick(jsqr);
+        }).catch(function (err) {
+            if (err && err.stage === "cancelled") {
+                if (gen === scanGen) { stopScan(); say($("scan-msg"), "Camera stopped.", "info"); }
+                return;
+            }
+            if (gen !== scanGen) return;   // a newer Scan tap or a stop owns the scanner now
+            stopScan();
+            var name = err && err.name;
+            if (err && err.stage === "load")
+                say($("scan-msg"), "Couldn't load the QR scanner (no internet?). Check the connection and try again, or use Paste the link.", "error");
+            else if (name === "NotAllowedError" || name === "SecurityError")
+                say($("scan-msg"), "Camera access was blocked. Allow the camera for this app (Settings → Safari → Camera, or tap Scan again and choose Allow), or use Paste the link.", "error");
+            else if (name === "NotFoundError" || name === "OverconstrainedError")
+                say($("scan-msg"), "No camera was found. Use Paste the link instead.", "error");
+            else
+                say($("scan-msg"), "The camera couldn't start" + (name ? " (" + name + ")" : "") + ". Try again, or use Paste the link.", "error");
+        });
+    });
+
+    $("scan-stop").addEventListener("click", function () { stopScan(); say($("scan-msg"), "Camera stopped.", "info"); });
+    window.addEventListener("pagehide", stopScan);
+    document.addEventListener("visibilitychange", function () {
+        // Also while the camera is still starting (Scan is disabled until it runs or fails).
+        if (document.hidden && (scanning || $("scan-btn").disabled)) { stopScan(); say($("scan-msg"), "Camera stopped.", "info"); }
+    });
+
+    /* ---------- #pair ---------- */
+    function focusPair() {
+        if (location.hash !== "#pair") return;
+        var sec = $("pair");
+        try { sec.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_) { sec.scrollIntoView(); }
+        sec.classList.remove("flash");
+        void sec.offsetWidth;
+        sec.classList.add("flash");
+    }
+    window.addEventListener("hashchange", focusPair);
+    window.addEventListener("pageshow", refresh);
+    window.addEventListener("storage", refresh);
+
+    refresh();
+    focusPair();
+})();
+</script>
+</body>
+</html>

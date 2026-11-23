@@ -1,11 +1,11 @@
-/* Tempe Order Check board 1.6.4
+/* Tempe Order Check board 1.6.5
    On the RDP PC (Order Check reader running): reads WIP from the reader and
    picking from the intranet, works out every job's status and, when signed in
    as the publisher, shares the results with the team and sends Discord alerts.
    Anywhere else: sign in and see the shared results. */
 (() => {
   "use strict";
-  const VERSION = "1.6.4";
+  const VERSION = "1.6.5";
   const R = window.OrderRules;
   const Share = window.OrderShare || null;
   const SHARE_CONFIG = window.ORDER_CHECK_SHARE || null;
@@ -29,6 +29,9 @@
   const UPDATE_KEY = "orderCheck.autoUpdate";
   const LEAVE_OUT_KEY = "orderCheck.leaveOut";
   const LEAVE_OUT_DEFAULT = "MD ST UBH YTA";   // Tommy, 23 Oct: ST is the boss, MD, UBH and YTA have left
+  // The Tempe home-screen app (app/app-shell.js). A phone never has the reader or the extension,
+  // so it goes straight to the team board. False everywhere else, including the RDP board.
+  const APP_MODE = !!(window.TempeApp && window.TempeApp.isApp);
 
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -44,6 +47,9 @@
     pending: new Map(),
     lastBeat: 0, lastBeatKey: "", checkedOnce: false, updateNote: "",
   };
+  // In the app, skip the 5 s wait for the extension: cycle() then marks the reader as missing at once.
+  // Only on a touch-only device: a mouse/desktop window always keeps the 5 s extension fallback.
+  if (APP_MODE && (() => { try { return matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches; } catch (_) { return false; } })()) state.bridgeOk = false;
 
   // Source = this browser can read COSTAR (the reader answered at least once).
   const isSource = () => state.readerOk === true;
@@ -268,6 +274,15 @@
       state.share.started = await Share.start(SHARE_CONFIG, onAuth);
     } catch (error) {
       state.share.note = error.message === "file" ? "Team sharing works from the GitHub page, not from a file copy." : `Team sharing isn't available: ${error.message}`;
+    }
+    // A download that works again clears a passing "Team sharing stopped: Load failed".
+    // A changed passphrase or a missing account comes through onAuth instead, so it stays.
+    if (state.share.started && typeof Share.onPollOk === "function") {
+      Share.onPollOk(() => {
+        if (!/^Team sharing stopped: /.test(state.share.error)) return;
+        state.share.error = "";
+        renderAccount();
+      });
     }
     renderAccount();
   }
@@ -621,13 +636,39 @@
     }
   }
 
+  // One sound context for the page. Browsers (iPhones especially) start it paused until a tap,
+  // so the first tap with sound on wakes it, and every chime wakes it again if it was paused.
+  let audio = null;
+  function audioContext() {
+    if (!audio) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audio = new Ctx();
+    }
+    if (audio.state !== "running") audio.resume().catch(() => { /* needs a tap first */ });
+    return audio;
+  }
+  function unlockAudio() {
+    if (!state.prefs.sound || (audio && audio.state === "running")) return;
+    try { audioContext(); } catch { /* audio blocked */ }
+  }
+  for (const type of ["pointerdown", "touchend", "keydown"]) document.addEventListener(type, unlockAudio, { capture: true, passive: true });
+  let chimeWaiting = false;
   function chime() {
     try {
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator(); const gain = ctx.createGain();
-      osc.frequency.value = 880; gain.gain.value = 0.08;
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.25);
+      const ctx = audioContext();
+      if (!ctx) return;
+      const play = () => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.frequency.value = 880; gain.gain.value = 0.08;
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.25);
+      };
+      if (ctx.state === "running") { play(); return; }
+      // Still paused: one chime plays when it wakes (never a pile of them at once).
+      if (chimeWaiting) return;
+      chimeWaiting = true;
+      ctx.resume().then(() => { chimeWaiting = false; if (ctx.state === "running") play(); }, () => { chimeWaiting = false; });
     } catch { /* audio blocked until the page is clicked once */ }
   }
 
@@ -724,7 +765,7 @@
     const box = $("problem");
     box.hidden = !problems.length;
     box.textContent = problems.join(" ");
-    $("refresh").hidden = !isSource();
+    $("refresh").hidden = !(isSource() || (APP_MODE && isViewer()));   // the app's Refresh checks GitHub now
   }
 
   function renderTally(c) {
@@ -915,7 +956,7 @@
       }
       if (t.dataset.ack) { markOk(t.dataset.ack); return; }
       if (t.dataset.unack) { undoOk(t.dataset.unack); return; }
-      if (t.id === "refresh") { refreshNow(); return; }
+      if (t.id === "refresh") { if (isSource()) refreshNow(); else refreshViewer(); return; }
       if (t.id === "openSignin") { state.share.showForm = true; renderAccount(); $("email").focus(); return; }
       if (t.id === "signOut" || t.id === "signOutNoAccess") { Share.signOut(); return; }
       if (t.id === "forgot") { forgotPassword(); return; }
@@ -974,6 +1015,32 @@
       button.disabled = false; button.textContent = "Refresh now";
     }, 4000);
   }
+
+  // Team view: download the board again now instead of waiting for the next minute's check.
+  const RESUME_GAP_MS = 10000;
+  let lastViewerPoll = 0;
+  function canPollNow() { return isViewer() && !!Share && typeof Share.pollNow === "function"; }
+  async function refreshViewer() {
+    if (!canPollNow()) return;
+    const button = $("refresh");
+    button.disabled = true; button.textContent = "Checking…";
+    lastViewerPoll = Date.now();
+    try { await Share.pollNow(); }
+    finally {
+      button.disabled = false; button.textContent = "Refresh now";
+      evaluateAll(); render();
+    }
+  }
+  // Phones freeze the page in the background: check as soon as it's back on screen (at most every 10 s).
+  function onResume() {
+    if (document.visibilityState !== "visible" || !canPollNow()) return;
+    if (Date.now() - lastViewerPoll < RESUME_GAP_MS) return;
+    lastViewerPoll = Date.now();
+    // Draw again afterwards even when nothing changed: the "stopped updating" warning uses the time now.
+    Share.pollNow().then(() => { evaluateAll(); render(); });
+  }
+  document.addEventListener("visibilitychange", onResume);
+  window.addEventListener("pageshow", (event) => { if (event.persisted) onResume(); });
 
   $("ver").textContent = `v${VERSION}`;
   loadStore();

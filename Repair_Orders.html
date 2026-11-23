@@ -5,9 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#070b11">
+    <!-- The installed iPhone app ("Tempe Orders", app/): home-screen icon, full screen, and its top bar. -->
+    <link rel="manifest" href="./app/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./app/icon-180.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tempe">
     <title>Repair Orders</title>
     <link rel="stylesheet" href="./allaround.css?v=20261027-ro3">
-    <link rel="stylesheet" href="./repair-orders.css?v=20261102-ro5">
+    <link rel="stylesheet" href="./repair-orders.css?v=20261124-app1">
+    <link rel="stylesheet" href="./app/app.css?v=20261124-app1">
+    <script src="./app/app-shell.js?v=20261124-app1"></script>
 </head>
 
 <body class="app-page ro-page">
@@ -51,6 +60,10 @@
             <div id="helperLine" class="ro-helper" data-state="unknown" role="status" aria-live="polite">
                 <span class="ro-dot" aria-hidden="true"></span><span id="helperText">Checking the desk PC…</span>
             </div>
+            <!-- In the installed app only: the desk PC said "pair again" (the app keeps its own pairing). -->
+            <a id="pairAgain" class="ro-primary ro-pair-again" href="app/index.html#pair" hidden>Pair with desk PC</a>
+            <!-- Saves still being followed (or never seen to end), e.g. after a reload: tap to open and check. -->
+            <div id="pendingSaves" class="ro-pending" role="status" aria-live="polite" hidden></div>
 
             <div class="ro-searchbar">
                 <label class="ro-search">
@@ -264,6 +277,6 @@
         })();
     </script>
     <script src="./costar-client.js?v=20261027-ro4" defer></script>
-    <script src="./repair-orders.js?v=20261102-ro5" defer></script>
+    <script src="./repair-orders.js?v=20261124-app1" defer></script>
 </body>
 </html>

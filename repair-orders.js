@@ -146,7 +146,8 @@
             else if (!h.roOn) setHelper("warn", "Repair Orders are switched off in the RDP helper.");
             else if (!h.roReady) setHelper("busy", h.roDetail || "COSTAR Tempe is busy.");
             else setHelper("ok", "COSTAR Tempe is ready");
-        } catch (error) { setHelper("off", error.message); }
+            $("pairAgain").hidden = true;
+        } catch (error) { setHelper("off", error.message); offerPair(error); }
     }
 
     // ---------- the list ----------
@@ -227,7 +228,7 @@
         if (!client) return;
         let view;
         try { view = await client.roList(); }
-        catch (error) { renderMeta(/HTTP 404/.test(error.message) ? "The desk PC needs helper 2.6.0 for Repair Orders." : error.message, "error"); return; }
+        catch (error) { renderMeta(/HTTP 404/.test(error.message) ? "The desk PC needs helper 2.6.0 for Repair Orders." : error.message, "error"); offerPair(error); return; }
         applyList(view);
         const age = state.list ? Date.now() - Date.parse(state.list.readUtc) : Infinity;
         if (force || view.refresh || !(age < 60000)) refreshList(view.refresh);
@@ -244,7 +245,7 @@
             if (status === null) renderMeta("The desk PC lost track of the read. Tap ↻ to try again.", "error");
             else if (status && status.status === "failed") { renderMeta(status.message, "error"); return; }
             applyList(await client.roList());
-        } catch (error) { renderMeta(error.message, "error"); }
+        } catch (error) { renderMeta(error.message, "error"); offerPair(error); }
         finally {
             state.listBusy = false; $("listBar").hidden = true; $("refreshList").classList.remove("is-spinning"); renderList(); renderPcFilter();
             if (state.wantFresh) { state.wantFresh = false; refreshList(null, true); }
@@ -338,7 +339,8 @@
         } catch (error) {
             if (token !== state.token) return;
             $("openCard").hidden = true;
-            if (!early) showAlert(error.message, [{ label: "Try again", primary: true, run: () => readFromCostar(state.token) }]);
+            const pair = offerPair(error) ? [{ label: "Pair with desk PC", run: () => { window.location.href = appPairUrl(); } }] : [];
+            if (!early) showAlert(error.message, pair.concat([{ label: "Try again", primary: true, run: () => readFromCostar(state.token) }]));
         } finally {
             if (state.readingToken === token) state.readingToken = 0;
             if (state.closingToken === token) state.closingToken = 0;
@@ -912,6 +914,7 @@
                 paintSave(t);
                 if (t.phase !== "ended" && t.phase !== "refused" && state.sheetDoc !== p.doc) toast("RO " + p.doc + ": " + (t.phase === "lost" ? "lost contact with the desk PC while " + (p.kind === "print" ? "printing" : "saving") + ": open it to check" : "the desk PC doesn't know your " + (p.kind === "print" ? "print" : "save") + " any more: open it to check"));
                 if (here(p.doc)) updateSaveBar();
+                renderPending();
             }
         })();
         return t;
@@ -962,7 +965,8 @@
         if (t.phase === "refused") {
             failAt("sent"); $("saveTitle").textContent = "Not sent";
             saveResult("error", "Not sent", t.error.message.replace(/^PC helper returned HTTP \d+\.\s*/, ""));
-            saveActions([{ label: "Keep editing", primary: true, run: closeSheet }]); return;
+            const pair = offerPair(t.error) ? [{ label: "Pair with desk PC", run: () => { window.location.href = appPairUrl(); } }] : [];
+            saveActions(pair.concat([{ label: "Keep editing", primary: true, run: closeSheet }])); return;
         }
         if (t.phase === "lost") {
             failAt(t.reached || "sent"); $("saveTitle").textContent = "Lost contact";
@@ -1087,7 +1091,7 @@
     function route() {
         const m = /^#ro=([0-9A-Za-z-]{1,20})$/.exec(window.location.hash);
         if (m) { const doc = m[1].toUpperCase(); if (doc !== state.doc || $("detailView").hidden) openDetail(doc, false); }
-        else { state.token++; if (state.sheetDoc) closeSheet(); state.doc = null; state.base = null; showView("list"); renderList(); renderMeta(); }
+        else { state.token++; if (state.sheetDoc) closeSheet(); state.doc = null; state.base = null; showView("list"); renderList(); renderMeta(); renderPending(); }
     }
     function goList() {
         if (state.base && countChanges()) toast("Your changes stay here as a draft until you save them.");
@@ -1097,11 +1101,56 @@
     function showPairing(reason) {
         showView("list");
         setHelper("off", "This phone isn't connected to the desk PC.");
-        const empty = $("listEmpty"); empty.hidden = false; empty.replaceChildren(
+        const empty = $("listEmpty"); empty.hidden = false;
+        // The installed app keeps its own storage (not Safari's), and a QR scanned with the Camera opens in
+        // Safari: the app is paired on its own Setup page (paste the QR link or scan it there).
+        const app = appPairUrl();
+        if (app) empty.replaceChildren(
+            el("strong", { text: "Pair the app with the desk PC" }),
+            el("p", { text: (reason ? reason + " " : "") + "The app keeps its own pairing, separate from Safari's. On the desk PC click Show phone QR, then pair here: scan the QR in the app or paste its link." }),
+            el("a", { href: app, class: "ro-primary", text: "Pair with desk PC" }));
+        else empty.replaceChildren(
             el("strong", { text: "Connect this phone first" }),
             el("p", { text: reason || "On the desk PC click Show phone QR and scan the Job Card code with this phone, then come back to Repair Orders." }),
             el("a", { href: "Fitment_Planner.html", class: "ro-primary", text: "Open the Job Card" }));
         $("refreshList").disabled = true; $("search").disabled = true; $("clearPcFilter").disabled = true;
+    }
+    // ---------- the installed iPhone app (app/app-shell.js) ----------
+    // Its Setup page's pairing address while this runs as the app; "" in Safari or on the desk PC.
+    function appPairUrl() {
+        const app = window.TempeApp;
+        return app && app.isApp === true && typeof app.pairUrl === "string" && app.pairUrl ? app.pairUrl : "";
+    }
+    // The desk PC said "pair again" (401: its pairing was reset): in the app, a link to the app's own pairing.
+    function offerPair(error) {
+        const url = appPairUrl();
+        if (!url || !error || error.status !== 401) return false;
+        const link = $("pairAgain"); link.href = url; link.hidden = false;
+        return true;
+    }
+    // Saves written down on this phone and not seen to end (within their 3 hours), e.g. after a reload or
+    // the app being closed: listed on the list, each opens its Repair Order (which follows it again).
+    // Nothing is sent from here.
+    function renderPending() {
+        const box = $("pendingSaves"); if (!box) return;
+        if (!appPairUrl()) { box.hidden = true; box.replaceChildren(); return; }   // the app only
+        const docs = [];
+        if (client && client.isPaired()) try {
+            const keys = [];
+            for (let i = 0; i < window.localStorage.length; i++) { const k = window.localStorage.key(i); if (k && k.startsWith(PENDING_KEY)) keys.push(k); }
+            for (const k of keys) { const doc = k.slice(PENDING_KEY.length), p = /^[0-9A-Za-z-]{1,20}$/.test(doc) ? pendingOf(doc) : null; if (p) docs.push({ doc, at: p.at, print: p.kind === "print" }); }
+        } catch (_) { /* storage blocked: nothing to list */ }
+        docs.sort((a, b) => b.at - a.at);
+        box.replaceChildren();
+        for (const d of docs.slice(0, 5)) {
+            const following = !!tracks[d.doc];
+            const b = el("button", { type: "button", class: "ro-pending-row", "data-doc": d.doc },
+                el("span", { text: "RO " + d.doc + ": your " + (d.print ? "print" : "save") + " of " + clock(d.at) + (following ? " is being checked" : " isn't known to have finished") }),
+                el("b", { text: "Open" }));
+            b.addEventListener("click", () => { state.cameFromList = true; window.location.hash = "ro=" + d.doc; });
+            box.append(b);
+        }
+        box.hidden = !docs.length;
     }
     function bind() {
         $("search").addEventListener("input", e => { state.query = e.target.value; renderList(); });
@@ -1150,7 +1199,7 @@
         // The sheet can be put away while a save goes on: it is followed all the same.
         $("saveSheet").addEventListener("close", () => { state.sheetDoc = null; updateSaveBar(); });
         window.addEventListener("hashchange", route);
-        document.addEventListener("visibilitychange", () => { if (!document.hidden) { checkHealth(); if (!$("listView").hidden) loadList(false); } });
+        document.addEventListener("visibilitychange", () => { if (!document.hidden) { checkHealth(); if (!$("listView").hidden) { loadList(false); renderPending(); } } });
     }
     function start() {
         if (window.TempeRoStartup) window.TempeRoStartup.ready();

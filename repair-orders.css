@@ -243,6 +243,7 @@ body.ro-page .ro-searchbar {
     border: 1px solid var(--ro-line);
     border-radius: 15px;
     background: rgba(8, 12, 18, 0.9);
+    -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
 }
 
@@ -481,6 +482,7 @@ body.ro-page .ro-detail-top {
     z-index: 20;
     padding: 8px;
     background: rgba(12, 18, 26, 0.94);
+    -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
 }
 
@@ -995,6 +997,7 @@ body.ro-page .ro-savebar {
     background: rgba(10, 15, 22, 0.94);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
     transform: translateX(-50%);
+    -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
 }
 
@@ -1054,6 +1057,7 @@ body.ro-page .ro-sheet {
 
 body.ro-page .ro-sheet::backdrop {
     background: rgba(2, 6, 12, 0.66);
+    -webkit-backdrop-filter: blur(3px);
     backdrop-filter: blur(3px);
 }
 
@@ -1377,4 +1381,64 @@ body.ro-page .ro-form.is-locked {
     opacity: 0.55;
     pointer-events: none;
     transition: opacity 0.2s ease;
+}
+
+/* The installed iPhone app (app/app-shell.js marks <html> with tempe-app and draws a fixed bar at the top,
+   its height in --tempe-appbar-h; app/app.css hides the site nav). The page starts under that bar and
+   keeps clear of the notch sideways; the sticky search bar and RO header stop just under it. */
+html.tempe-app body.ro-page {
+    padding-top: calc(var(--tempe-appbar-h, 0px) + 10px);
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+}
+
+html.tempe-app body.ro-page .ro-searchbar,
+html.tempe-app body.ro-page .ro-detail-top {
+    top: calc(var(--tempe-appbar-h, 0px) + 8px);
+}
+
+/* Saves still being followed (or never seen to end) after a reload: open that Repair Order to check it. */
+body.ro-page .ro-pending {
+    display: grid;
+    gap: 6px;
+}
+
+body.ro-page .ro-pending-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 9px 12px;
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: 11px;
+    color: #fde68a;
+    background: rgba(120, 53, 15, 0.22);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+}
+
+body.ro-page .ro-pending-row span {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+body.ro-page .ro-pending-row b {
+    flex: 0 0 auto;
+    color: #fff7ed;
+    font-size: 0.78rem;
+}
+
+body.ro-page .ro-pending-row:hover {
+    border-color: rgba(245, 158, 11, 0.65);
+    background: rgba(120, 53, 15, 0.32);
+}
+
+/* The app has its own pairing (its storage is separate from Safari): a link to it when the desk PC says "pair again". */
+body.ro-page .ro-pair-again {
+    justify-self: start;
 }

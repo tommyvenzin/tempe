@@ -19,7 +19,7 @@
   let cfg = null, onAuthCb = null, key = null, keyFor = "";
   let latestRows = null, latestMeta = null, lastRowsJson = "", lastProblems = "", dirty = false, lastSaved = 0, saving = null;
   let lastText = "", pollTimer = 0, lastRows = null, lastStatus = null;
-  const listeners = { rows: new Set(), status: new Set(), errors: new Set() };
+  const listeners = { rows: new Set(), status: new Set(), errors: new Set(), ok: new Set() };
   let now = () => Date.now();
 
   const store = {
@@ -182,7 +182,7 @@
   async function poll() {
     try {
       const text = await download();
-      if (text === null || text === lastText) return;
+      if (text === null || text === lastText) { listeners.ok.forEach((cb) => cb()); return; }
       const payload = await unseal(text, store.get(KEYS.pass));
       lastText = text;
       const rows = new Map();
@@ -191,6 +191,7 @@
       lastRows = rows; lastStatus = status;
       listeners.status.forEach((cb) => cb(status));
       listeners.rows.forEach((cb) => cb(rows));
+      listeners.ok.forEach((cb) => cb());
     } catch (error) {
       if (error.code === "wrong-passphrase") {
         store.del(KEYS.pass); key = null; lastText = ""; lastRows = null; lastStatus = null; stopPolling();
@@ -199,6 +200,14 @@
       }
       listeners.errors.forEach((cb) => cb(error));
     }
+  }
+  // A check right now (the app coming back on screen, or its Refresh button). Only while
+  // something is watching, and never two downloads at once.
+  let polling = null;
+  function pollNow() {
+    if (!pollTimer) return Promise.resolve(false);
+    if (!polling) polling = poll().then(() => true, () => false).finally(() => { polling = null; });
+    return polling;
   }
   function startPolling() { if (!pollTimer) { pollTimer = setInterval(poll, POLL_MS); poll(); } }
   function stopPolling() { clearInterval(pollTimer); pollTimer = 0; }
@@ -229,7 +238,7 @@
     // Returns false when share-config.js isn't set up for GitHub.
     async start(config, onAuth) {
       if (!config || config.backend !== "github" || !config.owner || !config.repo) return false;
-      if (!(globalThis.crypto && crypto.subtle) || typeof CompressionStream === "undefined") throw new Error("This browser is too old for team sharing. Use an up-to-date Chrome.");
+      if (!(globalThis.crypto && crypto.subtle) || typeof CompressionStream === "undefined" || typeof DecompressionStream === "undefined") throw new Error("This browser is too old for team sharing. Update to iOS 16.4 or later, or use an up-to-date Chrome.");
       cfg = { branch: "main", ...config };
       onAuthCb = onAuth;
       setTimeout(() => announce(), 0);
@@ -269,6 +278,9 @@
     watchRows(cb, onError) { return watch("rows", cb, onError); },
     watchStatus(cb, onError) { return watch("status", cb, onError); },
     watchAcks() { return () => {}; },   // "Mark OK" stays on the RDP board in GitHub mode
+    // Viewers: cb() after every download that worked, changed or not (clears a passing "Load failed").
+    onPollOk(cb) { listeners.ok.add(cb); return () => listeners.ok.delete(cb); },
+    pollNow,
 
     async publish(results) {
       latestRows = results.map(slim);
