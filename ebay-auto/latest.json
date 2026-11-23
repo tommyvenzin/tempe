@@ -1,18 +1,18 @@
 {
   "product": "Ebay-auto",
-  "version": "1.1.9",
-  "name": "1.1.9 - Sydney or Tempe",
-  "notes": "Each eBay order goes into COSTAR Sydney (Br1) or COSTAR Tempe (Br11), chosen with two buttons in the 404 extension 1.6.0 panel (wheel/package titles suggest Tempe; the other choice asks to confirm). Same receiver and worker, one order at a time. Update BOTH parts to 1.1.9 and the extension to 1.6.0: a 1.1.8 part gets no orders from a 1.1.9 part. Old 1.1.8 orders stay Sydney orders.",
-  "published": "2026-11-20",
+  "version": "1.1.10",
+  "name": "1.1.10 - Contact info and customer details",
+  "notes": "Billing lookup uses Contact info only, accepting its match in Mobile, Home or Bus Ph while keeping COSTAR's account and phone placement. Ship to phone remains delivery-only. Missing customer details no longer block the known details and order lines: incomplete mandatory fields skip account creation and the result says CHECK BY HAND. Older stopped attempts using a different Ship to phone require manual completion. Pause entry, update BOTH parts to 1.1.10 and the extension to 1.6.1, then refresh and resume. Sydney/Tempe routing and all stock, price and duplicate checks remain.",
+  "published": "2026-11-24",
   "protocol": 2,
   "receiver": {
-    "zip": "Ebay-auto-Receiver-v1.1.9.zip",
-    "sha256": "dd35ae333699aa1aeeb647d3f30d278a93c16eac5f649ccb0b3386c4d5749a20",
-    "size": 1006179
+    "zip": "Ebay-auto-Receiver-v1.1.10.zip",
+    "sha256": "96a4dbc9e12d12f7c8dbe05814bdd0487c7cce54aa5259008274148075b5f907",
+    "size": 1017426
   },
   "worker": {
-    "zip": "Ebay-auto-Worker-v1.1.9.zip",
-    "sha256": "e88735185456886405b6502e921b71cef5b93e4089962f890c086f2fae1985d9",
-    "size": 1002359
+    "zip": "Ebay-auto-Worker-v1.1.10.zip",
+    "sha256": "960ea11eef63b8db3b49eaca5de09f75f7b99d0d6e1ca430328048a7cc60cab7",
+    "size": 1013582
   }
 }

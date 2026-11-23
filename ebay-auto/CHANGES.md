@@ -1,5 +1,15 @@
 # Ebay-auto changes
 
+## 1.1.10 - 24 November 2026
+
+- Customer lookup uses Contact info only. The Ship to phone is kept for delivery contact and is never a fallback for choosing the billing account.
+- A matching Contact info number in billing Mobile Ph, Home Ph or Bus Ph is accepted. COSTAR's account and phone-field placement are kept; the eBay Order/Buyer name still fills billing.
+- Missing customer name/address details no longer stop the known details and order lines from being entered. Missing mandatory fields skip new-account creation; the result says CHECK BY HAND. Supplied invalid values still stop entry.
+- A stopped older attempt that used a different Ship to phone is left for manual completion instead of silently changing its customer account.
+- Sydney/Tempe routing, prices, totals, stock prompts, open Repair Orders, Next #, clipboard references and duplicate protection are unchanged.
+
+Pause order entry and update BOTH app parts to 1.1.10 and the 404 extension to 1.6.1 before resuming. Keep the existing extension folder and pairing. Protocol 2 and order schema v3 are unchanged. Live COSTAR validation of the new customer behaviour is still required.
+
 ## 1.1.9 - 20 November 2026
 
 - Each eBay order goes into COSTAR Sydney (Br1) or COSTAR Tempe (Br11): Seb chooses with two buttons in the 404 extension 1.6.0 panel.
@@ -11,15 +21,6 @@
 - Includes the extension-only 1.5.3 wheel SKU fix (published 19 November).
 
 Requires BOTH app parts 1.1.9 and extension 1.6.0 (a 1.1.8 part gets no orders from a 1.1.9 part). The first live Tempe order still needs a watched check.
-
-## Extension 1.5.3 - 19 November 2026
-
-- Wheel-only listings drop one numeric SKU suffix: 903189096S-11897 becomes 903189096S.
-- The copy panel, Copy all and Send to COSTAR use the same corrected code. The original-to-COSTAR mapping is shown on the panel.
-- Tyres, packages, accessories, missing/conflicting item titles and complex multi-hyphen codes keep their current handling. Item titles are matched to their own item ID.
-- Quantity, pricing, stock checks and existing-order retry safeguards stay unchanged.
-- Extension-only update: receiver and worker remain 1.1.8. Replace the existing extension folder, reload the extension and refresh eBay.
-- Validation: 19 parser/formatter groups and 11 payload groups passed; all JavaScript syntax checks and ZIP byte comparisons passed. No live COSTAR order was sent.
 
 ## 1.1.8 - 19 November 2026
 
