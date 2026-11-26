@@ -1,8 +1,8 @@
 {
-  "version": "2.9.19",
-  "name": "2.9.19 - Invoice lines and item Reference",
-  "zip": "Tempe-COSTAR-Helper-v2.9.19.zip",
-  "sha256": "9ec032441b827d4ec8e71613a7ea432cd8590751e159db9f94aed740d409c5d5",
-  "size": 1458926,
-  "notes": "Invoices that show \"PO: Reqd\" under the # heading read no lines at all (\"a label in the line number column isn't a line number\"): COSTAR's PO: Reqd and the hidden stock details inside line 1 were taken for line numbers. Only what sits on a line, below the headings and on screen, is counted now. Fill Buffalo page: when the item rows can't be filled, the first row's Reference now gets the invoice number (Tempe Buffalo Fill 1.0.2, which updates itself from the helper's folder). A longer invoice whose line list COSTAR keeps from being scrolled back (its keyboard went into the lines) no longer ends \"changed while it was read\" when what shows matches what was read; the status line then says to scroll the list back and click where you mean to type. The helper still never scrolls with COSTAR's keyboard in the lines. Nothing is sold or saved in COSTAR, nothing is saved in Buffalo; Sold stays disabled. Not yet tried on the RDP PC. Update the RDP helper (and the desk PC, to keep them the same)."
+  "version": "2.9.20",
+  "name": "2.9.20 - Diagnostics upload to GitHub",
+  "zip": "Tempe-COSTAR-Helper-v2.9.20.zip",
+  "sha256": "5e9a2c362084453df9382c720a1812fe77d7d918677f53fb076aff2d083d9bd8",
+  "size": 1511145,
+  "notes": "Save diagnostics and Diagnostics ZIP to Desktop (and the wholesale helper's Save diagnostics) also upload the saved ZIP to Tommy's private GitHub repository tommyvenzin/tempe-diagnostics, so Claude can read it there. The ZIP is still saved and shown as before; the upload runs in the background and says where it went, or why not. Set it up once for each Windows login with the new GitHub upload button: Open GitHub (the token page comes filled in), pick Only select repositories > tempe-diagnostics, Generate token, paste it and click Save. The same token can be pasted on every PC, and Ebay-auto 1.1.11 uses it too under the same login. Remove for this Windows login takes it off; not set up, ZIPs are only saved, as before. Only diagnostics ZIPs are sent, only to that private repository, and GitHub tokens are masked out of the diagnostics. Nothing is sold or saved in COSTAR. Not yet tried on the RDP PC. Update the RDP helper (and the desk PC, to keep them the same)."
 }
