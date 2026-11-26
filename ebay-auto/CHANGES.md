@@ -1,5 +1,14 @@
 # Ebay-auto changes
 
+## 1.1.11 - 27 November 2026
+
+- Export diagnostics also uploads the saved ZIP to Tommy's private GitHub repository tommyvenzin/tempe-diagnostics (uploads/<date>/<time>-ebay-receiver-1.1.11-<PC>.zip or ...-ebay-worker-...), so Claude can read it there. The ZIP is saved, shown in its folder and described as before; the upload runs in the background and never holds up or undoes the save. The save message ends "Uploading the diagnostics to GitHub ..."; then a balloon and the More tab (and the worker's Activity log) say "Uploaded to GitHub ..." or "Not uploaded to GitHub: <why>" (the ZIP stays saved: send it by hand).
+- GitHub upload (a button on the More tab, and GitHub upload... in the tray icon's menu) is set up once for each Windows login on each PC. Its Open GitHub button opens GitHub's new-token page already filled in (the name, owner tommyvenzin, no expiry, Contents: Read and write): pick Only select repositories > tempe-diagnostics, click Generate token, paste the token and click Save. It is checked with GitHub before it is kept with Windows DPAPI in %LOCALAPPDATA%\TempeDiagnosticsUpload, shared with the Tempe helper 2.9.20 under the same login; the same token can be pasted on every PC. Remove for this Windows login takes it off. Not set up: ZIPs are only saved, as before, and the save message says so.
+- Before every upload GitHub must say the repository is tommyvenzin/tempe-diagnostics and private. Only Export diagnostics ZIPs (40 MB at most) are sent; settings, entry reports, keys and the pairing never are. An upload gets 60 s plus 1 s for every 32 KB (at most 30 minutes); a slower one stops and says so (the ZIP stays saved). The token is never written to a log, the diagnostics, a message or the screen, and the diagnostics' masker now also takes out any GitHub token. The day log has one diag_upload line per export (a fixed code, and where it went).
+- Order entry, Sydney/Tempe routing, Contact info lookup, prices, stock prompts, open Repair Orders and duplicate protection are unchanged. Protocol 2, order schema v3 and the 404 extension 1.6.1 are unchanged.
+
+Update BOTH app parts to 1.1.11 (the extension stays 1.6.1: keep its folder and pairing), then set up GitHub upload once for each Windows login: the receiver's on Seb's PC, and the worker's inside Remote Desktop (already set up if the Tempe helper 2.9.20 is set up under that login). The upload was tested here against a fake GitHub only: not yet against the real GitHub, on Seb's PC or in Remote Desktop.
+
 ## 1.1.10 - 24 November 2026
 
 - Customer lookup uses Contact info only. The Ship to phone is kept for delivery contact and is never a fallback for choosing the billing account.

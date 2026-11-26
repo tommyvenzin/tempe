@@ -1,18 +1,18 @@
 {
   "product": "Ebay-auto",
-  "version": "1.1.10",
-  "name": "1.1.10 - Contact info and customer details",
-  "notes": "Billing lookup uses Contact info only, accepting its match in Mobile, Home or Bus Ph while keeping COSTAR's account and phone placement. Ship to phone remains delivery-only. Missing customer details no longer block the known details and order lines: incomplete mandatory fields skip account creation and the result says CHECK BY HAND. Older stopped attempts using a different Ship to phone require manual completion. Pause entry, update BOTH parts to 1.1.10 and the extension to 1.6.1, then refresh and resume. Sydney/Tempe routing and all stock, price and duplicate checks remain.",
-  "published": "2026-11-24",
+  "version": "1.1.11",
+  "name": "1.1.11 - Diagnostics to GitHub",
+  "notes": "Export diagnostics also uploads the saved ZIP to Tommy's private GitHub repository tommyvenzin/tempe-diagnostics once GitHub upload is set up for that Windows login (More tab, GitHub upload: Open GitHub fills in the token page; pick tempe-diagnostics, generate the token, paste it and click Save). The save, its folder and its message are as before and the upload runs in the background; only diagnostics ZIPs are sent, never the token. Update BOTH parts to 1.1.11; the 404 extension stays 1.6.1. Order entry is unchanged.",
+  "published": "2026-11-27",
   "protocol": 2,
   "receiver": {
-    "zip": "Ebay-auto-Receiver-v1.1.10.zip",
-    "sha256": "96a4dbc9e12d12f7c8dbe05814bdd0487c7cce54aa5259008274148075b5f907",
-    "size": 1017426
+    "zip": "Ebay-auto-Receiver-v1.1.11.zip",
+    "sha256": "9980f32c56d184bf83b95223fbc9b6f99347c845e0d2fff1f341d9c7d984bce9",
+    "size": 1066630
   },
   "worker": {
-    "zip": "Ebay-auto-Worker-v1.1.10.zip",
-    "sha256": "960ea11eef63b8db3b49eaca5de09f75f7b99d0d6e1ca430328048a7cc60cab7",
-    "size": 1013582
+    "zip": "Ebay-auto-Worker-v1.1.11.zip",
+    "sha256": "f784fa153f7123640159ff7d2d9ac06783a5b553b0fe25b395625deea1509972",
+    "size": 1062785
   }
 }
