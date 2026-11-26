@@ -1,8 +1,8 @@
 {
-  "version": "2.9.18",
-  "name": "2.9.18 - Fill Buffalo page fixes",
-  "zip": "Tempe-COSTAR-Helper-v2.9.18.zip",
-  "sha256": "e1b712d15493bbe63981e3abd75cd85aec44a2bc84461620e2352ec75d541df9",
-  "size": 1428733,
-  "notes": "Fixes from the first try of Fill Buffalo page on the RDP PC. The line under the Invoice tab's buttons (waiting for a Buffalo page, and why nothing was filled) was cut off: the buttons are now in two rows and the card makes room for long lines at any window width. Tempe Buffalo Fill 1.0.1: a copy without its key (pair.json) now says so and names the folder to load instead; a failed check of the Buffalo page now says why, with Chrome's version, on its button and on the helper's line, and goes to the day log, as does how each fill ended. After this update, in Chrome on the RDP PC, once per Windows user: chrome://extensions, Remove any Tempe Buffalo Fill, then Load unpacked and paste %LOCALAPPDATA%\\TempeMobileCostar\\BuffaloFill into the folder box. The read, the Buffalo rules and Copy Buffalo Details are as 2.9.17. Nothing is sold or saved in COSTAR, nothing is saved in Buffalo; Sold stays disabled. Not yet tried on the live Buffalo page. Update the RDP helper (and the desk PC, to keep them the same)."
+  "version": "2.9.19",
+  "name": "2.9.19 - Invoice lines and item Reference",
+  "zip": "Tempe-COSTAR-Helper-v2.9.19.zip",
+  "sha256": "9ec032441b827d4ec8e71613a7ea432cd8590751e159db9f94aed740d409c5d5",
+  "size": 1458926,
+  "notes": "Invoices that show \"PO: Reqd\" under the # heading read no lines at all (\"a label in the line number column isn't a line number\"): COSTAR's PO: Reqd and the hidden stock details inside line 1 were taken for line numbers. Only what sits on a line, below the headings and on screen, is counted now. Fill Buffalo page: when the item rows can't be filled, the first row's Reference now gets the invoice number (Tempe Buffalo Fill 1.0.2, which updates itself from the helper's folder). A longer invoice whose line list COSTAR keeps from being scrolled back (its keyboard went into the lines) no longer ends \"changed while it was read\" when what shows matches what was read; the status line then says to scroll the list back and click where you mean to type. The helper still never scrolls with COSTAR's keyboard in the lines. Nothing is sold or saved in COSTAR, nothing is saved in Buffalo; Sold stays disabled. Not yet tried on the RDP PC. Update the RDP helper (and the desk PC, to keep them the same)."
 }
