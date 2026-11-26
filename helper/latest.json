@@ -1,8 +1,8 @@
 {
-  "version": "2.9.16",
-  "name": "2.9.16 - Buffalo details (Tempe's rules)",
-  "zip": "Tempe-COSTAR-Helper-v2.9.16.zip",
-  "sha256": "4ee33c2aef7d1368b24fa7c2843203f66e0a485574f186c3b5df023b7bc98dc9",
-  "size": 1370335,
-  "notes": "Buffalo details by Tempe's rules: Copy Buffalo Details on the Invoice tab now fills only Receiver Information and Consignment Items. Receiver: everything from Ship to (name; the first address line, Address 2 left blank; suburb; email; contact; phone = Mobile Ph, else Bus Ph, else Home Ph; reference = the invoice's own Repair Order number). Items: one row per type, reference = the Repair Order number: PAS (a tyre 215 mm wide or less, 8 kg), SUV (over 215, 15 kg), TRUCK (a 17.5, 19.5 or 22.5 rim, 40 kg), CARTON (each wheel, or one per small-box line such as wheel nuts, 20 kg); Total Weight = Qty x kg. A line is counted only when its words clearly name one tyre, wheel or small box; packages, sets, credits, back orders, tubes, rings, possibly fitted wheel and tyre packages and anything unclear are UNRESOLVED, and the text then ends NOT READY FOR BOOKING. With nothing unresolved it ends ALL FILLED IN BY TEMPE'S BUFFALO RULES: still check the rows against the invoice, then enter them in Buffalo yourself. Nothing is sold, saved, booked or sent; Sold stays disabled. Not yet checked on a live COSTAR. Update the RDP helper (and the desk PC, to keep them the same)."
+  "version": "2.9.17",
+  "name": "2.9.17 - Fill Buffalo page",
+  "zip": "Tempe-COSTAR-Helper-v2.9.17.zip",
+  "sha256": "99c745e1b7e11b595fc735f27f58b886f766b99074cf9bbe7b198ce00b97b87d",
+  "size": 1416064,
+  "notes": "Fill Buffalo page: a new button on the Invoice tab, next to Copy Buffalo Details. After a read, click it and switch to a blank Buffalo Create Consignment page in Chrome on the RDP PC (within 45 s): the new Tempe Buffalo Fill extension types the Buffalo details into Receiver Information and Consignment Items, exactly as the Buffalo box has them. It never presses Save: check every box against the invoice and Save it yourself. A banner on the page says ALL FILLED, NOT READY (UNRESOLVED boxes left empty and outlined, item rows only when every line is counted) or that it stopped. Only a blank page in front is filled; the suburb is picked from Buffalo's own list. Once per Windows user on the RDP PC, after this update has started the helper: in Chrome open chrome://extensions, turn on Developer mode, Load unpacked, folder %LOCALAPPDATA%\\TempeMobileCostar\\BuffaloFill. The Buffalo text's first line and ALL FILLED line are reworded; the read and the rules are as 2.9.16. Nothing is sold or saved in COSTAR; Sold stays disabled. Not yet tried on the live Buffalo page. Update the RDP helper (and the desk PC, to keep them the same)."
 }
