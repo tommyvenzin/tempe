@@ -1,8 +1,8 @@
 {
-  "version": "2.9.21",
-  "name": "2.9.21 - Faster Buffalo fill",
-  "zip": "Tempe-COSTAR-Helper-v2.9.21.zip",
-  "sha256": "baf3c79dcbd3572d79cc713bd12e7618163eac792c88c3542eca1697dd1ce19e",
-  "size": 1543554,
-  "notes": "Fill Buffalo page no longer needs a click into Chrome: keep a blank Create Consignment page showing in Chrome beside the helper, click Fill and stay in the helper. The fill itself is quicker (about 1 s instead of about 4 s on the test page). Tempe Buffalo Fill updates itself to 1.0.3: after updating the helper, click into a Create Consignment page once and leave Chrome in front for a few seconds. The invoice read no longer waits 3 s before scrolling COSTAR's line list when nothing was touched since the click on Read: click Read, then keep the mouse and keyboard still for about a second (touching them brings back the 3 s wait, or stops the read once it has started: press Read again). Its result shows at once; the day log keeps the read's and the fill's times. Nothing is saved in Buffalo or changed in COSTAR. Not yet tried on the RDP PC. Update the RDP helper (and the desk PC, to keep them the same)."
+  "version": "2.9.22",
+  "name": "2.9.22 - Buffalo Fill updates itself",
+  "zip": "Tempe-COSTAR-Helper-v2.9.22.zip",
+  "sha256": "24de2de1e229d72cc9cc9bf2afec1a1d95953057443327730f781c1f02e247df",
+  "size": 1564151,
+  "notes": "Tempe Buffalo Fill 1.0.4 updates itself from the helper: about once a minute while Chrome is open (no Buffalo page needed), when Chrome starts and when its button is opened, never in the middle of a fill. If a reload doesn't take it tries again 10 minutes later (3 times in all); if it still can't update itself its button shows a red ! and the helper's Fill line says what to click. After updating the helper, 1.0.3 updates itself to 1.0.4 once a Create Consignment page shows in Chrome (no click needed), or click Reload on it in chrome://extensions. Keep Developer mode on in chrome://extensions. Nothing is saved in Buffalo or changed in COSTAR. Not yet tried on the RDP PC. Update the RDP helper (and the desk PC, to keep them the same)."
 }
